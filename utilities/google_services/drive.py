@@ -1,6 +1,9 @@
 from googleapiclient.discovery import build
 
+from utilities.logging import get_logger
 from utilities.google_services import get_google_credentials
+
+logger = get_logger(name="drive", file_name="job-hunt")
 
 
 def get_drive_client():
@@ -47,3 +50,27 @@ def share_resource(resource_id, email, client=None):
     ).execute()
 
     return True
+
+
+def list_folder_resources(folder_id="root", client=None):
+    """List all resources in a specified Google Drive folder or in the root."""
+    if client is None:
+        client = get_drive_client()
+
+    query = f"'{folder_id}' in parents and trashed=false"
+    results = (
+        client.files()
+        .list(
+            q=query,
+            spaces="drive",
+            fields="nextPageToken, files(id, name, mimeType)",
+            pageSize=1000,
+        )
+        .execute()
+    )
+    items = results.get("files", [])
+    if not items:
+        logger.info("No files found.")
+        return
+
+    return items
