@@ -39,8 +39,14 @@ def add_new_tab_to_sheet(sheet_id, tab_name, rows=1000, cols=26, client=None):
 
     sheet_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}"
     sheet = client.open_by_url(sheet_url)
-    worksheet = sheet.add_worksheet(title=tab_name, rows=rows, cols=cols)
-    return worksheet
+
+    current_tabs = [tab.title for tab in sheet.worksheets()]
+    if tab_name not in current_tabs:
+        worksheet = sheet.add_worksheet(title=tab_name, rows=rows, cols=cols)
+        return worksheet
+    else:
+        logger.warn(f"Tab {tab_name} already exists in sheet {sheet_id}.")
+        return False
 
 
 def delete_tab_from_sheet(sheet_id, tab_name, client=None):
@@ -51,9 +57,17 @@ def delete_tab_from_sheet(sheet_id, tab_name, client=None):
 
     sheet_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}"
     sheet = client.open_by_url(sheet_url)
-    worksheet = sheet.worksheet(tab_name)
-    sheet.del_worksheet(worksheet)
-    return True
+
+    current_tabs = [tab.title for tab in sheet.worksheets()]
+    if tab_name in current_tabs:
+        worksheet = sheet.worksheet(tab_name)
+        sheet.del_worksheet(worksheet)
+        return True
+    else:
+        logger.warn(
+            f"Cannot delete tab {tab_name} as it doesn't exit in sheet {sheet_id}."
+        )
+        return False
 
 
 def read_sheet(sheet_id, tab_name, client=None):
@@ -77,6 +91,8 @@ def write_dataframe_to_sheet(df, sheet_id, tab_name, mode="replace", client=None
     sheet = client.open_by_url(sheet_url)
     try:
         worksheet = sheet.worksheet(tab_name)
+        if worksheet.row_count == 0:
+            mode = "replace"
 
         if mode == "replace":
             worksheet.clear()  # Clear the existing data
