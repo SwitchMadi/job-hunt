@@ -19,7 +19,7 @@ def extract_linkedin_jobs():
     jobs_side_panel = driver.find_element(
         by=By.CLASS_NAME, value="scaffold-layout__list-container"
     )
-    for job in jobs_side_panel.find_elements(By.XPATH, "./*")[:5]:
+    for job in jobs_side_panel.find_elements(By.XPATH, "./*")[:15]:
         job.click()
         time.sleep(1)
 

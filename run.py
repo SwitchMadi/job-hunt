@@ -10,6 +10,7 @@ from utilities.google_services.sheet import (
     add_new_tab_to_sheet,
     delete_tab_from_sheet,
     write_dataframe_to_sheet,
+    reset_row_heights,
 )
 from utilities.google_services.drive import (
     create_drive_folder,
@@ -27,7 +28,8 @@ df_jobs["job_info"] = df_jobs.apply(
 )
 
 user_folder_id = None
-for resource in list_folder_resources():
+existing_resources = list_folder_resources()
+for resource in existing_resources:
     if (resource["mimeType"] == "application/vnd.google-apps.folder") and (
         resource["name"] == config["user_email"]
     ):
@@ -55,3 +57,5 @@ delete_tab_from_sheet(sheet_id=jobs_sheet_id, tab_name="Sheet1")
 write_dataframe_to_sheet(
     df=df_jobs, sheet_id=jobs_sheet_id, tab_name=today, mode="append"
 )
+
+reset_row_heights(sheet_id=jobs_sheet_id, tab_name=today)

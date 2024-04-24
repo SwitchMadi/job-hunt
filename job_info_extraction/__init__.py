@@ -25,7 +25,7 @@ def extract_job_info(job_description, source):
 Job description -
 {job_description}"""
 
-    logger.info(f"Extracting job info for following job -\n{job_description[:20]}...")
+    logger.info(f"Extracting job info for following job -\n{job_description[:50]}...")
     job_info = get_gpt_response(system_prompt, user_prompt)
 
     return job_info

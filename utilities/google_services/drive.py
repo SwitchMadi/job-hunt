@@ -71,6 +71,6 @@ def list_folder_resources(folder_id="root", client=None):
     items = results.get("files", [])
     if not items:
         logger.info("No files found.")
-        return
+        return []
 
     return items
