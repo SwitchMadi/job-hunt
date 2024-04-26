@@ -6,71 +6,76 @@ from utilities.google_services import get_google_credentials
 logger = get_logger(name="drive", file_name="job-hunt")
 
 
-def get_drive_client():
-    credentials = get_google_credentials(["drive"])
-    client = build("drive", "v3", credentials=credentials)
-    return client
+class DriveResource:
+    def __init__(
+        self, resource_id=None, name=None, resource_type=None, parent_folder_id=None
+    ):
+        credentials = get_google_credentials(["drive"])
+        self.client = build("drive", "v3", credentials=credentials)
 
+        if resource_id:
+            metadata = self.client.files().get(fileId=resource_id, fields="*").execute()
+        else:
+            if resource_type == "folder":
+                mime_type = "application/vnd.google-apps.folder"
+            elif resource_type == "sheet":
+                mime_type = "application/vnd.google-apps.spreadsheet"
+            else:
+                raise Exception(f"Unsupported resource type - {resource_type}")
 
-def create_drive_folder(folder_name, parent_id=None, client=None):
-    """Create a folder in Google Drive, optionally within a specified parent folder."""
-    if client is None:
-        client = get_drive_client()
+            metadata = {
+                "name": name,
+                "mimeType": mime_type,
+            }
+            if parent_folder_id:
+                metadata["parents"] = [
+                    parent_folder_id
+                ]  # Assign parent folder if provided
 
-    file_metadata = {
-        "name": folder_name,
-        "mimeType": "application/vnd.google-apps.folder",
-    }
-    if parent_id:
-        file_metadata["parents"] = [parent_id]  # Assign parent folder if provided
+            metadata = self.client.files().create(body=metadata, fields="*").execute()
 
-    file = client.files().create(body=file_metadata, fields="id").execute()
-    return file.get("id")
+        for key, value in metadata.items():
+            setattr(self, key, value)
 
+        self.folder_resources = None
 
-def delete_resource(resource_id, client=None):
-    """Delete a file or folder in Google Drive by its ID."""
-    if client is None:
-        client = get_drive_client()
+    def delete(self):
+        self.client.files().delete(fileId=self.id).execute()
+        logger.info(f"Drive resource {self.name} deleted successfully.")
 
-    client.files().delete(fileId=resource_id).execute()
-    return True
-
-
-def share_resource(resource_id, email, client=None):
-    """Share a file or folder with a given email address."""
-    if client is None:
-        client = get_drive_client()
-
-    user_permission = {"type": "user", "role": "writer", "emailAddress": email}
-    client.permissions().create(
-        fileId=resource_id,
-        body=user_permission,
-        fields="id",
-    ).execute()
-
-    return True
-
-
-def list_folder_resources(folder_id="root", client=None):
-    """List all resources in a specified Google Drive folder or in the root."""
-    if client is None:
-        client = get_drive_client()
-
-    query = f"'{folder_id}' in parents and trashed=false"
-    results = (
-        client.files()
-        .list(
-            q=query,
-            spaces="drive",
-            fields="nextPageToken, files(id, name, mimeType)",
-            pageSize=1000,
+    def share(self, email, role="writer"):
+        """Share a file or folder with a given email address."""
+        user_permission = {"type": "user", "role": role, "emailAddress": email}
+        self.client.permissions().create(
+            fileId=self.id,
+            body=user_permission,
+            fields="id",
+        ).execute()
+        logger.info(
+            f"Drive resource {self.name} successfully shared with {email} with role as {role}."
         )
-        .execute()
-    )
-    items = results.get("files", [])
-    if not items:
-        logger.info("No files found.")
-        return []
 
-    return items
+    def get_folder_resources(self):
+        if self.mimeType != "application/vnd.google-apps.folder":
+            logger.warn(f"Cannot list resources of resource type {self.mimeType}.")
+            return
+
+        query = f"'{self.id}' in parents and trashed=false"
+        results = (
+            self.client.files()
+            .list(
+                q=query,
+                spaces="drive",
+                fields="nextPageToken, files(id, name, mimeType)",
+                pageSize=1000,
+            )
+            .execute()
+        )
+        items = results.get("files", [])
+        self.folder_resources = items
+
+        if not items:
+            logger.info("No files found.")
+            return []
+
+        return items

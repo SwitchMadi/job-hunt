@@ -5,18 +5,8 @@ import pytz
 
 from jobs_sourcing.linkedin import extract_linkedin_jobs
 from job_info_extraction import extract_job_info
-from utilities.google_services.sheet import (
-    create_sheet,
-    add_new_tab_to_sheet,
-    delete_tab_from_sheet,
-    write_dataframe_to_sheet,
-    reset_row_heights,
-)
-from utilities.google_services.drive import (
-    create_drive_folder,
-    share_resource,
-    list_folder_resources,
-)
+from utilities.google_services.sheet import Sheet
+from utilities.google_services.drive import DriveResource
 
 config = yaml.safe_load(open("config.yml"))
 
@@ -28,34 +18,39 @@ df_jobs["job_info"] = df_jobs.apply(
 )
 
 user_folder_id = None
-existing_resources = list_folder_resources()
-for resource in existing_resources:
+root_folder = DriveResource(resource_id="root")
+for resource in root_folder.get_folder_resources():
     if (resource["mimeType"] == "application/vnd.google-apps.folder") and (
         resource["name"] == config["user_email"]
     ):
         user_folder_id = resource["id"]
-if user_folder_id is None:
-    user_folder_id = create_drive_folder(config["user_email"])
-    share_resource(resource_id=user_folder_id, email=config["user_email"])
+
+if user_folder_id:
+    user_folder = DriveResource(resource_id=user_folder_id)
+else:
+    user_folder = DriveResource(
+        name=config["user_email"],
+        resource_type="folder",
+        parent_folder_id=root_folder.id,
+    )
+    user_folder.share(email=config["user_email"])
 
 today = datetime.now(pytz.timezone("Asia/Kolkata")).date()
 today = f"{today.year}{str(today.month).zfill(2)}{str(today.day).zfill(2)}"
 cur_month = today[:-2]
 
-jobs_sheet_id = None
-for resource in list_folder_resources(folder_id=user_folder_id):
+jobs_sheet = None
+for resource in user_folder.get_folder_resources():
     if (resource["mimeType"] == "application/vnd.google-apps.spreadsheet") and (
         resource["name"] == cur_month
     ):
-        jobs_sheet_id = resource["id"]
-if jobs_sheet_id is None:
-    jobs_sheet_id = create_sheet(sheet_title=cur_month, folder_id=user_folder_id)
+        jobs_sheet = Sheet(sheet_id=resource["id"])
 
-add_new_tab_to_sheet(sheet_id=jobs_sheet_id, tab_name=today)
-delete_tab_from_sheet(sheet_id=jobs_sheet_id, tab_name="Sheet1")
+if jobs_sheet is None:
+    jobs_sheet = Sheet(title=cur_month, folder_id=user_folder.id)
 
-write_dataframe_to_sheet(
-    df=df_jobs, sheet_id=jobs_sheet_id, tab_name=today, mode="append"
-)
+jobs_sheet.add_new_tab(tab_name=today)
+jobs_sheet.delete_tab(tab_name="Sheet1")
 
-reset_row_heights(sheet_id=jobs_sheet_id, tab_name=today)
+jobs_sheet.write_dataframe_to_tab(df=df_jobs, tab_name=today, mode="append")
+jobs_sheet.reset_tab_row_heights(tab_name=today)
