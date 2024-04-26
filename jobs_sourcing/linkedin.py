@@ -17,9 +17,17 @@ def extract_linkedin_jobs():
 
     jobs = []
     jobs_side_panel = driver.find_element(
+        by=By.CLASS_NAME, value="jobs-search-results-list"
+    )
+    jobs_list = driver.find_element(
         by=By.CLASS_NAME, value="scaffold-layout__list-container"
     )
-    for job in jobs_side_panel.find_elements(By.XPATH, "./*")[:15]:
+    for job in jobs_list.find_elements(By.XPATH, "./*")[:15]:
+        # Scroll the jobs side panel to the current job
+        driver.execute_script(
+            "arguments[0].scrollTop = arguments[1].offsetTop;", jobs_side_panel, job
+        )
+
         job.click()
         time.sleep(1)
 
