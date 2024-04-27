@@ -110,11 +110,24 @@ class Sheet:
         if mode == "replace":
             tab.clear()  # Clear the existing data
 
-        # Convert DataFrame to list of lists and update or append
-        data_to_upload = [df.columns.values.tolist()] + df.values.tolist()
         if mode == "append":
-            tab.append_rows(data_to_upload[1:])  # Append data, ignoring headers
+            # Get the header from the sheet to align columns
+            existing_headers = tab.row_values(1)
+            new_columns = [col for col in df.columns if col not in existing_headers]
+            if new_columns:
+                # Append new columns to the end of existing headers
+                existing_headers = existing_headers + new_columns
+                tab.update(
+                    "A1:" + chr(64 + len(existing_headers)) + "1", [existing_headers]
+                )
+
+            # Reorder and/or add new columns DataFrame to match the order in the sheet
+            df = df.reindex(columns=existing_headers, fill_value="")
+
+            data_to_upload = df.values.tolist()
+            tab.append_rows(data_to_upload)
         else:
+            data_to_upload = [df.columns.values.tolist()] + df.values.tolist()
             tab.update(
                 data_to_upload, value_input_option="USER_ENTERED"
             )  # Update sheet with new data
