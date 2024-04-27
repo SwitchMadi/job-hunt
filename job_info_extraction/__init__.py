@@ -20,41 +20,53 @@ def extract_job_info(job_description, source):
             "your standard answer is - Cannot Determine"
         )
 
-    user_prompt = f"""For the following job description on this page, extract following info - 
-1. Company name
-2. Job Title
-3. Job location
-4. Job location requirement (onsite / remote / hybrid)
-5. Job type (Full-time / Contract)
-6. Years of experience required
-7. Software technical skills required (comma separated)
-8. Other skills required (comma separated)
-9. How many employees?
-
-Answer format should be - "Question number: Answer"
-
-Job description -
-{job_description}"""
-
     logger.info(f"Extracting job info for following job -\n{job_description[:50]}...")
-    gpt_resp = get_gpt_response(system_prompt, user_prompt)
 
     job_info = {}
     question_map = {
-        "1": "company",
-        "2": "title",
-        "3": "location",
-        "4": "location_requirement",
-        "5": "employment_type",
-        "6": "experience_requirement",
-        "7": "technical_skills",
-        "8": "other_skills",
-        "9": "employees_count",
+        "1": {"key": "company", "prompt": "Company name"},
+        "2": {"key": "title", "prompt": "Job title"},
+        "3": {"key": "location", "prompt": "Job location"},
+        "4": {
+            "key": "location_requirement",
+            "prompt": "Job location requirement (onsite / remote / hybrid)",
+        },
+        "5": {"key": "employment_type", "prompt": "Job type (Full-time / Contract)"},
+        "6": {
+            "key": "experience_requirement",
+            "prompt": "Years of experience required",
+        },
+        "7": {
+            "key": "technical_skills",
+            "prompt": "Software technical skills required (comma separated)",
+        },
+        "8": {
+            "key": "other_skills",
+            "prompt": "Non technical skills required (comma separated)",
+        },
     }
-    for question in gpt_resp.split("\n"):
+    gpt_resp = ""
+    question_prompts_group = ""
+    i = 0
+    for question_no, question_obj in question_map.items():
+        i += 1
+        question_prompts_group += f"{question_no}. {question_obj['prompt']}\n"
+
+        if (i % 4 == 0) or (i == len(question_map)):
+            user_prompt = f"""For the following job description on this page, extract following info - 
+            {question_prompts_group}
+            Answer format should be - "Question number: Answer"
+
+            Job description -
+            {job_description}"""
+
+            gpt_resp += f"{get_gpt_response(system_prompt, user_prompt)}\n"
+            question_prompts_group = ""
+
+    for question in gpt_resp.strip().split("\n"):
         answer = question.split(":")[-1]
         question_no = question[0]
-        job_info[question_map[question_no]] = answer.strip()
+        job_info[question_map[question_no]["key"]] = answer.strip()
 
     if job_info.get("experience_requirement"):
         years = re.findall(r"\d+", job_info["experience_requirement"])
@@ -64,13 +76,5 @@ Job description -
         job_info["experience_requirement_min_years"] = min_years
         job_info["experience_requirement_max_years"] = max_years
         del job_info["experience_requirement"]
-
-    if job_info.get("employees_count"):
-        employees_count = re.findall(
-            r"\d+", job_info["employees_count"].replace(",", "")
-        )
-        employees_count = [int(x) for x in employees_count]
-        employees_count = min(employees_count) if employees_count else None
-        job_info["employees_count"] = employees_count
 
     return job_info
