@@ -11,7 +11,7 @@ def extract_linkedin_jobs():
 
     input("Please log into Linkedin and then press any key to continue...")
 
-    url = "https://www.linkedin.com/jobs/search/?f_WT=2&geoId=102713980&keywords=software&location=India&origin=JOB_SEARCH_PAGE_SEARCH_BUTTON&refresh=true"
+    url = "https://www.linkedin.com/jobs/search/?currentJobId=3904616444&geoId=102713980&keywords=software&location=India&origin=JOB_SEARCH_PAGE_JOB_FILTER&refresh=true"
     driver.get(url)
     time.sleep(5)
 
@@ -40,8 +40,15 @@ def extract_linkedin_jobs():
         job_description = driver.find_element(
             by=By.CLASS_NAME, value="jobs-search__job-details--wrapper"
         ).text
+        linkedin_easy_apply = True if "Easy Apply" in job_description else False
 
-        jobs.append({"job_url": job_url, "job_description": job_description})
+        jobs.append(
+            {
+                "job_url": job_url,
+                "job_description": job_description,
+                "linkedin_easy_apply": linkedin_easy_apply,
+            }
+        )
 
     driver.quit()
 
