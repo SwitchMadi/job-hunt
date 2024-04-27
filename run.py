@@ -2,6 +2,7 @@ import pandas as pd
 import yaml
 from datetime import datetime
 import pytz
+import numpy as np
 
 from jobs_sourcing.linkedin import extract_linkedin_jobs
 from job_info_extraction import extract_job_info
@@ -16,6 +17,9 @@ df_jobs["source"] = "linkedin"
 df_jobs["job_info"] = df_jobs.apply(
     lambda row: extract_job_info(row["job_description"], source=row["source"]), axis=1
 )
+df_dict = pd.json_normalize(df_jobs["job_info"])
+df_jobs = pd.concat([df_jobs, df_dict], axis=1).drop("job_info", axis=1)
+df_jobs = df_jobs.replace({np.nan: None})
 
 user_folder_id = None
 root_folder = DriveResource(resource_id="root")
