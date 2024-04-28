@@ -44,6 +44,14 @@ def extract_job_info(job_description, source):
             "key": "other_skills",
             "prompt": "Non technical skills required (comma separated)",
         },
+        "9": {
+            "key": "employees_count",
+            "prompt": "How many employees?",
+        },
+        "10": {
+            "key": "software_domain",
+            "prompt": "Software domain? (Backend / Web frontend / App frontend / Data engineering / DevOps / ML-AI)",
+        },
     }
     gpt_resp = ""
     question_prompts_group = ""
@@ -55,7 +63,7 @@ def extract_job_info(job_description, source):
         if (i % 4 == 0) or (i == len(question_map)):
             user_prompt = f"""For the following job description on this page, extract following info - 
             {question_prompts_group}
-            Answer format should be - "Question number: Answer"
+            Answer format should strictly be - "Question number: Answer"
 
             Job description -
             {job_description}"""
@@ -64,9 +72,22 @@ def extract_job_info(job_description, source):
             question_prompts_group = ""
 
     for question in gpt_resp.strip().split("\n"):
-        answer = question.split(":")[-1]
-        question_no = question[0]
-        job_info[question_map[question_no]["key"]] = answer.strip()
+        answer = (
+            question.split(".")[-1]
+            .split("?")[-1]
+            .split(":")[-1]
+            .split("\n")[-1]
+            .strip()
+            .strip("'")
+            .strip('"')
+        )
+        if "cannot determine" in answer.lower():
+            continue
+
+        match = re.match(r"^(\d+)", question)
+        if match:
+            question_no = match.group(1)
+            job_info[question_map[question_no]["key"]] = answer
 
     if job_info.get("experience_requirement"):
         years = re.findall(r"\d+", job_info["experience_requirement"])
@@ -76,5 +97,13 @@ def extract_job_info(job_description, source):
         job_info["experience_requirement_min_years"] = min_years
         job_info["experience_requirement_max_years"] = max_years
         del job_info["experience_requirement"]
+
+    if job_info.get("employees_count"):
+        employees_count = re.findall(
+            r"\d+", job_info["employees_count"].replace(",", "")
+        )
+        employees_count = [int(x) for x in employees_count]
+        employees_count = min(employees_count) if employees_count else None
+        job_info["employees_count"] = employees_count
 
     return job_info
