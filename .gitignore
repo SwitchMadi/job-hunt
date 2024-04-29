@@ -161,3 +161,4 @@ cython_debug/
 chromedriver
 /logs/
 /job-hunt-420615-0ce7f4f42a30.json
+/chrome_profiles/
