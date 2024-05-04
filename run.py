@@ -5,7 +5,7 @@ import pytz
 import numpy as np
 
 from jobs_sourcing.linkedin import extract_linkedin_jobs
-from job_info_extraction import extract_job_info
+from jobs_sourcing import extract_job_info
 from utilities.google_services.sheet import Sheet
 from utilities.google_services.drive import DriveResource
 

@@ -1,7 +1,9 @@
-from utilities.selenium import get_selenium_driver
 from selenium.webdriver.common.by import By
 import time
 from urllib.parse import urlparse, parse_qs
+
+from utilities import time_ago_to_epoch
+from utilities.selenium import get_selenium_driver
 
 
 def extract_linkedin_jobs():
@@ -11,7 +13,7 @@ def extract_linkedin_jobs():
 
     input("Please log into Linkedin and then press any key to continue...")
 
-    url = "https://www.linkedin.com/jobs/search/?currentJobId=3905150215&distance=25&f_TPR=r604800&f_WT=2&geoId=102713980&keywords=software&origin=JOB_SEARCH_PAGE_JOB_FILTER"
+    url = "https://www.linkedin.com/jobs/search/?currentJobId=3909159410&f_E=4%2C5%2C6&f_TPR=r604800&f_WT=2&geoId=102713980&keywords=software&location=India&origin=JOB_SEARCH_PAGE_JOB_FILTER&refresh=true"
     driver.get(url)
     time.sleep(5)
 
@@ -43,16 +45,52 @@ def extract_linkedin_jobs():
             parsed_url = urlparse(current_url)
             query_params = parse_qs(parsed_url.query)
             job_id = query_params.get("currentJobId", [None])[0]
-            job_url = f"https://www.linkedin.com/jobs/view/{job_id}"
+            linkedin_job_url = f"https://www.linkedin.com/jobs/view/{job_id}"
 
             job_description = driver.find_element(
                 by=By.CLASS_NAME, value="jobs-search__job-details--wrapper"
             ).text
             linkedin_easy_apply = True if "Easy Apply" in job_description else False
 
+            if linkedin_easy_apply:
+                original_job_url = linkedin_job_url
+                is_reposted_job = False
+            else:
+                apply_buttons = driver.find_elements(
+                    by=By.CLASS_NAME, value="jobs-apply-button--top-card"
+                )
+                if apply_buttons:
+                    main_window_handle = driver.current_window_handle
+                    apply_buttons[0].click()
+                    new_tab_handle = [
+                        handle
+                        for handle in driver.window_handles
+                        if handle != main_window_handle
+                    ][0]
+                    driver.switch_to.window(new_tab_handle)
+                    original_job_url = driver.current_url
+                    driver.close()
+                    is_reposted_job = True
+                    driver.switch_to.window(main_window_handle)
+                else:
+                    continue
+
+            top_card_text = driver.find_element(
+                by=By.CLASS_NAME,
+                value="job-details-jobs-unified-top-card__primary-description-container",
+            ).text
+            post_time_text = [
+                x for x in top_card_text.split("·") if "ago" in x.lower()
+            ][0].strip()
+            post_time_text = " ".join(post_time_text.split()[-3:])
+            job_posted_at = time_ago_to_epoch(post_time_text)
+
             jobs.append(
                 {
-                    "job_url": job_url,
+                    "job_url": original_job_url.split("?")[0],
+                    "repost_url": linkedin_job_url if is_reposted_job else None,
+                    "is_reposted_job": is_reposted_job,
+                    "job_posted_at": job_posted_at,
                     "job_description": job_description,
                     "linkedin_easy_apply": linkedin_easy_apply,
                 }
