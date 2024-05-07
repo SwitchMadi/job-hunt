@@ -13,13 +13,13 @@ logger = get_logger(name="scrape_linkedin", file_name="job-hunt")
 
 def extract_linkedin_jobs():
     driver = get_selenium_driver(headless=False)
-    driver.set_page_load_timeout(10)
+    driver.set_page_load_timeout(15)
     url = "https://linkedin.com"
     driver.get(url)
 
     input("Please log into Linkedin and then press any key to continue...")
 
-    url = "https://www.linkedin.com/jobs/search/?currentJobId=3911322476&f_E=4%2C5%2C6&f_TPR=r2592000&f_WT=2&keywords=software%20engineering&origin=JOB_SEARCH_PAGE_JOB_FILTER&refresh=true"
+    url = "https://www.linkedin.com/jobs/search/?currentJobId=3913498796&f_E=4&f_JT=F&f_PP=105214831&f_TPR=r604800&keywords=data%20engineering&origin=JOB_SEARCH_PAGE_JOB_FILTER&refresh=true&sortBy=R"
     driver.get(url)
     time.sleep(5)
 
@@ -101,6 +101,13 @@ def extract_linkedin_jobs():
                         except TimeoutException:
                             logger.warn(
                                 "Job application page URL fetch took more than 10 seconds to load."
+                            )
+                            original_job_url = driver.execute_script(
+                                "return window.location.href;"
+                            )
+                        except Exception as e:
+                            logger.warn(
+                                f"Job application page URL fetch failed with error - {e}."
                             )
                             original_job_url = driver.execute_script(
                                 "return window.location.href;"
