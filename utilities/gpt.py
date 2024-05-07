@@ -40,8 +40,8 @@ def get_gpt_response(system_prompt, user_prompt, sleep_time=1):
                 system_prompt, user_prompt, sleep_time=2 * sleep_time
             )
         else:
-            logger.exception(f"HTTP error occurred: {e}")
+            logger.exception(f"HTTP error occurred while calling Openai api: {e}")
             return None
     except Exception as e:
-        logger.exception(f"An unexpected error occurred: {e}")
+        logger.exception(f"An unexpected error occurred while calling Openai api: {e}")
         return None
