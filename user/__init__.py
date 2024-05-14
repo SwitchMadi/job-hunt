@@ -29,6 +29,7 @@ class User:
 
         self._drive_folder = None
         self._jobs_sheet = None
+        self._job_filters = None
 
     @staticmethod
     def find_user_by_email(email):
@@ -53,7 +54,7 @@ class User:
 
     def add_job_preference(self, job_field, value):
         job_preference_query = f"""
-            insert into users.job_preferences
+            insert into users.job_filter_preferences
             (user_id, job_field, value)
             values ({self.id}, '{job_field}', '{value}')
         """
@@ -106,7 +107,7 @@ class User:
         self._jobs_sheet = jobs_sheet
         return self._jobs_sheet
 
-    def _preferred_jobs_query_filter(self, job_age=7):
+    def _preferred_jobs_query_filters(self, job_filter_id):
         """
         This private method returns SQL query filter which will return jobs based on user preferences and job age.
 
@@ -121,12 +122,13 @@ class User:
             select coalesce(t2.related_job_field, t1.job_field) job_field,
                    unnest(coalesce(t2.synonyms, ARRAY[t1.value])) as value,
                    is_preferred
-            from users.job_preferences t1
+            from users.job_filter_preferences t1
             left join jobs.field_value_synonyms t2
-            on t1.job_field = t2.job_field 
-            and t1.value = t2.value
+            on t1.job_field = t2.job_field
+            and t1.value = t2.value 
             where t1.user_id = {self.id}
             and t1.is_active
+            and t1.job_filter_id = {job_filter_id}
         """
         df_user_preferences = get_sql_query_output(
             query=user_preferences_query, output_as_dataframe=True
@@ -213,7 +215,23 @@ class User:
 
         return filters
 
-    def get_unshared_jobs(self):
+    @property
+    def job_filters(self):
+        if self._job_filters:
+            return self._job_filters
+
+        job_filters_query = f"""
+            select id, "name"
+            from users.job_filters
+            where user_id = {self.id}
+            and is_active
+        """
+        job_filters = get_sql_query_output(query=job_filters_query)
+        self._job_filters = job_filters if job_filters else []
+
+        return self._job_filters
+
+    def get_unshared_jobs(self, job_filter_id):
         query = f"""
             select *, to_timestamp(coalesce(job_posted_at, created_at)) AT TIME ZONE 'Asia/Kolkata' as job_posted_at_ist
             from jobs.jobs
@@ -221,9 +239,10 @@ class User:
                     select job_id
                     from users.jobs_shared
                     where user_id = {self.id}
+                    and job_filter_id = {job_filter_id}
                 )
             and is_active
-            and {self._preferred_jobs_query_filter()}
+            and {self._preferred_jobs_query_filters(job_filter_id)}
             limit 10
         """
         df_unshared_jobs = get_sql_query_output(query=query, output_as_dataframe=True)
@@ -231,47 +250,50 @@ class User:
         return df_unshared_jobs
 
     def share_jobs(self):
-        df_unshared_jobs = self.get_unshared_jobs()
-        skip_columns = [
-            "id",
-            "job_posted_at",
-            "created_at",
-            "updated_at",
-            "source",
-            "job_description",
-            "is_active",
-        ]
-        keep_columns = [
-            col for col in df_unshared_jobs.columns if col not in skip_columns
-        ]
-
-        df_unshared_jobs["job_posted_at_ist"] = df_unshared_jobs[
-            "job_posted_at_ist"
-        ].astype(str)
-        df_unshared_jobs = df_unshared_jobs.replace({np.nan: None})
-
         today = datetime.now(pytz.timezone("Asia/Kolkata")).date()
         today = f"{today.year}{str(today.month).zfill(2)}{str(today.day).zfill(2)}"
-        self.jobs_sheet.add_new_tab(tab_name=today)
-        self.jobs_sheet.delete_tab(tab_name="Sheet1")
 
-        self.jobs_sheet.write_dataframe_to_tab(
-            df=df_unshared_jobs[keep_columns], tab_name=today, mode="append"
-        )
-        self.jobs_sheet.reset_tab_row_heights(tab_name=today)
+        for cur_filter in self.job_filters:
+            df_unshared_jobs = self.get_unshared_jobs(cur_filter["id"])
+            skip_columns = [
+                "id",
+                "job_posted_at",
+                "created_at",
+                "updated_at",
+                "source",
+                "job_description",
+                "is_active",
+            ]
+            keep_columns = [
+                col for col in df_unshared_jobs.columns if col not in skip_columns
+            ]
 
-        df_unshared_jobs = df_unshared_jobs[["id"]].rename(columns={"id": "job_id"})
-        df_unshared_jobs["user_id"] = self.id
+            df_unshared_jobs["job_posted_at_ist"] = df_unshared_jobs[
+                "job_posted_at_ist"
+            ].astype(str)
+            df_unshared_jobs = df_unshared_jobs.replace({np.nan: None})
+            tab_name = f"{today}-{cur_filter['name']}"[:50]
+            self.jobs_sheet.add_new_tab(tab_name=tab_name)
+            self.jobs_sheet.delete_tab(tab_name="Sheet1")
 
-        con = get_sql_connection(con_type="sqlalchemy")
-        df_unshared_jobs.to_sql(
-            name="jobs_shared",
-            con=con,
-            schema="users",
-            if_exists="append",
-            index=False,
-            chunksize=1000,
-            method="multi",
-        )
+            self.jobs_sheet.write_dataframe_to_tab(
+                df=df_unshared_jobs[keep_columns], tab_name=tab_name, mode="append"
+            )
+            self.jobs_sheet.reset_tab_row_heights(tab_name=tab_name)
+
+            df_unshared_jobs = df_unshared_jobs[["id"]].rename(columns={"id": "job_id"})
+            df_unshared_jobs["user_id"] = self.id
+            df_unshared_jobs["job_filter_id"] = cur_filter["id"]
+
+            con = get_sql_connection(con_type="sqlalchemy")
+            df_unshared_jobs.to_sql(
+                name="jobs_shared",
+                con=con,
+                schema="users",
+                if_exists="append",
+                index=False,
+                chunksize=1000,
+                method="multi",
+            )
 
         return True
