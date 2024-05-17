@@ -243,7 +243,6 @@ class User:
                 )
             and is_active
             and {self._preferred_jobs_query_filters(job_filter_id)}
-            limit 10
         """
         df_unshared_jobs = get_sql_query_output(query=query, output_as_dataframe=True)
 
