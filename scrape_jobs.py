@@ -3,8 +3,8 @@ import numpy as np
 from sqlalchemy.types import Integer, Boolean
 from datetime import datetime
 
-from jobs_sourcing.linkedin import extract_linkedin_jobs
-from jobs_sourcing import extract_job_info
+from jobs.sourcing.linkedin import extract_linkedin_jobs
+from jobs.sourcing import extract_job_info
 from utilities import generate_hash
 from utilities.sql import get_sql_connection, get_sql_query_output, execute_sql_query
 from utilities.logging import get_logger
