@@ -2,6 +2,7 @@ from selenium.webdriver.common.by import By
 from selenium.common.exceptions import TimeoutException
 import time
 from urllib.parse import urlparse, parse_qs
+import yaml
 
 from utilities import time_ago_to_epoch
 from utilities.selenium import get_selenium_driver
@@ -12,12 +13,15 @@ logger = get_logger(name="scrape_linkedin", file_name="job-hunt")
 
 
 def extract_linkedin_jobs():
+    config = yaml.safe_load(open("config.yml"))
+
     driver = get_selenium_driver(headless=False)
     driver.set_page_load_timeout(15)
     url = "https://linkedin.com"
     driver.get(url)
 
-    input("Please log into Linkedin and then press any key to continue...")
+    if config["scraping"]["linkedin"]["login_pause"]:
+        input("Please log into Linkedin and then press any key to continue...")
 
     url = "https://www.linkedin.com/jobs/search/?currentJobId=3913498796&f_E=4&f_JT=F&f_PP=105214831&f_TPR=r604800&keywords=data%20engineering&origin=JOB_SEARCH_PAGE_JOB_FILTER&refresh=true&sortBy=R"
     driver.get(url)

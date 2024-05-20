@@ -1,4 +1,7 @@
 chromedriver: '/Users/bhaskar/Desktop/other/job-hunt/chromedriver'
 chrome_profile_path: '/Users/bhaskar/Desktop/other/job-hunt/chrome_profiles'
 log_folder: '/Users/bhaskar/Desktop/other/job-hunt/logs'
-user_email: 'ria2verma@gmail.com'
+user_email: 'bhaskar2choudhary@gmail.com'
+scraping:
+  linkedin:
+    login_pause: False
