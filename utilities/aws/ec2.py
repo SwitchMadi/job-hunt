@@ -74,3 +74,25 @@ class EC2:
 
     def stop_instance(self):
         self.client.stop_instances(InstanceIds=[self.instance_id])
+
+    def create_snapshot(self):
+        # Create an AMI from the instance
+        ami_response = self.client.create_image(
+            InstanceId=self.instance_id,
+            Name=f"snapshot-{self.instance_id}",
+            NoReboot=True,
+        )
+
+        ami_id = ami_response["ImageId"]
+
+        # Wait for the AMI to be available
+        waiter = self.client.get_waiter("image_available")
+        waiter.wait(ImageIds=[ami_id])
+
+        # Describe the AMI to get the snapshot ID
+        image_info = self.client.describe_images(ImageIds=[ami_id])
+        snapshot_id = image_info["Images"][0]["BlockDeviceMappings"][0]["Ebs"][
+            "SnapshotId"
+        ]
+
+        return snapshot_id
