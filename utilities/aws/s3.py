@@ -6,7 +6,7 @@ from utilities.logging import get_logger
 logger = get_logger(name="s3", file_name="job-hunt")
 
 
-class S3Handler:
+class S3Bucket:
     def __init__(self, bucket_name):
         self.client = get_aws_client("s3")
         self.bucket_name = bucket_name
