@@ -1,5 +1,4 @@
 from utilities.aws import get_aws_client
-
 from utilities.logging import get_logger
 
 
