@@ -2,15 +2,32 @@ import pandas as pd
 import numpy as np
 from sqlalchemy.types import Integer, Boolean
 from datetime import datetime
+import yaml
 
 from jobs.sourcing.linkedin import extract_linkedin_jobs
 from jobs.sourcing import extract_job_info
-from utilities import generate_hash
+from utilities import generate_hash, unzip_directory
 from utilities.sql import get_sql_connection, get_sql_query_output, execute_sql_query
 from utilities.logging import get_logger
+from utilities.aws.s3 import S3Bucket
 
 
 logger = get_logger(name="scrape_jobs", file_name="job-hunt")
+config = yaml.safe_load(open("config.yml"))
+
+s3_bucket = S3Bucket(bucket_name=config["s3_bucket"])
+chrome_profile_fetched = s3_bucket.fetch_data(
+    file_s3_path=f"chrome_profiles/{config['user_email']}.zip",
+    file_local_path=f"chrome_profiles/{config['user_email']}.zip",
+)
+if chrome_profile_fetched:
+    logger.info("Unzipping user chrome profile...")
+    unzip_directory(
+        zip_file_path=f"{config['chrome_profile_path']}/{config['user_email']}.zip",
+        extract_dir=f"{config['chrome_profile_path']}/{config['user_email']}",
+    )
+
+input("Press any key...")
 
 jobs = extract_linkedin_jobs()
 df_jobs = pd.DataFrame(jobs)

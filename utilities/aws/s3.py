@@ -11,13 +11,18 @@ class S3Bucket:
         self.bucket_name = bucket_name
 
     def fetch_data(self, file_s3_path, file_local_path):
+        logger.info(f"Fetching {file_s3_path} from S3 bucket {self.bucket_name}...")
         try:
             self.client.download_file(self.bucket_name, file_s3_path, file_local_path)
+            return True
         except Exception as e:
             logger.exception(f"Error fetching data from S3 for {file_s3_path}: {e}")
+            return False
 
     def upload_data(self, file_s3_path, file_local_path):
         try:
             self.client.upload_file(file_local_path, self.bucket_name, file_s3_path)
+            return True
         except Exception as e:
             logger.exception(f"Error uploading data to S3 for {file_local_path}: {e}")
+            return False
