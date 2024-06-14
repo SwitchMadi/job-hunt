@@ -1,4 +1,11 @@
+import base64
+import time
+
 from utilities.aws import get_aws_client
+from utilities.logging import get_logger
+
+
+logger = get_logger(name="ec2", file_name="job-hunt")
 
 
 class EC2:
@@ -10,6 +17,7 @@ class EC2:
         instance_type=None,
         key_name=None,
         security_group=None,
+        iam_fleet_role=None,
         user_data_script=None,
     ):
         self.client = get_aws_client("ec2")
@@ -20,6 +28,7 @@ class EC2:
             self.instance_type = instance_type
             self.key_name = key_name
             self.security_group = security_group
+            self.iam_fleet_role = iam_fleet_role
             self.user_data_script = user_data_script
 
             if instance_pricing_model == "spot":
@@ -30,6 +39,7 @@ class EC2:
     def launch_spot_instance(self):
         response = self.client.request_spot_fleet(
             SpotFleetRequestConfig={
+                "IamFleetRole": self.iam_fleet_role,
                 "AllocationStrategy": "lowestPrice",
                 "LaunchSpecifications": [
                     {
@@ -37,7 +47,11 @@ class EC2:
                         "InstanceType": self.instance_type,
                         "KeyName": self.key_name,
                         "SecurityGroups": [{"GroupName": self.security_group}],
-                        "UserData": self.user_data_script.encode("utf-8").strip(),
+                        "UserData": base64.b64encode(
+                            self.user_data_script.encode("utf-8")
+                        )
+                        .decode("utf-8")
+                        .strip(),
                     },
                 ],
                 "TargetCapacity": 1,
@@ -46,15 +60,26 @@ class EC2:
 
         spot_fleet_request_id = response["SpotFleetRequestId"]
 
-        # Wait for the spot instance to be fulfilled
-        waiter = self.client.get_waiter("spot_fleet_request_fulfilled")
-        waiter.wait(SpotFleetRequestIds=[spot_fleet_request_id])
+        # Custom polling mechanism to wait for the spot instance to be fulfilled
+        instance_fulfilled = False
+        while not instance_fulfilled:
+            logger.info("Sleeping for 10 seconds to check spot_fleet_response later...")
+            time.sleep(10)  # Wait for 10 seconds before checking the status again
+            spot_fleet_response = self.client.describe_spot_fleet_requests(
+                SpotFleetRequestIds=[spot_fleet_request_id]
+            )
+            status = spot_fleet_response["SpotFleetRequestConfigs"][0]["ActivityStatus"]
+            if status == "fulfilled":
+                instance_fulfilled = True
 
         # Get the instance ID
         spot_instances = self.client.describe_spot_fleet_instances(
             SpotFleetRequestId=spot_fleet_request_id
         )
         self.instance_id = spot_instances["ActiveInstances"][0]["InstanceId"]
+        logger.info(
+            f"Spot instance request fulfilled. instance_id - {self.instance_id}"
+        )
 
         return True
 
@@ -65,8 +90,8 @@ class EC2:
             MinCount=1,
             MaxCount=1,
             KeyName=self.key_name,
-            SecurityGroups=[self.security_group],
-            UserData=self.user_data_script.encode("utf-8").strip(),
+            SecurityGroupIds=[self.security_group],
+            UserData=f"{self.user_data_script}",
         )
 
         self.instance_id = response["Instances"][0]["InstanceId"]
@@ -74,6 +99,13 @@ class EC2:
 
     def stop_instance(self):
         self.client.stop_instances(InstanceIds=[self.instance_id])
+        logger.info(f"Instance stopped. instance_id - {self.instance_id}")
+
+    def terminate_instance(self):
+        response = self.client.terminate_instances(InstanceIds=[self.instance_id])
+        terminated_instance_id = response["TerminatingInstances"][0]["InstanceId"]
+        logger.info(f"Instance terminated. instance_id - {terminated_instance_id}")
+        return True
 
     def create_snapshot(self):
         # Create an AMI from the instance
