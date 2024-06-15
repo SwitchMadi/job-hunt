@@ -3,6 +3,7 @@ import numpy as np
 from sqlalchemy.types import Integer, Boolean
 from datetime import datetime
 import yaml
+import time
 
 from jobs.sourcing.linkedin import extract_linkedin_jobs
 from jobs.sourcing import extract_job_info
@@ -14,6 +15,19 @@ from utilities.aws.s3 import S3Bucket
 
 logger = get_logger(name="scrape_jobs", file_name="job-hunt")
 config = yaml.safe_load(open("config.yml"))
+
+user_email = None
+while user_email is None:
+    time.sleep(1)
+    logger.info("Checking if user email has been set in startup config...")
+    startup_config = yaml.safe_load(open(config["startup_input"])) or {}
+    user_email = startup_config.get("user_email")
+
+    if user_email:
+        logger.info(f"Writing user email {user_email} to main config...")
+        config["user_email"] = user_email
+        with open("config.yml", "w") as file:
+            yaml.safe_dump(config, file)
 
 s3_bucket = S3Bucket(bucket_name=config["s3_bucket"])
 chrome_profile_fetched = s3_bucket.fetch_data(

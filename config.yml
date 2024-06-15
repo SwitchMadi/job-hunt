@@ -1,8 +1,8 @@
-chromedriver: '/Users/bhaskar/Desktop/other/job-hunt/chromedriver'
-chrome_profile_path: '/Users/bhaskar/Desktop/other/job-hunt/chrome_profiles'
-log_folder: '/Users/bhaskar/Desktop/other/job-hunt/logs'
-user_email: 'bhaskar2choudhary@gmail.com'
-s3_bucket: 'job-hunt-storage'
+chrome_profile_path: C:\Users\JobHunt\Desktop\job-hunt\chrome_profiles
+chromedriver: C:\Users\JobHunt\Desktop\job-hunt\chromedriver
+log_folder: C:\Users\JobHunt\Desktop\job-hunt\logs
+s3_bucket: job-hunt-storage
 scraping:
   linkedin:
-    login_pause: False
+    login_pause: true
+startup_input: C:\Users\JobHunt\Desktop\startup_input.yml

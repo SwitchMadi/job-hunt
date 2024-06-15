@@ -3,14 +3,14 @@ import yaml
 from datetime import datetime
 import pytz
 
-config = yaml.safe_load(open("config.yml"))
-
 
 def get_logger(
     name,
     file_name,
     level="INFO",
 ):
+    config = yaml.safe_load(open("config.yml"))
+
     today = datetime.now(pytz.timezone("Asia/Kolkata")).date()
     today = f"{today.year}{str(today.month).zfill(2)}{str(today.day).zfill(2)}"
     log_config = {
