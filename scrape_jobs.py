@@ -41,8 +41,6 @@ if chrome_profile_fetched:
         extract_dir=f"{config['chrome_profile_path']}/{config['user_email']}",
     )
 
-input("Press any key...")
-
 jobs = extract_linkedin_jobs()
 df_jobs = pd.DataFrame(jobs)
 
