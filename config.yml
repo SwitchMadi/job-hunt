@@ -4,5 +4,5 @@ log_folder: C:\Users\JobHunt\Desktop\job-hunt\logs
 s3_bucket: job-hunt-storage
 scraping:
   linkedin:
-    login_pause: true
+    login_pause: false
 startup_input: C:\Users\JobHunt\Desktop\startup_input.yml
