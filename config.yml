@@ -1,5 +1,5 @@
 chrome_profile_path: C:\Users\JobHunt\Desktop\job-hunt\chrome_profiles
-chromedriver: C:\Users\JobHunt\Desktop\job-hunt\chromedriver
+chromedriver: C:\Users\JobHunt\Desktop\job-hunt\chromedriver.exe
 log_folder: C:\Users\JobHunt\Desktop\job-hunt\logs
 s3_bucket: job-hunt-storage
 scraping:
