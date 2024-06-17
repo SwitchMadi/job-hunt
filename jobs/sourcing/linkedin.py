@@ -41,7 +41,9 @@ def extract_linkedin_jobs():
     jobs_scraped = 0
     cur_page = 1
     continue_scraping = True
-    while (jobs_scraped <= min(jobs_count, 500)) and continue_scraping:
+    while (
+        jobs_scraped <= min(jobs_count, config["scraping"]["linkedin"]["max_job_count"])
+    ) and continue_scraping:
         for job in jobs_list.find_elements(By.XPATH, "./*"):
             try:
                 # Scroll the jobs side panel to the current job

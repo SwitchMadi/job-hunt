@@ -5,4 +5,5 @@ s3_bucket: job-hunt-storage
 scraping:
   linkedin:
     login_pause: false
+    max_job_count: 500
 startup_input: C:\Users\JobHunt\Desktop\startup_input.yml
