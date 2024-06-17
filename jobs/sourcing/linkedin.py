@@ -12,19 +12,17 @@ from utilities.logging import get_logger
 logger = get_logger(name="scrape_linkedin", file_name="job-hunt")
 
 
-def extract_linkedin_jobs():
+def extract_linkedin_jobs(jobs_url):
     config = yaml.safe_load(open("config.yml"))
 
     driver = get_selenium_driver(headless=False)
     driver.set_page_load_timeout(15)
-    url = "https://linkedin.com"
-    driver.get(url)
+    driver.get("https://linkedin.com")
 
     if config["scraping"]["linkedin"]["login_pause"]:
         input("Please log into Linkedin and then press any key to continue...")
 
-    url = "https://www.linkedin.com/jobs/search/?currentJobId=3913498796&f_E=4&f_JT=F&f_PP=105214831&f_TPR=r604800&keywords=data%20engineering&origin=JOB_SEARCH_PAGE_JOB_FILTER&refresh=true&sortBy=R"
-    driver.get(url)
+    driver.get(jobs_url)
     time.sleep(5)
 
     jobs = []
