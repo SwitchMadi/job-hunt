@@ -1,0 +1,17 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Resources:
+  MyLambdaFunction:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      FunctionName: TriggerJobScrape
+      Handler: scripts.lambdas.trigger_job_scrape.lambda_handler
+      Runtime: python3.10
+      CodeUri: /Users/bhaskar/Desktop/other/job-hunt/
+      Timeout: 900
+      Events:
+        ScheduledEvent:
+          Type: Schedule
+          Properties:
+            Schedule: 'cron(0 19 * * ? *)'  # 7PM UTC every day
+            Name: DailyTrigger

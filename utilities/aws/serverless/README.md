@@ -1,0 +1,5 @@
+- Move lambda's ``requirements.txt`` to template ``CodeUri`` temporarily for build process
+- Move to ``utilities/aws/serverless``
+- ``rm -rf .aws-sam``
+- ``sam build``
+- ``sam deploy --guided``
