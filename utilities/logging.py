@@ -2,6 +2,7 @@ import logging.config
 import yaml
 from datetime import datetime
 import pytz
+import os
 
 
 def get_logger(
@@ -11,8 +12,25 @@ def get_logger(
 ):
     config = yaml.safe_load(open("config.yml"))
 
-    today = datetime.now(pytz.timezone("Asia/Kolkata")).date()
-    today = f"{today.year}{str(today.month).zfill(2)}{str(today.day).zfill(2)}"
+    handlers = ["console"]
+    if os.path.exists(config["log_folder"]):
+        today = datetime.now(pytz.timezone("Asia/Kolkata")).date()
+        today = f"{today.year}{str(today.month).zfill(2)}{str(today.day).zfill(2)}"
+
+        file_handler = {
+            "class": "logging.handlers.RotatingFileHandler",
+            "level": level,
+            "formatter": "standard",
+            "filename": f"{config['log_folder']}/{file_name}-{today}.log",
+            "mode": "a",
+            "maxBytes": 2 * 1024 * 1024,
+            "backupCount": 50,
+        }
+
+        handlers.append("file")
+    else:
+        file_handler = None
+
     log_config = {
         "version": 1,
         "disable_existing_loggers": False,
@@ -28,20 +46,12 @@ def get_logger(
                 "formatter": "standard",
                 "stream": "ext://sys.stdout",
             },
-            "file": {
-                "class": "logging.handlers.RotatingFileHandler",
-                "level": level,
-                "formatter": "standard",
-                "filename": f"{config['log_folder']}/{file_name}-{today}.log",
-                "mode": "a",
-                "maxBytes": 2 * 1024 * 1024,
-                "backupCount": 50,
-            },
         },
-        "loggers": {
-            "": {"handlers": ["console", "file"], "level": "DEBUG", "propagate": True}
-        },
+        "loggers": {"": {"handlers": handlers, "level": "DEBUG", "propagate": True}},
     }
+
+    if file_handler:
+        log_config["handlers"]["file"] = file_handler
 
     logging.config.dictConfig(log_config)
     logger = logging.getLogger(name)
