@@ -1,5 +1,6 @@
 import base64
 import time
+import requests
 
 from utilities.aws import get_aws_client
 from utilities.logging import get_logger
@@ -11,6 +12,7 @@ logger = get_logger(name="ec2", file_name="job-hunt")
 class EC2:
     def __init__(
         self,
+        self_identify_instance=False,
         instance_id=None,
         instance_pricing_model=None,
         ami_id=None,
@@ -21,7 +23,17 @@ class EC2:
         user_data_script=None,
     ):
         self.client = get_aws_client("ec2")
-        if instance_id:
+        if self_identify_instance:
+            # The URL for the EC2 instance metadata service to get the instance ID
+            metadata_url = "http://169.254.169.254/latest/meta-data/instance-id"
+
+            try:
+                response = requests.get(metadata_url)
+                response.raise_for_status()
+                self.instance_id = response.text
+            except requests.RequestException as e:
+                logger.exception(f"Error fetching instance ID: {e}")
+        elif instance_id:
             self.instance_id = instance_id
         else:
             self.ami_id = ami_id
