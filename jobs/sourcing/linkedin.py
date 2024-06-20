@@ -59,6 +59,7 @@ def extract_linkedin_jobs(jobs_url):
                 query_params = parse_qs(parsed_url.query)
                 job_id = query_params.get("currentJobId", [None])[0]
                 linkedin_job_url = f"https://www.linkedin.com/jobs/view/{job_id}"
+                logger.info(f"Job collected - {linkedin_job_url}")
 
                 job_description = driver.find_element(
                     by=By.CLASS_NAME, value="jobs-search__job-details--wrapper"
