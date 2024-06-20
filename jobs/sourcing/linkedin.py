@@ -16,7 +16,6 @@ def extract_linkedin_jobs(jobs_url):
     config = yaml.safe_load(open("config.yml"))
 
     driver = get_selenium_driver(headless=False)
-    driver.set_page_load_timeout(15)
     driver.get("https://linkedin.com")
 
     if config["scraping"]["linkedin"]["login_pause"]:
@@ -24,6 +23,7 @@ def extract_linkedin_jobs(jobs_url):
 
     driver.get(jobs_url)
     time.sleep(5)
+    driver.set_page_load_timeout(15)
 
     jobs = []
     jobs_count = driver.find_element(
