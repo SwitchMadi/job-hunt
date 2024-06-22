@@ -13,5 +13,5 @@ Resources:
         ScheduledEvent:
           Type: Schedule
           Properties:
-            Schedule: 'cron(0 19 * * ? *)'  # 7PM UTC every day
+            Schedule: 'cron(30 12 * * ? *)'  # 6PM IST every day
             Name: DailyTrigger

@@ -11,7 +11,7 @@ def lambda_handler(event, context):
 
     EC2(
         instance_pricing_model="on_demand",
-        ami_id="ami-051cba059c4a2c252",
+        ami_id="ami-00e7b75689331186f",
         instance_type="t3a.2xlarge",
         key_name="job-hunt",
         security_group="sg-011a3786d569e6382",
