@@ -7,5 +7,12 @@ scraping:
     login_pause: false
     max_job_count: 500
     jobs_urls:
-      - https://www.linkedin.com/jobs/search/?currentJobId=3951654520&f_E=4%2C5&f_TPR=r86400&f_WT=3%2C2&keywords=software%20engineer&origin=JOB_SEARCH_PAGE_JOB_FILTER&refresh=true
+      - https://www.linkedin.com/jobs/search/?f_E=4%2C5&f_TPR=r86400&f_WT=2&keywords=software%20engineer&origin=JOB_SEARCH_PAGE_JOB_FILTER&refresh=true
+      - https://www.linkedin.com/jobs/search/?f_E=4%2C5&f_TPR=r86400&f_WT=3&geoId=105214831&keywords=software%20engineer&location=Bengaluru%2C%20Karnataka%2C%20India&origin=JOB_SEARCH_PAGE_JOB_FILTER&refresh=true
+      - https://www.linkedin.com/jobs/search/?f_TPR=r86400&f_WT=2&geoId=102713980&keywords=engineering%20manager&location=India&origin=JOB_SEARCH_PAGE_JOB_FILTER&refresh=true
+      - https://www.linkedin.com/jobs/search/?f_TPR=r86400&f_WT=3&geoId=105214831&keywords=engineering%20manager&location=Bengaluru%2C%20Karnataka%2C%20India&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true
+      - https://www.linkedin.com/jobs/search/?f_E=4%2C5&f_TPR=r86400&f_WT=2&geoId=102713980&keywords=principal%20engineer&location=India&origin=JOB_SEARCH_PAGE_KEYWORD_AUTOCOMPLETE&refresh=true
+      - https://www.linkedin.com/jobs/search/?f_E=4%2C5&f_TPR=r86400&f_WT=3&geoId=105214831&keywords=principal%20engineer&location=Bengaluru%2C%20Karnataka%2C%20India&origin=JOB_SEARCH_PAGE_KEYWORD_AUTOCOMPLETE&refresh=true
+      - https://www.linkedin.com/jobs/search/?f_E=4%2C5&f_TPR=r86400&f_WT=2&geoId=102713980&keywords=director%20of%20engineering&location=India&origin=JOB_SEARCH_PAGE_KEYWORD_AUTOCOMPLETE&refresh=true
+      - https://www.linkedin.com/jobs/search/?f_E=4%2C5&f_TPR=r86400&f_WT=3&geoId=105214831&keywords=director%20of%20engineering&location=Bengaluru%2C%20Karnataka%2C%20India&origin=JOB_SEARCH_PAGE_KEYWORD_AUTOCOMPLETE&refresh=true
 startup_input: C:\Users\JobHunt\Desktop\startup_input.yml
