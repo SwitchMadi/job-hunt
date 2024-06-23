@@ -1,5 +1,5 @@
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
 import time
 from urllib.parse import urlparse, parse_qs
 import yaml
@@ -149,10 +149,15 @@ def extract_linkedin_jobs(jobs_url):
                 logger.exception(f"An error occurred while scraping a job - {e}")
 
         continue_scraping = False
-        pagination_section = driver.find_element(
-            by=By.CSS_SELECTOR,
-            value=".artdeco-pagination__pages.artdeco-pagination__pages--number",
-        )
+        try:
+            pagination_section = driver.find_element(
+                by=By.CSS_SELECTOR,
+                value=".artdeco-pagination__pages.artdeco-pagination__pages--number",
+            )
+        except NoSuchElementException:
+            logger.info(f"Pagination not found. Stopping to scrape further.")
+            continue
+
         ignore_more_pages_button = True
         for page in pagination_section.find_elements(By.XPATH, "./*"):
             if page.text == str(cur_page):
