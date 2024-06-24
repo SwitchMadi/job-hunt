@@ -25,17 +25,22 @@ def extract_linkedin_jobs(jobs_url):
     time.sleep(5)
     driver.set_page_load_timeout(15)
 
+    try:
+        jobs_count = driver.find_element(
+            by=By.CLASS_NAME, value="jobs-search-results-list__subtitle"
+        ).text
+        jobs_count = int(jobs_count.split()[0].replace(",", ""))
+        jobs_side_panel = driver.find_element(
+            by=By.CLASS_NAME, value="jobs-search-results-list"
+        )
+        jobs_list = driver.find_element(
+            by=By.CLASS_NAME, value="scaffold-layout__list-container"
+        )
+    except NoSuchElementException as e:
+        logger.info(f"No element found - {e}")
+        return []
+
     jobs = []
-    jobs_count = driver.find_element(
-        by=By.CLASS_NAME, value="jobs-search-results-list__subtitle"
-    ).text
-    jobs_count = int(jobs_count.split()[0].replace(",", ""))
-    jobs_side_panel = driver.find_element(
-        by=By.CLASS_NAME, value="jobs-search-results-list"
-    )
-    jobs_list = driver.find_element(
-        by=By.CLASS_NAME, value="scaffold-layout__list-container"
-    )
     jobs_scraped = 0
     cur_page = 1
     continue_scraping = True

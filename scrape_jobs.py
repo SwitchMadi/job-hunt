@@ -44,8 +44,10 @@ try:
     for jobs_url in config["scraping"]["linkedin"]["jobs_urls"]:
         logger.info(f"Scraping url - {jobs_url}")
         jobs = extract_linkedin_jobs(jobs_url)
-        df_jobs = pd.DataFrame(jobs)
+        if not jobs:
+            continue
 
+        df_jobs = pd.DataFrame(jobs)
         df_jobs["source"] = "linkedin"
         df_jobs["job_hash_id"] = df_jobs["job_url"].apply(generate_hash)
         df_jobs.drop_duplicates("job_hash_id", inplace=True)
@@ -65,6 +67,8 @@ try:
         logger.info(
             f"Jobs remaining after removing already scraped - {df_jobs.shape[0]}"
         )
+        if df_jobs.empty:
+            continue
 
         df_jobs["job_info"] = df_jobs.apply(
             lambda row: extract_job_info(row["job_description"], source=row["source"]),
