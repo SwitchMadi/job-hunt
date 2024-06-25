@@ -1,6 +1,6 @@
 import os
 import dotenv
-from openai import OpenAI
+from openai import OpenAI, RateLimitError
 from httpx import HTTPStatusError
 import time
 
@@ -30,8 +30,12 @@ def get_gpt_response(system_prompt, user_prompt, sleep_time=1):
         resp = completion.choices[0].message.content
         logger.debug(f"GPT response - \n{resp}")
         return resp
-    except HTTPStatusError as e:
+    except (RateLimitError, HTTPStatusError) as e:
         if e.response.status_code == 429:
+            if "You exceeded your current quota" in str(e) or sleep_time >= 60:
+                logger.exception(f"429 error occurred while calling Openai api: {e}")
+                return None
+
             logger.debug(
                 f"Openai API rate limit exceeded, retrying in {sleep_time} seconds..."
             )
