@@ -93,40 +93,50 @@ def extract_job_info(job_description, source):
         group_questions_prompt = ""
 
     job_info = {}
-    for question in gpt_resp.strip().split("\n"):
-        answer = re.sub(r"^\d+\.", "", question)
-        answer = (
-            answer.split("?")[-1]
-            .split(":")[-1]
-            .split(" - ")[-1]
-            .split("\n")[-1]
-            .strip()
-            .strip("'")
-            .strip('"')
+    try:
+        gpt_resp_questions = gpt_resp.strip().split("\n\n")
+        if len(gpt_resp_questions) == 1:
+            gpt_resp_questions = gpt_resp.strip().split("\n")
+        for question in gpt_resp_questions:
+            answer = re.sub(r"^\d+\.", "", question)
+            answer = (
+                answer.split("?")[-1]
+                .split(":")[-1]
+                .split(" - ")[-1]
+                .split("\n")[-1]
+                .strip("-")
+                .strip()
+                .strip("'")
+                .strip('"')
+            )
+            if "cannot determine" in answer.lower():
+                continue
+
+            match = re.search(r"(\d+)", question)
+            if match:
+                question_no = match.group(1)
+                if question_map.get(question_no):
+                    job_info[question_map[question_no]["key"]] = answer
+
+        if job_info.get("experience_requirement"):
+            years = re.findall(r"\d+", job_info["experience_requirement"])
+            years = [int(x.split(".")[0]) for x in years]
+            min_years = min(years) if years else None
+            max_years = max(years) if years else None
+            job_info["experience_requirement_min_years"] = min_years
+            job_info["experience_requirement_max_years"] = max_years
+            del job_info["experience_requirement"]
+
+        if job_info.get("employees_count"):
+            employees_count = re.findall(
+                r"\d+", job_info["employees_count"].replace(",", "")
+            )
+            employees_count = [int(x) for x in employees_count]
+            employees_count = min(employees_count) if employees_count else None
+            job_info["employees_count"] = employees_count
+    except Exception as e:
+        logger.exception(
+            f"An unexpected error occurred while extracting job info - {e}\nJob description -\n{job_description}"
         )
-        if "cannot determine" in answer.lower():
-            continue
-
-        match = re.search(r"(\d+)", question)
-        if match:
-            question_no = match.group(1)
-            job_info[question_map[question_no]["key"]] = answer
-
-    if job_info.get("experience_requirement"):
-        years = re.findall(r"\d+", job_info["experience_requirement"])
-        years = [int(x.split(".")[0]) for x in years]
-        min_years = min(years) if years else None
-        max_years = max(years) if years else None
-        job_info["experience_requirement_min_years"] = min_years
-        job_info["experience_requirement_max_years"] = max_years
-        del job_info["experience_requirement"]
-
-    if job_info.get("employees_count"):
-        employees_count = re.findall(
-            r"\d+", job_info["employees_count"].replace(",", "")
-        )
-        employees_count = [int(x) for x in employees_count]
-        employees_count = min(employees_count) if employees_count else None
-        job_info["employees_count"] = employees_count
 
     return job_info
