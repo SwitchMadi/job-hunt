@@ -90,7 +90,18 @@ def minify_html_for_gpt_prompt(html_content):
         comment.extract()
 
     # Extract relevant tags
-    relevant_tags = ["a", "button", "form", "input", "select", "textarea", "iframe"]
+    relevant_tags = [
+        "a",
+        "button",
+        "form",
+        "input",
+        "select",
+        "textarea",
+        "iframe",
+        "h1",
+        "h2",
+        "h3",
+    ]
     elements = soup.find_all(relevant_tags)
 
     # Create a new BeautifulSoup object to hold the filtered elements
