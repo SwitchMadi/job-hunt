@@ -2,6 +2,7 @@ import hashlib
 import datetime
 import shutil
 import os
+from bs4 import BeautifulSoup, Comment
 
 
 def generate_hash(string):
@@ -74,3 +75,36 @@ def unzip_directory(zip_file_path, extract_dir):
     :param extract_dir: Directory where the contents should be extracted.
     """
     shutil.unpack_archive(zip_file_path, extract_dir)
+
+
+def minify_html_for_gpt_prompt(html_content):
+    # Parse the HTML content
+    soup = BeautifulSoup(html_content, "html.parser")
+
+    # Remove script and style tags
+    for script_or_style in soup(["script", "style"]):
+        script_or_style.decompose()
+
+    # Remove comments
+    for comment in soup.findAll(text=lambda text: isinstance(text, Comment)):
+        comment.extract()
+
+    # Extract relevant tags
+    relevant_tags = ["a", "button", "form", "input", "select", "textarea", "iframe"]
+    elements = soup.find_all(relevant_tags)
+
+    # Create a new BeautifulSoup object to hold the filtered elements
+    filtered_soup = BeautifulSoup(features="html.parser")
+
+    for elem in elements:
+        # Copy the element to the new soup object
+        filtered_soup.append(elem.extract())
+
+    # Remove unnecessary attributes from the filtered elements
+    for elem in filtered_soup.find_all(True):
+        for attr in list(elem.attrs):
+            if attr not in ["id", "class", "href", "type", "name", "value"]:
+                del elem[attr]
+
+    # Return the prettified, filtered HTML
+    return filtered_soup.prettify()
