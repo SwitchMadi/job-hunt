@@ -8,7 +8,8 @@ import os
 def get_logger(
     name,
     file_name,
-    level="INFO",
+    file_log_level="INFO",
+    console_log_level="DEBUG",
 ):
     config = yaml.safe_load(open("config.yml"))
 
@@ -19,7 +20,7 @@ def get_logger(
 
         file_handler = {
             "class": "logging.handlers.RotatingFileHandler",
-            "level": level,
+            "level": file_log_level,
             "formatter": "standard",
             "filename": f"{config['log_folder']}/{file_name}-{today}.log",
             "mode": "a",
@@ -42,7 +43,7 @@ def get_logger(
         "handlers": {
             "console": {
                 "class": "logging.StreamHandler",
-                "level": "DEBUG",
+                "level": console_log_level,
                 "formatter": "standard",
                 "stream": "ext://sys.stdout",
             },
