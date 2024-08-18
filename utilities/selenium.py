@@ -26,9 +26,10 @@ def get_selenium_driver(headless=True):
     options.add_argument(
         f"user-data-dir={config['chrome_profile_path']}"
     )  # User Data directory
-    options.add_argument(
-        f"profile-directory={config['user_email']}"
-    )  # Profile directory
+    if config.get("user_email"):
+        options.add_argument(
+            f"profile-directory={config['user_email']}"
+        )  # Profile directory
 
     # Set up service
     service = Service(executable_path=config["chromedriver"])
