@@ -1,6 +1,7 @@
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
+from bs4 import BeautifulSoup
 import yaml
 
 
@@ -43,3 +44,30 @@ def get_selenium_driver(headless=True):
     )
 
     return driver
+
+
+def extract_iframe_urls(html_content):
+    # Parse the HTML content with BeautifulSoup
+    soup = BeautifulSoup(html_content, "html.parser")
+
+    # Find all iframe elements in the HTML
+    iframes = soup.find_all("iframe")
+    iframe_urls = []
+
+    # Iterate through each iframe
+    for iframe in iframes:
+        # Get the iframe's src attribute
+        src = iframe.get("src")
+        if src:
+            iframe_urls.append(src)
+        else:
+            # Look for meta refresh tag inside the iframe if src is not available
+            meta_refresh = iframe.find("meta", {"http-equiv": "refresh"})
+            if meta_refresh:
+                # Parse the URL from the content attribute
+                content = meta_refresh.get("content")
+                if content:
+                    url = content.split("url=")[-1].strip()
+                    iframe_urls.append(url)
+
+    return iframe_urls
