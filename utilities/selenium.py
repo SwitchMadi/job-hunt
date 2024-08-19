@@ -5,43 +5,49 @@ from bs4 import BeautifulSoup
 import yaml
 
 
+driver = None
+
+
 def get_selenium_driver(headless=True):
-    config = yaml.safe_load(open("config.yml"))
+    global driver
 
-    # Setup Chrome options
-    options = Options()
-    if headless:
-        options.add_argument("--headless")
-    else:
-        options.add_argument("start-maximized")  # open Browser in maximized mode
-    options.add_argument("disable-infobars")  # disabling infobars
-    options.add_argument("--disable-extensions")  # disabling extensions
-    options.add_argument(
-        "--disable-dev-shm-usage"
-    )  # overcome limited resource problems
-    options.add_argument("--no-sandbox")  # Bypass OS security model
-    options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    options.add_experimental_option("useAutomationExtension", False)
-    options.add_argument("--disable-blink-features=AutomationControlled")
+    if driver is None:
+        config = yaml.safe_load(open("config.yml"))
 
-    options.add_argument(
-        f"user-data-dir={config['chrome_profile_path']}"
-    )  # User Data directory
-    if config.get("user_email"):
+        # Setup Chrome options
+        options = Options()
+        if headless:
+            options.add_argument("--headless")
+        else:
+            options.add_argument("start-maximized")  # open Browser in maximized mode
+        options.add_argument("disable-infobars")  # disabling infobars
+        options.add_argument("--disable-extensions")  # disabling extensions
         options.add_argument(
-            f"profile-directory={config['user_email']}"
-        )  # Profile directory
+            "--disable-dev-shm-usage"
+        )  # overcome limited resource problems
+        options.add_argument("--no-sandbox")  # Bypass OS security model
+        options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        options.add_experimental_option("useAutomationExtension", False)
+        options.add_argument("--disable-blink-features=AutomationControlled")
 
-    # Set up service
-    service = Service(executable_path=config["chromedriver"])
+        options.add_argument(
+            f"user-data-dir={config['chrome_profile_path']}"
+        )  # User Data directory
+        if config.get("user_email"):
+            options.add_argument(
+                f"profile-directory={config['user_email']}"
+            )  # Profile directory
 
-    # Start browser
-    driver = webdriver.Chrome(service=service, options=options)
+        # Set up service
+        service = Service(executable_path=config["chromedriver"])
 
-    # This script attempts to set navigator.webdriver to undefined
-    driver.execute_script(
-        "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
-    )
+        # Start browser
+        driver = webdriver.Chrome(service=service, options=options)
+
+        # This script attempts to set navigator.webdriver to undefined
+        driver.execute_script(
+            "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+        )
 
     return driver
 
