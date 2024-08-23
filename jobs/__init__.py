@@ -4,6 +4,7 @@ from utilities.selenium import get_selenium_driver, extract_iframe_urls
 from utilities import minify_html_for_gpt_prompt
 from utilities.gpt import get_gpt_response
 from utilities.logging import get_logger
+from utilities import constants
 
 
 logger = get_logger(name="job", file_name="job-hunt")
@@ -50,13 +51,14 @@ class Job:
         for key, value in htmls.items():
             html_prompt += f"\nkey - {key}\nvalue - {minify_html_for_gpt_prompt(value['page_source'])}\n"
 
-        system_prompt = """You're a tool which helps in job application automation.
-            You are good at identifying html components for actions in job application."""
         user_prompt = f"""Out of of following htmls, which one is job application page for job title {self.title}.
             Answer should strictly be just the relevant key's name or "Cannot determine" -
             {html_prompt}"""
 
-        job_application_page_key = get_gpt_response(system_prompt, user_prompt)
+        job_application_page_key = get_gpt_response(
+            constants["gpt"]["system_prompts"]["application_step_identification"],
+            user_prompt,
+        )
 
         for key, value in htmls.items():
             if key in job_application_page_key:
