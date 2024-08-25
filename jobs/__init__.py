@@ -56,13 +56,13 @@ class ApplicationPage:
         try:
             overlay_action_buttons = eval(overlay_action_buttons)
             for overlay_action_button in overlay_action_buttons:
-                self.application_steps.append(
-                    CrossButton(
-                        x_path=overlay_action_button,
-                        action_type="close_overlay",
-                        parent_application_page=self,
-                    )
+                close_overlay_button = Button(
+                    x_path=overlay_action_button,
+                    action_type="close_overlay",
+                    parent_application_page=self,
                 )
+                close_overlay_button.proceed()
+                self.application_steps.append(close_overlay_button)
         except SyntaxError:
             logger.warn(
                 f"GPT response to identify_popups prompt could not be converted to list. Response - "
@@ -154,7 +154,7 @@ class PageComponent(ABC):
         pass
 
 
-class CrossButton(PageComponent):
+class Button(PageComponent):
     def __init__(self, x_path, action_type, parent_application_page: ApplicationPage):
         global driver
         self.x_path = x_path
