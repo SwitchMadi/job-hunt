@@ -1,6 +1,7 @@
 import time
 from abc import ABC, abstractmethod
 from selenium.webdriver.common.by import By
+from pydantic import BaseModel, Field
 
 from utilities.selenium import get_selenium_driver, extract_iframe_urls
 from utilities import minify_html_for_gpt_prompt
@@ -30,7 +31,7 @@ class ApplicationPage:
         self.original_application_page = ApplicationPage
         self.application_steps = []
 
-    def identify_popups(self, retry=False):
+    def identify_popups(self):
         global driver
         driver.get(self.url)
         time.sleep(10)
@@ -39,37 +40,45 @@ class ApplicationPage:
             f"Analyze the following HTML page for any screen overlays or UI overlays such as cookie "
             f"consent banners, pop-ups which is strictly not related to job application, or any other similar "
             f"elements. For each overlay found, provide the XPath of one button to close the overlay."
-            f"Analyse the button if it can close the overlay. If the button doesn't close the overlay "
-            f"then strictly ignore the overlay and do not give button XPath in response.\n"
-            f"Your response should be strictly a list of XPaths with reason, with no additional text or "
-            f"explanation whatsoever. If no overlays are found, respond with an empty list.\n"
-            f"Examples of valid responses: ['//button[@id=\"accept\"]', '//div[@class=\"popup\"]/button'], "
-            f"[]\nI will click the XPaths in the order you provide, so ensure the sequence is correct and "
+            f"Carefully analyse each button based on its html, class names & text if it can close the overlay. If the "
+            f"button doesn't seem to be closing the overlay then strictly ignore the overlay and do not give button in "
+            f"response.\nI will click the XPaths in the order you provide, so ensure the sequence is correct and "
             f"can be clicked in that order.\n"
             f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}"
         )
 
-        overlay_action_buttons = get_gpt_response(
+        class OverlayActionButton(BaseModel):
+            x_path: str = Field(
+                ...,
+                description="For the overlay found, XPath of one button to close the overlay.",
+            )
+            button_result: str = Field(
+                ..., description="What will happen clicking this button?"
+            )
+
+        class OverlayActionButtons(BaseModel):
+            buttons: list[OverlayActionButton]
+
+        overlay_action_buttons_found, overlay_action_buttons = get_gpt_response(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
+            response_format=OverlayActionButtons,
         )
-        try:
-            overlay_action_buttons = eval(overlay_action_buttons)
-            for overlay_action_button in overlay_action_buttons:
+        if overlay_action_buttons_found:
+            for overlay_action_button in overlay_action_buttons.buttons:
                 close_overlay_button = Button(
-                    x_path=overlay_action_button,
-                    action_type="close_overlay",
+                    x_path=overlay_action_button.x_path,
+                    button_type="close_overlay",
                     parent_application_page=self,
+                    click_result=overlay_action_button.button_result,
                 )
                 close_overlay_button.proceed()
                 self.application_steps.append(close_overlay_button)
-        except SyntaxError:
+        else:
             logger.warn(
-                f"GPT response to identify_popups prompt could not be converted to list. Response - "
+                f"GPT could/did not find overlay close buttons. Response - "
                 f"{overlay_action_buttons}"
             )
-            if not retry:
-                return self.identify_popups(retry=True)
 
         return
 
@@ -155,11 +164,18 @@ class PageComponent(ABC):
 
 
 class Button(PageComponent):
-    def __init__(self, x_path, action_type, parent_application_page: ApplicationPage):
+    def __init__(
+        self,
+        x_path,
+        button_type,
+        parent_application_page: ApplicationPage,
+        click_result=None,
+    ):
         global driver
         self.x_path = x_path
-        self.action_type = action_type
+        self.action_type = button_type
         self.parent_application_page = parent_application_page
+        self.click_result = click_result
 
     def proceed(self):
         global driver
@@ -180,4 +196,5 @@ class Button(PageComponent):
             "class_name": self.__class__.__name__,
             "x_path": self.x_path,
             "action_type": self.action_type,
+            "click_result": self.click_result,
         }

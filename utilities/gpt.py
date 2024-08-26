@@ -13,11 +13,11 @@ client = OpenAI(api_key=os.getenv("OPENAI_KEY"))
 config = yaml.safe_load(open("config.yml"))
 
 
-def get_gpt_response(system_prompt, user_prompt, sleep_time=1):
+def get_gpt_response(system_prompt, user_prompt, response_format=None, sleep_time=1):
     try:
-        completion = client.chat.completions.create(
-            model=config["openai_model"],
-            messages=[
+        payload = {
+            "model": config["openai_model"],
+            "messages": [
                 {
                     "role": "system",
                     "content": system_prompt,
@@ -27,11 +27,28 @@ def get_gpt_response(system_prompt, user_prompt, sleep_time=1):
                     "content": user_prompt,
                 },
             ],
-        )
+        }
 
-        resp = completion.choices[0].message.content
-        logger.debug(f"GPT response - \n{resp}")
-        return resp
+        if response_format is not None:
+            payload["response_format"] = response_format
+
+            completion = client.beta.chat.completions.parse(**payload)
+            resp = completion.choices[0].message
+
+            if resp.refusal:
+                logger.debug(
+                    f"GPT could not respond with structured output - \n{resp.refusal}"
+                )
+                return False, resp.refusal
+            else:
+                logger.debug(f"GPT responded with structured output - \n{resp.parsed}")
+                return True, resp.parsed
+        else:
+            completion = client.chat.completions.create(**payload)
+            resp = completion.choices[0].message.content
+
+            logger.debug(f"GPT response - \n{resp}")
+            return resp
     except (RateLimitError, HTTPStatusError) as e:
         if e.response.status_code == 429:
             if "You exceeded your current quota" in str(e) or sleep_time >= 60:
