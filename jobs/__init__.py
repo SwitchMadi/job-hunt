@@ -2,6 +2,7 @@ import time
 from abc import ABC, abstractmethod
 from selenium.webdriver.common.by import By
 from pydantic import BaseModel, Field
+from enum import Enum
 
 from utilities.selenium import get_selenium_driver, extract_iframe_urls
 from utilities import minify_html_for_gpt_prompt
@@ -150,7 +151,118 @@ class ApplicationPage:
         return
 
     def identify_steps(self):
-        pass
+        global driver
+        application_completed = False
+        while not application_completed:
+            user_prompt = (
+                f"Following HTML page is job application page for {self.parent_job.title}. Analyse the HTML"
+                f"very carefully for the immediate next step in job application. Respond with just 1 next "
+                f"step, not any further than 1 step.\n"
+                f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}"
+            )
+
+            class JobApplicationStep(str, Enum):
+                start_application = "start_application"
+                select_application_data_source = "select_application_data_source"
+                job_application_completed = "job_application_completed"
+
+            class JobApplicationNextStep(BaseModel):
+                step: JobApplicationStep = Field(
+                    ...,
+                    description="What is the immediate next step in the job application, based on the HTML.\n"
+                    "start_application - I have to start job application process by clicking somewhere\n"
+                    "select_application_data_source - The page is asking for selecting job application data input "
+                    "source like autofill using resume, manual input, apply using linkedin etc.\n"
+                    "job_application_completed - Job application has been completed.",
+                )
+
+            next_step_found, next_step = get_gpt_response(
+                constants.gpt["system_prompts"]["application_step_identification"],
+                user_prompt,
+                response_format=JobApplicationNextStep,
+            )
+            if next_step_found:
+                if next_step.step == JobApplicationStep.start_application:
+                    self._extract_start_application_step_details()
+                elif (
+                    next_step.step == JobApplicationStep.select_application_data_source
+                ):
+                    self._extract_application_data_source_options_details()
+            else:
+                application_completed = True
+
+    def _extract_start_application_step_details(self):
+        global driver
+
+        user_prompt = (
+            f"Following HTML page is job application page for {self.parent_job.title}. As a first step in "
+            f"the job application, I have to start application by clicking some button. Give XPath of the"
+            f"UI element clicking which I can start the job application.\n"
+            f"HTML : {minify_html_for_gpt_prompt(driver.page_source)}"
+        )
+
+        class StartApplication(BaseModel):
+            x_path: str = Field(
+                ..., description="XPath of the UI element to start the job application"
+            )
+
+        start_application_button_found, start_application_button = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=StartApplication,
+        )
+        if start_application_button_found:
+            start_application_button = Button(
+                x_path=start_application_button.x_path,
+                button_type="start_application",
+                parent_application_page=self,
+                click_result="Starts job application",
+            )
+            start_application_button.proceed()
+            self.application_steps.append(start_application_button)
+        else:
+            logger.critical(
+                f"Start application button not found.\nGPT response - {start_application_button}"
+            )
+
+    def _extract_application_data_source_options_details(self):
+        global driver
+
+        user_prompt = (
+            f"Following HTML page is job application page for {self.parent_job.title}. As the next step in "
+            f"the job application, I have to select how I want to insert data in the application fields."
+            f"Priority is as follows -\n"
+            f"1. Manually insert data\n"
+            f"2. Autofill with resume\n"
+            f"Based on above priority give me XPath of just 1 UI element clicking which I can select data "
+            f"input strategy for the job application.\n"
+            f"HTML : {minify_html_for_gpt_prompt(driver.page_source)}"
+        )
+
+        class DataInputOption(BaseModel):
+            x_path: str = Field(
+                ..., description="XPath of the UI element to start the job application"
+            )
+            strategy: str = Field(..., description="selected data input strategy")
+
+        data_input_option_found, data_input_option = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=DataInputOption,
+        )
+        if data_input_option_found:
+            data_input_option_button = Button(
+                x_path=data_input_option.x_path,
+                button_type="select_application_data_source",
+                parent_application_page=self,
+                click_result=data_input_option.strategy,
+            )
+            data_input_option_button.proceed()
+            self.application_steps.append(data_input_option_button)
+        else:
+            logger.critical(
+                f"Data input option not found / identified properly.\nGPT response - {data_input_option}"
+            )
 
 
 class PageComponent(ABC):
@@ -185,8 +297,8 @@ class Button(PageComponent):
             driver.execute_script("arguments[0].scrollIntoView(true);", element)
             element.click()
         except Exception as e:
-            logger.error(
-                f"Unexpected error occurred in proceed method.\n{e}\nButton instance - {vars(self)}"
+            logger.exception(
+                f"Unexpected error occurred in class Button's proceed method.\n{e}\nButton instance - {vars(self)}"
             )
 
         return
