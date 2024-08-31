@@ -168,9 +168,9 @@ class ApplicationPage:
         application_completed = False
         while not application_completed:
             user_prompt = (
-                f"Following HTML page is job application page for {self.parent_job.title}. Analyse the HTML"
-                f"very carefully for the immediate next step in job application. Respond with just 1 next "
-                f"step, not any further than 1 step.\n"
+                f"Following HTML page is job application page for {self.parent_job.title}. Analyse the whole HTML"
+                f"very carefully for determining the immediate next step in job application. Respond with just 1 next "
+                f"step, not any further than 1 step. Login can be the least priority for next step if possible.\n"
                 f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}"
             )
 
@@ -182,7 +182,7 @@ class ApplicationPage:
             class JobApplicationNextStep(BaseModel):
                 step: JobApplicationStep = Field(
                     ...,
-                    description="What is the immediate next step in the job application, based on the HTML.\n"
+                    description="What is the immediate & mandatory next step in the job application, based on the whole HTML.\n"
                     "start_application - I have to start job application process by clicking somewhere\n"
                     "select_application_data_source - The page is asking for selecting job application data input "
                     "source like autofill using resume, manual input, apply using linkedin etc.\n"
