@@ -1,6 +1,7 @@
 import time
 from abc import ABC, abstractmethod
 from selenium.webdriver.common.by import By
+from selenium.common.exceptions import ElementClickInterceptedException
 from pydantic import BaseModel, Field
 from enum import Enum
 
@@ -308,6 +309,12 @@ class Button(PageComponent):
             element = driver.find_element(By.XPATH, self.x_path)
             driver.execute_script("arguments[0].scrollIntoView(true);", element)
             element.click()
+        except ElementClickInterceptedException as e:
+            logger.info(
+                f"element click intercepted in class Button's proceed method.\n{e}\nButton instance - {vars(self)}"
+            )
+            element = driver.find_element(By.XPATH, self.x_path)
+            driver.execute_script("arguments[0].click();", element)
         except Exception as e:
             logger.exception(
                 f"Unexpected error occurred in class Button's proceed method.\n{e}\nButton instance - {vars(self)}"
