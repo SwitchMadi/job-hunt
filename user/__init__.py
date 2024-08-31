@@ -1,14 +1,22 @@
 import uuid
 import yaml
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import pytz
 import numpy as np
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
+import os
+import dotenv
 
 from utilities.sql import get_sql_query_output, execute_sql_query, get_sql_connection
 from utilities.google_services.drive import DriveResource
 from utilities.google_services.sheet import Sheet
+from utilities.logging import get_logger
 
 
+logger = get_logger(name="user", file_name="job-hunt")
+
+dotenv.load_dotenv()
 config = yaml.safe_load(open("config.yml"))
 
 
@@ -30,6 +38,7 @@ class User:
         self._drive_folder = None
         self._jobs_sheet = None
         self._job_filters = None
+        self._google_oauth_credentials = None
 
     @staticmethod
     def find_user_by_email(email):
@@ -296,3 +305,76 @@ class User:
             )
 
         return True
+
+    @property
+    def google_oauth_credentials(self):
+        """
+        Load the credentials from the database using the user_id.
+        """
+
+        if self._google_oauth_credentials:
+            return self._google_oauth_credentials
+
+        credentials = None
+
+        query = f"""
+            SELECT * 
+            FROM users.google_oauth_tokens 
+            WHERE user_id = {self.id}
+        """
+        result = get_sql_query_output(query)
+
+        if result:
+            token_data = result[0]
+            credentials = Credentials(
+                token=token_data["access_token"],
+                refresh_token=token_data["refresh_token"],
+                expiry=datetime.fromtimestamp(token_data["expires_at"]),
+                token_uri="https://oauth2.googleapis.com/token",
+                client_id=os.getenv("GOOGLE_CLIENT_ID"),
+                client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
+                scopes=token_data["scope"].split(","),
+            )
+
+            if credentials.expired and credentials.refresh_token:
+                try:
+                    credentials.refresh(Request())
+                    self.google_oauth_credentials = credentials
+                except Exception as e:
+                    logger.exception(f"Failed to refresh google oauth token: {e}")
+                    credentials = None
+
+        self._google_oauth_credentials = credentials
+
+        return credentials
+
+    @google_oauth_credentials.setter
+    def google_oauth_credentials(self, credentials):
+        self._google_oauth_credentials = credentials
+        self._save_google_oauth_credentials()
+        return
+
+    def _save_google_oauth_credentials(self):
+        """
+        Upsert the OAuth2 credentials to the SQL database.
+        """
+        credentials = self.google_oauth_credentials
+        expires_at = int(credentials.expiry.replace(tzinfo=timezone.utc).timestamp())
+        query = f"""
+            INSERT INTO users.google_oauth_tokens
+            (user_id, access_token, refresh_token, expires_at, scope)
+            VALUES (
+                {self.id}, '{credentials.token}', '{credentials.refresh_token}', {expires_at},
+                '{','.join(credentials.scopes)}'
+            )
+            ON CONFLICT (user_id)
+            DO UPDATE SET
+                access_token = EXCLUDED.access_token,
+                refresh_token = EXCLUDED.refresh_token,
+                expires_at = EXCLUDED.expires_at,
+                scope = EXCLUDED.scope;
+            """
+
+        execute_sql_query(query)
+
+        return
