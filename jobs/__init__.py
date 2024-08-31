@@ -30,7 +30,19 @@ class ApplicationPage:
         self.parent_job = parent_job
 
         self.original_application_page = ApplicationPage
-        self.application_steps = []
+        self.head_step = None
+        self.tail_step = None
+
+    def _update_steps(self, step):
+        if self.head_step is None:
+            self.head_step = step
+            self.tail_step = step
+        else:
+            self.tail_step.next = step
+            step.prev = self.tail_step
+            self.tail_step = step
+
+        return
 
     def identify_popups(self):
         global driver
@@ -74,7 +86,7 @@ class ApplicationPage:
                     click_result=overlay_action_button.button_result,
                 )
                 close_overlay_button.proceed()
-                self.application_steps.append(close_overlay_button)
+                self._update_steps(close_overlay_button)
         else:
             logger.warn(
                 f"GPT could/did not find overlay close buttons. Response - "
@@ -219,7 +231,7 @@ class ApplicationPage:
                 click_result="Starts job application",
             )
             start_application_button.proceed()
-            self.application_steps.append(start_application_button)
+            self._update_steps(start_application_button)
         else:
             logger.critical(
                 f"Start application button not found.\nGPT response - {start_application_button}"
@@ -258,7 +270,7 @@ class ApplicationPage:
                 click_result=data_input_option.strategy,
             )
             data_input_option_button.proceed()
-            self.application_steps.append(data_input_option_button)
+            self._update_steps(data_input_option_button)
         else:
             logger.critical(
                 f"Data input option not found / identified properly.\nGPT response - {data_input_option}"
