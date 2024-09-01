@@ -114,7 +114,7 @@ def minify_html_for_gpt_prompt(html_content):
     # Remove unnecessary attributes from the filtered elements
     for elem in filtered_soup.find_all(True):
         for attr in list(elem.attrs):
-            if attr not in ["id", "class", "href", "type", "name", "value"]:
+            if attr not in ["id", "class", "href", "type", "name", "value", "display"]:
                 del elem[attr]
 
     # Return the prettified, filtered HTML

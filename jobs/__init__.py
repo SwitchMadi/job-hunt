@@ -1,7 +1,4 @@
 import time
-from abc import ABC, abstractmethod
-from selenium.webdriver.common.by import By
-from selenium.common.exceptions import ElementClickInterceptedException
 from pydantic import BaseModel, Field
 from enum import Enum
 
@@ -10,6 +7,7 @@ from utilities import minify_html_for_gpt_prompt
 from utilities.gpt import get_gpt_response
 from utilities.logging import get_logger
 from utilities import constants
+from jobs.page_components import Button, Login
 
 
 logger = get_logger(name="job", file_name="job-hunt")
@@ -18,10 +16,11 @@ driver.set_page_load_timeout(15)
 
 
 class Job:
-    def __init__(self, url, title):
+    def __init__(self, url, title, user=None):
         self.url = url
         self.title = title
         self.application_page = ApplicationPage(url=url, parent_job=self)
+        self.user = user
 
 
 class ApplicationPage:
@@ -178,6 +177,7 @@ class ApplicationPage:
             class JobApplicationStep(str, Enum):
                 start_application = "start_application"
                 select_application_data_source = "select_application_data_source"
+                login = "login"
                 job_application_completed = "job_application_completed"
 
             class JobApplicationNextStep(BaseModel):
@@ -187,6 +187,7 @@ class ApplicationPage:
                     "start_application - I have to start job application process by clicking somewhere\n"
                     "select_application_data_source - The page is asking for selecting job application data input "
                     "source like autofill using resume, manual input, apply using linkedin etc.\n"
+                    "login - If login is mandatory step before moving to any next step in job application.\n"
                     "job_application_completed - Job application has been completed.",
                 )
 
@@ -202,6 +203,8 @@ class ApplicationPage:
                     next_step.step == JobApplicationStep.select_application_data_source
                 ):
                     self._extract_application_data_source_options_details()
+                elif next_step.step == JobApplicationStep.login:
+                    self._extract_login_step_details()
             else:
                 application_completed = True
 
@@ -217,7 +220,8 @@ class ApplicationPage:
 
         class StartApplication(BaseModel):
             x_path: str = Field(
-                ..., description="XPath of the UI element to start the job application"
+                ...,
+                description="XPath of the UI element to start the job application",
             )
 
         start_application_button_found, start_application_button = get_gpt_response(
@@ -278,69 +282,7 @@ class ApplicationPage:
                 f"Data input option not found / identified properly.\nGPT response - {data_input_option}"
             )
 
-
-class PageComponent(ABC):
-    @abstractmethod
-    def proceed(self):
-        pass
-
-    @abstractmethod
-    def to_dict(self):
-        pass
-
-
-class Button(PageComponent):
-    def __init__(
-        self,
-        x_path,
-        button_type,
-        parent_application_page: ApplicationPage,
-        click_result=None,
-    ):
-        global driver
-        self.x_path = x_path
-        self.action_type = button_type
-        self.parent_application_page = parent_application_page
-        self.click_result = click_result
-
-        self.next = None
-        self.prev = None
-        self.is_component_functional = True
-
-    def proceed(self, attempt=1, max_attempt=3):
-        global driver
-
-        try:
-            element = driver.find_element(By.XPATH, self.x_path)
-            driver.execute_script("arguments[0].scrollIntoView(true);", element)
-            element.click()
-            time.sleep(2)
-        except ElementClickInterceptedException as e:
-            logger.info(
-                f"element click intercepted in class Button's proceed method.\n{e}\nButton instance - {vars(self)}"
-            )
-            element = driver.find_element(By.XPATH, self.x_path)
-            driver.execute_script("arguments[0].click();", element)
-            time.sleep(2)
-        except Exception as e:
-            if attempt <= max_attempt:
-                logger.info(
-                    f"Retrying class Button's proceed method.\nButton instance - {vars(self)}"
-                )
-                time.sleep(2 * (attempt**2))
-                return self.proceed(attempt=attempt + 1)
-            else:
-                logger.exception(
-                    f"Unexpected error occurred in class Button's proceed method.\n{e}\nButton instance - {vars(self)}"
-                )
-                self.is_component_functional = False
-
-        return
-
-    def to_dict(self):
-        return {
-            "class_name": self.__class__.__name__,
-            "x_path": self.x_path,
-            "action_type": self.action_type,
-            "click_result": self.click_result,
-        }
+    def _extract_login_step_details(self):
+        login_step = Login(parent_application_page=self)
+        login_step.proceed()
+        self._update_steps(login_step)
