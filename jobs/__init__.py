@@ -35,13 +35,14 @@ class ApplicationPage:
         self.tail_step = None
 
     def _update_steps(self, step):
-        if self.head_step is None:
-            self.head_step = step
-            self.tail_step = step
-        else:
-            self.tail_step.next = step
-            step.prev = self.tail_step
-            self.tail_step = step
+        if step.is_component_functional:
+            if self.head_step is None:
+                self.head_step = step
+                self.tail_step = step
+            else:
+                self.tail_step.next = step
+                step.prev = self.tail_step
+                self.tail_step = step
 
         return
 
@@ -302,23 +303,37 @@ class Button(PageComponent):
         self.parent_application_page = parent_application_page
         self.click_result = click_result
 
-    def proceed(self):
+        self.next = None
+        self.prev = None
+        self.is_component_functional = True
+
+    def proceed(self, attempt=1, max_attempt=3):
         global driver
 
         try:
             element = driver.find_element(By.XPATH, self.x_path)
             driver.execute_script("arguments[0].scrollIntoView(true);", element)
             element.click()
+            time.sleep(2)
         except ElementClickInterceptedException as e:
             logger.info(
                 f"element click intercepted in class Button's proceed method.\n{e}\nButton instance - {vars(self)}"
             )
             element = driver.find_element(By.XPATH, self.x_path)
             driver.execute_script("arguments[0].click();", element)
+            time.sleep(2)
         except Exception as e:
-            logger.exception(
-                f"Unexpected error occurred in class Button's proceed method.\n{e}\nButton instance - {vars(self)}"
-            )
+            if attempt <= max_attempt:
+                logger.info(
+                    f"Retrying class Button's proceed method.\nButton instance - {vars(self)}"
+                )
+                time.sleep(2 * (attempt**2))
+                return self.proceed(attempt=attempt + 1)
+            else:
+                logger.exception(
+                    f"Unexpected error occurred in class Button's proceed method.\n{e}\nButton instance - {vars(self)}"
+                )
+                self.is_component_functional = False
 
         return
 
