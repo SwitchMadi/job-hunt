@@ -44,8 +44,10 @@ class Button(PageComponent):
         self.next = None
         self.prev = None
         self.is_component_functional = True
+        self.attempt = 1
+        self.max_attempt = 3
 
-    def proceed(self, attempt=1, max_attempt=3):
+    def proceed(self):
         global driver
 
         try:
@@ -62,12 +64,13 @@ class Button(PageComponent):
             actions.move_to_element(element).click().perform()
             time.sleep(2)
         except Exception as e:
-            if attempt <= max_attempt:
+            if self.attempt <= self.max_attempt:
                 logger.info(
                     f"Retrying class Button's proceed method.\nButton instance - {vars(self)}"
                 )
-                time.sleep(2 * (attempt**2))
-                return self.proceed(attempt=attempt + 1)
+                time.sleep(2 * (self.attempt**2))
+                self.attempt += 1
+                return self.proceed()
             else:
                 logger.exception(
                     f"Unexpected error occurred in class Button's proceed method.\n{e}\nButton instance - {vars(self)}"
@@ -82,14 +85,12 @@ class TextInput(PageComponent):
         self,
         x_path,
         input_type,
-        input_text,
         parent_application_page,
         parent_component=None,
     ):
         global driver
         self.x_path = x_path
         self.input_type = input_type
-        self.input_text = input_text
         self.parent_application_page = parent_application_page
         self.parent_component = parent_component
 
@@ -105,10 +106,24 @@ class TextInput(PageComponent):
             element.send_keys(Keys.RETURN)
         except Exception as e:
             logger.exception(
-                f"Unexpected error occurred in class TextInput's proceed method.\n{e}\nTextInput instance - {vars(self)}"
+                f"Unexpected error occurred in class TextInput's proceed method.\n{e}\n"
+                f"TextInput instance - {vars(self)}"
             )
 
         return
+
+    @property
+    def input_text(self):
+        if self.input_type == "username":
+            input_text = self.parent_application_page.parent_job.user.email
+        elif self.input_type == "password":
+            input_text = self.parent_application_page.parent_job.user.password
+        else:
+            raise Exception(
+                f"Invalid input_type for class TextInput - {self.input_type}"
+            )
+
+        return input_text
 
 
 class Login(PageComponent):
@@ -202,7 +217,6 @@ class Login(PageComponent):
                     self.username_input = TextInput(
                         x_path=login_step.username_x_path,
                         input_type="username",
-                        input_text=self.parent_application_page.parent_job.user.email,
                         parent_application_page=self.parent_application_page,
                         parent_component=self,
                     )
@@ -211,7 +225,6 @@ class Login(PageComponent):
                     self.password_input = TextInput(
                         x_path=login_step.password_x_path,
                         input_type="password",
-                        input_text=self.parent_application_page.parent_job.user.password,
                         parent_application_page=self.parent_application_page,
                         parent_component=self,
                     )
