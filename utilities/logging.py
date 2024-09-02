@@ -9,7 +9,7 @@ def get_logger(
     name,
     file_name,
     file_log_level="INFO",
-    console_log_level="DEBUG",
+    console_log_level="INFO",
 ):
     config = yaml.safe_load(open("config.yml"))
 
