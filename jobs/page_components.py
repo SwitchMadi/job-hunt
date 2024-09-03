@@ -230,6 +230,13 @@ class Login(PageComponent):
                     )
                     self.password_input.proceed()
 
+                    self.login_button = Button(
+                        x_path=login_step.login_x_path,
+                        button_type="login",
+                        parent_application_page=self.parent_application_page,
+                        parent_component=self,
+                    )
+
                     self.login_security_enabled = (
                         login_step.login_security_enabled.value
                     )
@@ -240,14 +247,44 @@ class Login(PageComponent):
                         )
                         return
                     else:
-                        self.login_button = Button(
-                            x_path=login_step.login_x_path,
-                            button_type="login",
-                            parent_application_page=self.parent_application_page,
-                            parent_component=self,
-                        )
                         self.login_button.proceed()
             else:
                 logger.critical(
                     f"First login step could not be identified.\nGPT response - {login_step}"
                 )
+
+        if self.is_login_successful:
+            return
+        else:
+            pass
+
+    @property
+    def is_login_successful(self):
+        user_prompt = (
+            f"Following HTML page is job application page for {self.parent_application_page.parent_job.title}. "
+            f"I just tried to login using username and password. Either I logged in successfully and current HTML is of"
+            f" the page next to login section OR login was unsuccessful and there is some error message. Analyse the "
+            f"HTML very carefully for determining whether login was successful or not.\n"
+            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}"
+        )
+
+        class LoginSuccessful(Enum):
+            true = True
+            false = False
+
+        class IsLoginSuccessful(BaseModel):
+            login_successful: LoginSuccessful = Field(
+                ..., description="Whether login was successful or not"
+            )
+
+        login_success_determined, is_login_successful = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=IsLoginSuccessful,
+        )
+        if login_success_determined:
+            return is_login_successful.login_successful.value
+        else:
+            raise Exception(
+                f"Login success could not be determined.\nGPT response - {is_login_successful}"
+            )
