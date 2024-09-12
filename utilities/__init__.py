@@ -111,6 +111,11 @@ def minify_html_for_gpt_prompt(html_content):
     ]
     elements = soup.find_all(relevant_tags)
 
+    # Include any other tag if it has text content < 100 characters
+    for tag in soup.find_all(True):
+        if tag.name not in relevant_tags and 0 < len(tag.get_text(strip=True)) < 100:
+            elements.append(tag)
+
     # Create a new BeautifulSoup object to hold the filtered elements
     filtered_soup = BeautifulSoup(features="html.parser")
 
