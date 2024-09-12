@@ -1,5 +1,6 @@
 from googleapiclient.discovery import build
 import base64
+from bs4 import BeautifulSoup
 
 from utilities.logging import get_logger
 from utilities.google_services import get_google_credentials
@@ -29,7 +30,7 @@ class Email:
                 .get(
                     userId="me",
                     id=self.message_id,
-                    fields="id,internalDate,payload/headers,payload/parts",
+                    fields="id,internalDate,payload/*",
                 )
                 .execute()
             )
@@ -70,18 +71,49 @@ class Email:
 
     @staticmethod
     def _extract_body(msg):
-        """Extract the body text from the email."""
+        """Extract the text content from the email, handling different content types."""
+
+        def decode_body(data):
+            """Helper function to decode base64 body data."""
+            return base64.urlsafe_b64decode(data).decode("utf-8")
+
+        def get_text_from_html(html):
+            """Helper function to extract text from HTML."""
+            soup = BeautifulSoup(html, "html.parser")
+            return soup.get_text(separator="\n", strip=True)
+
+        def get_body_from_parts(parts):
+            """Recursively extract body content from parts."""
+            for part in parts:
+                mime_type = part.get("mimeType")
+                body_data = part.get("body", {}).get("data")
+
+                if mime_type == "text/plain" and body_data:
+                    return decode_body(body_data)
+                elif mime_type == "text/html" and body_data:
+                    html_content = decode_body(body_data)
+                    return get_text_from_html(html_content)
+                elif (
+                    mime_type
+                    in ["multipart/alternative", "multipart/mixed", "multipart/related"]
+                    and "parts" in part
+                ):
+                    nested_body = get_body_from_parts(part["parts"])
+                    if nested_body:
+                        return nested_body
+
+            return None
+
+        if "body" in msg["payload"] and "data" in msg["payload"]["body"]:
+            body_data = decode_body(msg["payload"]["body"]["data"])
+            if msg["payload"]["mimeType"] == "text/html":
+                return get_text_from_html(body_data)
+            return body_data
+
         if "parts" in msg["payload"]:
-            for part in msg["payload"]["parts"]:
-                if part["mimeType"] == "text/plain":
-                    body_data = part["body"]["data"]
-                    body = base64.urlsafe_b64decode(body_data).decode("utf-8")
-                    return body
-        else:
-            body_data = msg["payload"]["body"]["data"]
-            body = base64.urlsafe_b64decode(body_data).decode("utf-8")
-            return body
-        return "No body text"
+            return get_body_from_parts(msg["payload"]["parts"])
+
+        return None
 
     def mark_as_read(self):
         """
@@ -101,7 +133,7 @@ class Gmail:
         credentials = get_google_credentials(scopes=["gmail"], user=user)
         self.client = build("gmail", "v1", credentials=credentials)
 
-    def get_emails(self, query=None, max_results=10):
+    def get_emails(self, query=None, max_results=100):
         """
         Get emails based on the provided query.
         :param query: Gmail search query string.
