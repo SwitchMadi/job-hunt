@@ -12,6 +12,7 @@ from utilities.sql import get_sql_query_output, execute_sql_query, get_sql_conne
 from utilities.google_services.drive import DriveResource
 from utilities.google_services.sheet import Sheet
 from utilities.logging import get_logger
+from utilities import generate_password, encrypt_string, decrypt_password
 
 
 logger = get_logger(name="user", file_name="job-hunt")
@@ -28,12 +29,14 @@ class User:
         if user is None:
             self.hash_id = uuid.uuid4()
             self.name = name
+            self.password = encrypt_string(generate_password())
             self.save_to_db()
             user = User.find_user_by_email(email)
 
         self.id = user["id"]
         self.hash_id = user["user_hash_id"]
         self.name = user["name"]
+        self.password = decrypt_password(user["password"])
 
         self._drive_folder = None
         self._jobs_sheet = None
@@ -56,8 +59,8 @@ class User:
     def save_to_db(self):
         user_create_query = f"""
             insert into users.users
-            (user_hash_id, email, name)
-            values ('{self.hash_id}', '{self.email}', '{self.name}')
+            (user_hash_id, email, name, password)
+            values ('{self.hash_id}', '{self.email}', '{self.name}', '{self.password}')
         """
         return execute_sql_query(user_create_query)
 

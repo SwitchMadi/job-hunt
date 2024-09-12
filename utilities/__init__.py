@@ -3,10 +3,17 @@ import datetime
 import shutil
 import os
 from bs4 import BeautifulSoup, Comment
+import random
+import string
+from cryptography.fernet import Fernet
+import dotenv
 
 
-def generate_hash(string):
-    hash_object = hashlib.sha256(string.encode())
+dotenv.load_dotenv()
+
+
+def generate_hash(input_string):
+    hash_object = hashlib.sha256(input_string.encode())
     _hash = hash_object.hexdigest()
 
     return _hash
@@ -119,3 +126,47 @@ def minify_html_for_gpt_prompt(html_content):
 
     # Return the prettified, filtered HTML
     return filtered_soup.prettify()
+
+
+def generate_password():
+    length = 12
+
+    # Define the character sets
+    uppercase = string.ascii_uppercase
+    lowercase = string.ascii_lowercase
+    digits = string.digits
+    special_characters = "!@#$%^&*"
+
+    # Make sure the password contains at least one of each required character type
+    password = [
+        random.choice(uppercase),
+        random.choice(lowercase),
+        random.choice(digits),
+        random.choice(
+            string.ascii_letters
+        ),  # At least one alphabetic character (uppercase or lowercase)
+        random.choice(special_characters),
+    ]
+
+    # Fill the rest of the password length with random characters from all sets combined
+    all_characters = uppercase + lowercase + digits + special_characters
+    password += random.choices(all_characters, k=length - len(password))
+
+    # Shuffle to ensure randomness
+    random.shuffle(password)
+
+    return "".join(password)
+
+
+def encrypt_string(input_string):
+    cipher_suite = Fernet(os.getenv("ENCRYPTION_KEY"))
+    encoded_password = input_string.encode("utf-8")
+    encrypted_password = cipher_suite.encrypt(encoded_password)
+    return encrypted_password.decode("utf-8")
+
+
+def decrypt_password(input_string):
+    cipher_suite = Fernet(os.getenv("ENCRYPTION_KEY"))
+    decoded_password = input_string.encode("utf-8")
+    decrypted_password = cipher_suite.decrypt(decoded_password)
+    return decrypted_password.decode("utf-8")
