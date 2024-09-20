@@ -6,12 +6,13 @@ from selenium.common.exceptions import ElementClickInterceptedException
 from selenium.webdriver.common.action_chains import ActionChains
 from enum import Enum
 from pydantic import BaseModel, Field
+from datetime import datetime
 
-from utilities import minify_html_for_gpt_prompt
+from utilities import minify_html_for_gpt_prompt, constants
 from utilities.selenium import get_selenium_driver
 from utilities.logging import get_logger
 from utilities.gpt import get_gpt_response
-from utilities import constants
+from utilities.google_services.gmail import Gmail
 
 
 logger = get_logger(name="job", file_name="job-hunt")
@@ -54,7 +55,7 @@ class Button(PageComponent):
             element = driver.find_element(By.XPATH, self.x_path)
             driver.execute_script("arguments[0].scrollIntoView(true);", element)
             element.click()
-            time.sleep(2)
+            time.sleep(10)
         except ElementClickInterceptedException as e:
             logger.info(
                 f"element click intercepted in class Button's proceed method.\n{e}\nButton instance - {vars(self)}"
@@ -62,7 +63,7 @@ class Button(PageComponent):
             element = driver.find_element(By.XPATH, self.x_path)
             actions = ActionChains(driver)
             actions.move_to_element(element).click().perform()
-            time.sleep(2)
+            time.sleep(10)
         except Exception as e:
             if self.attempt <= self.max_attempt:
                 logger.info(
@@ -129,24 +130,104 @@ class TextInput(PageComponent):
 class Login(PageComponent):
     def __init__(self, parent_application_page):
         self.parent_application_page = parent_application_page
+        self.login_section_url = driver.current_url
 
         self.next = None
         self.prev = None
-        self.is_component_functional = True
+        self.is_component_functional = False
 
         self.login_steps_identified = False
-        self.creds_form_input_button = None
-        self.username_input = None
-        self.password_input = None
+        self.first_step = None
+
+        self.login_form_input_button = None
+        self.login_username_input = None
+        self.login_password_input = None
         self.login_security_enabled = False
         self.login_button = None
 
+        self.resend_verification_email_button = None
+
+        self.create_account_form_input_button = None
+        self.create_account_username_input = None
+        self.create_account_password_input = None
+        self.create_account_confirm_password_input = None
+        self.create_account_consent_checkbox = None
+        self.create_account_security_enabled = False
+        self.create_account_button = None
+        self.account_created_at = None
+
     def proceed(self):
         if not self.login_steps_identified:
-            self._identify_login_steps()
+            self._identify_login_section_steps()
+
+            self.is_component_functional = True
+            self._redo_steps_until_login()
+
+            is_login_successful, login_failure_reason = self.is_login_successful
+            if is_login_successful:
+                return
 
         if self.login_security_enabled:
-            return
+            logger.critical("Security is enabled on login, so skipping login!")
+
+        if self.first_step == "click_to_open_form_input":
+            self.login_form_input_button.proceed()
+
+        logger.info("Trying to login...")
+        self.login_username_input.proceed()
+        self.login_password_input.proceed()
+        self.login_button.proceed()
+
+        is_login_successful, login_failure_reason = self.is_login_successful
+        if not is_login_successful:
+            if login_failure_reason == "non_existent_account":
+                logger.info(
+                    f"Login failed as account doesn't exist. Creating new account..."
+                )
+                self.create_account_form_input_button.proceed()
+
+                if self.create_account_security_enabled:
+                    logger.critical(
+                        "Security is enabled on create account activity, so skipping creating account!"
+                    )
+                    return
+
+                self.create_account_username_input.proceed()
+                self.create_account_password_input()
+                self.create_account_confirm_password_input()
+
+                if self.create_account_consent_checkbox:
+                    self.create_account_consent_checkbox.proceed()
+
+                self.account_created_at = datetime.utcnow()
+                self.create_account_button.proceed()
+            elif login_failure_reason == "email_not_verified":
+                logger.info(
+                    f"Email not verified. Triggering email verification email..."
+                )
+                self._trigger_email_verification_email()
+
+            if self.is_verification_email_sent:
+                logger.info(f"Verifying email...")
+                self._verify_email_address()
+
+        self._redo_steps_until_login()
+        return
+
+    def _identify_login_section_steps(self):
+        self._identify_login_steps()
+
+        is_login_successful, login_failure_reason = self.is_login_successful
+        if not is_login_successful:
+            if login_failure_reason == "non_existent_account":
+                self._identify_create_account_steps()
+            elif login_failure_reason == "email_not_verified":
+                self._trigger_email_verification_email()
+
+            if self.is_verification_email_sent:
+                self._verify_email_address()
+
+        self.login_steps_identified = True
 
     def _identify_login_steps(self):
         global driver
@@ -190,7 +271,7 @@ class Login(PageComponent):
                 "the button which will open username & password form",
             )
 
-        while self.username_input is None:
+        while self.login_username_input is None:
             user_prompt = (
                 f"Following HTML page is job application page for {self.parent_application_page.parent_job.title}. "
                 f"Currently I am at login section. I have to login using username and password. Analyse the whole HTML "
@@ -206,57 +287,195 @@ class Login(PageComponent):
             )
             if login_next_step_found:
                 if login_step.step == LoginStep.click_to_open_form_input:
-                    self.creds_form_input_button = Button(
+                    self.first_step = "click_to_open_form_input"
+                    self.login_form_input_button = Button(
                         x_path=login_step.open_form_input_x_path,
-                        button_type="click_to_open_form_input",
+                        button_type="login_form_input",
                         parent_application_page=self.parent_application_page,
                         parent_component=self,
                     )
-                    self.creds_form_input_button.proceed()
+                    self.login_form_input_button.proceed()
                 elif login_step.step == LoginStep.enter_credentials:
-                    self.username_input = TextInput(
-                        x_path=login_step.username_x_path,
-                        input_type="username",
-                        parent_application_page=self.parent_application_page,
-                        parent_component=self,
-                    )
-                    self.username_input.proceed()
-
-                    self.password_input = TextInput(
-                        x_path=login_step.password_x_path,
-                        input_type="password",
-                        parent_application_page=self.parent_application_page,
-                        parent_component=self,
-                    )
-                    self.password_input.proceed()
-
-                    self.login_button = Button(
-                        x_path=login_step.login_x_path,
-                        button_type="login",
-                        parent_application_page=self.parent_application_page,
-                        parent_component=self,
-                    )
-
                     self.login_security_enabled = (
                         login_step.login_security_enabled.value
                     )
-
                     if self.login_security_enabled:
                         logger.critical(
                             "Security is enabled on login, so skipping login!"
                         )
                         return
                     else:
+                        self.login_username_input = TextInput(
+                            x_path=login_step.username_x_path,
+                            input_type="username",
+                            parent_application_page=self.parent_application_page,
+                            parent_component=self,
+                        )
+                        self.login_username_input.proceed()
+
+                        self.login_password_input = TextInput(
+                            x_path=login_step.password_x_path,
+                            input_type="password",
+                            parent_application_page=self.parent_application_page,
+                            parent_component=self,
+                        )
+                        self.login_password_input.proceed()
+
+                        self.login_button = Button(
+                            x_path=login_step.login_x_path,
+                            button_type="login",
+                            parent_application_page=self.parent_application_page,
+                            parent_component=self,
+                        )
                         self.login_button.proceed()
             else:
                 logger.critical(
                     f"First login step could not be identified.\nGPT response - {login_step}"
                 )
 
-        if self.is_login_successful:
-            return
+        return
+
+    def _identify_create_account_steps(self):
+        user_prompt = (
+            f"Following HTML page is job application page for {self.parent_application_page.parent_job.title}. "
+            f"Currently I am at login section. I just tried logging in and failed. Analyse the whole HTML "
+            f"very carefully for finding button to go into create account section.\n"
+            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}"
+        )
+
+        class CreateAccountButton(BaseModel):
+            create_account_x_path: str = Field(
+                ...,
+                description="XPath of create account button",
+            )
+
+        create_account_button_found, create_account_button = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=CreateAccountButton,
+        )
+        if create_account_button_found:
+            self.create_account_form_input_button = Button(
+                x_path=create_account_button.create_account_x_path,
+                button_type="create_account_form_input",
+                parent_application_page=self.parent_application_page,
+                parent_component=self,
+            )
+            self.create_account_form_input_button.proceed()
+
+            user_prompt = (
+                f"Following HTML page is job application page for {self.parent_application_page.parent_job.title}. "
+                f"Currently I am at create account section. Analyse the whole HTML very carefully for identifying "
+                f"XPaths of elements to create account.\n"
+                f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}"
+            )
+
+            class CreateAccountSecurityEnabled(Enum):
+                true = True
+                false = False
+
+            class CreateAccountSteps(BaseModel):
+                username_x_path: str = Field(
+                    ...,
+                    description="XPath of email / username input field",
+                )
+                password_x_path: str = Field(
+                    ...,
+                    description="XPath of new password input field",
+                )
+                confirm_password_x_path: str = Field(
+                    ...,
+                    description="XPath of confirm password input field",
+                )
+                create_account_security_enabled: CreateAccountSecurityEnabled = Field(
+                    ...,
+                    description="Whether any captcha or security question or puzzle is to be solved to create "
+                    "account",
+                )
+                create_account_x_path: str = Field(
+                    ...,
+                    description="XPath of create account / submit button where display is not None",
+                )
+                mandatory_opt_in_checkbox_x_path: str = Field(
+                    ...,
+                    description="XPath of just 1 mandatory opt-in / consent checkbox that must be clicked in order to"
+                    "create account. Return just '' (empty string) if mandatory opt-in / consent checkbox "
+                    "not present.",
+                )
+
+            create_account_steps_found, create_account_steps = get_gpt_response(
+                constants.gpt["system_prompts"]["application_step_identification"],
+                user_prompt,
+                response_format=CreateAccountSteps,
+            )
+            if create_account_steps_found:
+                self.create_account_security_enabled = (
+                    create_account_steps.create_account_security_enabled.value
+                )
+                if self.create_account_security_enabled:
+                    logger.critical(
+                        "Security is enabled on create account activity, so skipping creating account!"
+                    )
+                    return
+                else:
+                    self.create_account_username_input = TextInput(
+                        x_path=create_account_steps.username_x_path,
+                        input_type="username",
+                        parent_application_page=self.parent_application_page,
+                        parent_component=self,
+                    )
+                    self.create_account_username_input.proceed()
+
+                    self.create_account_password_input = TextInput(
+                        x_path=create_account_steps.password_x_path,
+                        input_type="password",
+                        parent_application_page=self.parent_application_page,
+                        parent_component=self,
+                    )
+                    self.create_account_password_input.proceed()
+
+                    self.create_account_confirm_password_input = TextInput(
+                        x_path=create_account_steps.confirm_password_x_path,
+                        input_type="password",
+                        parent_application_page=self.parent_application_page,
+                        parent_component=self,
+                    )
+                    self.create_account_confirm_password_input.proceed()
+
+                    if create_account_steps.mandatory_opt_in_checkbox_x_path:
+                        self.create_account_consent_checkbox = Button(
+                            x_path=create_account_steps.mandatory_opt_in_checkbox_x_path,
+                            button_type="create_account_consent",
+                            parent_application_page=self.parent_application_page,
+                            parent_component=self,
+                        )
+                        self.create_account_consent_checkbox.proceed()
+
+                    self.create_account_button = Button(
+                        x_path=create_account_steps.create_account_x_path,
+                        button_type="create_account",
+                        parent_application_page=self.parent_application_page,
+                        parent_component=self,
+                    )
+                    self.account_created_at = datetime.utcnow()
+                    self.create_account_button.proceed()
+
+                    if self.is_verification_email_sent:
+                        self._verify_email_address()
+                    else:
+                        logger.critical(
+                            "It seems account verification email couldn't be sent."
+                        )
+            else:
+                logger.critical(
+                    f"Create account steps could not be identified.\nGPT response - {create_account_steps}"
+                )
         else:
-            pass
+            logger.critical(
+                f"Create account button could not be found.\nGPT response - {create_account_button}"
+            )
+
+        return
 
     @property
     def is_login_successful(self):
@@ -272,9 +491,18 @@ class Login(PageComponent):
             true = True
             false = False
 
+        class LoginFailureReason(Enum):
+            non_existent_account = "non_existent_account"
+            email_not_verified = "email_not_verified"
+            other = "other"
+
         class IsLoginSuccessful(BaseModel):
             login_successful: LoginSuccessful = Field(
                 ..., description="Whether login was successful or not"
+            )
+            login_failure_reason: LoginFailureReason = Field(
+                ...,
+                description="If login not successful then what's the reason of failed login",
             )
 
         login_success_determined, is_login_successful = get_gpt_response(
@@ -283,8 +511,186 @@ class Login(PageComponent):
             response_format=IsLoginSuccessful,
         )
         if login_success_determined:
-            return is_login_successful.login_successful.value
+            return (
+                is_login_successful.login_successful.value,
+                is_login_successful.login_failure_reason.value,
+            )
         else:
             raise Exception(
                 f"Login success could not be determined.\nGPT response - {is_login_successful}"
             )
+
+    def _trigger_email_verification_email(self):
+        user_prompt = (
+            f"Following HTML page is job application page for {self.parent_application_page.parent_job.title}. "
+            f"Currently I am at login section. I just tried logging in and it says that I need to verify my email "
+            f"address first. Analyse the whole HTML very carefully for finding button to resend verification email.\n"
+            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}"
+        )
+
+        class ResendVerificationEmailButton(BaseModel):
+            resend_verification_email_x_path: str = Field(
+                ...,
+                description="XPath of button to resend verification email",
+            )
+
+        resend_verification_email_button_found, resend_verification_email_button = (
+            get_gpt_response(
+                constants.gpt["system_prompts"]["application_step_identification"],
+                user_prompt,
+                response_format=ResendVerificationEmailButton,
+            )
+        )
+        if resend_verification_email_button_found:
+            self.resend_verification_email_button = Button(
+                x_path=resend_verification_email_button.resend_verification_email_x_path,
+                button_type="resend_verification_email",
+                parent_application_page=self.parent_application_page,
+                parent_component=self,
+            )
+            self.account_created_at = datetime.utcnow()
+            self.resend_verification_email_button.proceed()
+        else:
+            logger.critical(
+                f"Resend verification email button could not be found.\nGPT response - "
+                f"{resend_verification_email_button}"
+            )
+
+    @property
+    def is_verification_email_sent(self):
+        user_prompt = (
+            f"Following HTML page is job application page for {self.parent_application_page.parent_job.title}. "
+            f"I just tried creating account. Either verification email was sent which can be considered success OR "
+            f"create account step was unsuccessful and there is some error message. Analyse the "
+            f"HTML very carefully for determining whether create account step was successful or not.\n"
+            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}"
+        )
+
+        class CreateAccountSuccessful(Enum):
+            true = True
+            false = False
+
+        class IsCreateAccountSuccessful(BaseModel):
+            create_account_successful: CreateAccountSuccessful = Field(
+                ..., description="Whether create account step was successful or not"
+            )
+
+        create_account_success_determined, is_create_account_successful = (
+            get_gpt_response(
+                constants.gpt["system_prompts"]["application_step_identification"],
+                user_prompt,
+                response_format=IsCreateAccountSuccessful,
+            )
+        )
+        if create_account_success_determined:
+            return is_create_account_successful.create_account_successful.value
+        else:
+            raise Exception(
+                f"Create account step success could not be determined.\nGPT response - {is_create_account_successful}"
+            )
+
+    def _verify_email_address(self):
+        gmail = Gmail(user=self.parent_application_page.parent_job.user)
+
+        five_minutes_ago_unix = int(self.account_created_at.timestamp())
+        query = f"after:{five_minutes_ago_unix} is:unread"
+
+        email_verified = False
+
+        while not email_verified:
+            emails = gmail.get_emails(query=query)
+
+            email_prompt_info = [
+                {
+                    "email_id": email.message_id,
+                    "sender": email.sender,
+                    "subject": email.title,
+                }
+                for email in emails
+            ]
+            user_prompt = (
+                f"While applying for job title {self.parent_application_page.parent_job.title}, I just "
+                f"created an account on following URL - {driver.current_url}.\n Following emails are what I "
+                f"received in my inbox -\n{email_prompt_info}\nOut of above emails, is there any email "
+                f"which is account activation / email id verification email for the account creation?"
+            )
+
+            class VerificationEmailFound(Enum):
+                true = True
+                false = False
+
+            class VerificationEmail(BaseModel):
+                verification_email_found: VerificationEmailFound = Field(
+                    ...,
+                    description="Whether verification email found or not",
+                )
+                email_id: str = Field(
+                    ...,
+                    description="Email id of the verification email",
+                )
+
+            verification_email_search_succeeded, verification_email = get_gpt_response(
+                constants.gpt["system_prompts"]["application_step_identification"],
+                user_prompt,
+                response_format=VerificationEmail,
+            )
+
+            if verification_email_search_succeeded:
+                if verification_email.verification_email_found.value:
+                    verification_email = [
+                        email
+                        for email in emails
+                        if email.message_id == verification_email.email_id
+                    ][0]
+
+                    user_prompt = (
+                        f"While applying for job title {self.parent_application_page.parent_job.title}, I just "
+                        f"created an account on following URL - {driver.current_url}.\n Following email is the "
+                        f"verification email. Extract the link, by clicking which I can verify my email.\n"
+                        f"Email - \nTitle - {verification_email.title}\nSender - {verification_email.sender}\n"
+                        f"Body - {verification_email.body}"
+                    )
+
+                    class EmailVerificationLink(BaseModel):
+                        link: str = Field(..., description="Email verification link")
+
+                    email_verification_link_found, email_verification_link = (
+                        get_gpt_response(
+                            constants.gpt["system_prompts"][
+                                "application_step_identification"
+                            ],
+                            user_prompt,
+                            response_format=EmailVerificationLink,
+                        )
+                    )
+
+                    if email_verification_link_found:
+                        driver.get(email_verification_link.link)
+                        email_verified = True
+                        time.sleep(10)
+                    else:
+                        logger.critical(
+                            f"Email verification link couldn't be extracted.\nGPT response - {email_verification_link}"
+                        )
+            else:
+                logger.critical(
+                    f"Verification email search failed.\nGPT response - {verification_email}"
+                )
+
+        return
+
+    def _redo_steps_until_login(self):
+        logger.info("Re-doing all steps until login...")
+        driver.get(self.parent_application_page.url)
+        time.sleep(10)
+
+        next_step = self.parent_application_page.head_step
+        continue_proceeding = True
+        while continue_proceeding:
+            if next_step is self.parent_application_page.tail_step:
+                continue_proceeding = False
+
+            next_step.proceed()
+            next_step = next_step.next
+
+        return
