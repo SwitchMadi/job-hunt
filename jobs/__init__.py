@@ -179,16 +179,19 @@ class ApplicationPage:
                 select_application_data_source = "select_application_data_source"
                 login = "login"
                 job_application_completed = "job_application_completed"
+                page_not_found_error = "page_not_found_error"
 
             class JobApplicationNextStep(BaseModel):
                 step: JobApplicationStep = Field(
                     ...,
-                    description="What is the immediate & mandatory next step in the job application, based on the whole HTML.\n"
+                    description="What is the immediate & mandatory next step in the job application, based on the "
+                    "whole HTML.\n"
                     "start_application - I have to start job application process by clicking somewhere\n"
                     "select_application_data_source - The page is asking for selecting job application data input "
                     "source like autofill using resume, manual input, apply using linkedin etc.\n"
                     "login - If login is mandatory step before moving to any next step in job application.\n"
-                    "job_application_completed - Job application has been completed.",
+                    "job_application_completed - Job application has been completed.\n"
+                    "page_not_found_error - HTML has error message saying page / job not found or expired",
                 )
 
             next_step_found, next_step = get_gpt_response(
@@ -197,6 +200,11 @@ class ApplicationPage:
                 response_format=JobApplicationNextStep,
             )
             if next_step_found:
+                if next_step.step == JobApplicationStep.page_not_found_error:
+                    logger.critical(
+                        f"Job has expired / not found. Title - {self.parent_job.title}"
+                    )
+                    return
                 if next_step.step == JobApplicationStep.start_application:
                     self._extract_start_application_step_details()
                 elif (
