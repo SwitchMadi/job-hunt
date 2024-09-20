@@ -32,14 +32,12 @@ class Button(PageComponent):
         x_path,
         button_type,
         parent_application_page,
-        parent_component=None,
         click_result=None,
     ):
         global driver
         self.x_path = x_path
         self.action_type = button_type
         self.parent_application_page = parent_application_page
-        self.parent_component = parent_component
         self.click_result = click_result
 
         self.next = None
@@ -87,13 +85,11 @@ class TextInput(PageComponent):
         x_path,
         input_type,
         parent_application_page,
-        parent_component=None,
     ):
         global driver
         self.x_path = x_path
         self.input_type = input_type
         self.parent_application_page = parent_application_page
-        self.parent_component = parent_component
 
         self.next = None
         self.prev = None
@@ -292,7 +288,6 @@ class Login(PageComponent):
                         x_path=login_step.open_form_input_x_path,
                         button_type="login_form_input",
                         parent_application_page=self.parent_application_page,
-                        parent_component=self,
                     )
                     self.login_form_input_button.proceed()
                 elif login_step.step == LoginStep.enter_credentials:
@@ -309,7 +304,6 @@ class Login(PageComponent):
                             x_path=login_step.username_x_path,
                             input_type="username",
                             parent_application_page=self.parent_application_page,
-                            parent_component=self,
                         )
                         self.login_username_input.proceed()
 
@@ -317,7 +311,6 @@ class Login(PageComponent):
                             x_path=login_step.password_x_path,
                             input_type="password",
                             parent_application_page=self.parent_application_page,
-                            parent_component=self,
                         )
                         self.login_password_input.proceed()
 
@@ -325,7 +318,6 @@ class Login(PageComponent):
                             x_path=login_step.login_x_path,
                             button_type="login",
                             parent_application_page=self.parent_application_page,
-                            parent_component=self,
                         )
                         self.login_button.proceed()
             else:
@@ -359,7 +351,6 @@ class Login(PageComponent):
                 x_path=create_account_button.create_account_x_path,
                 button_type="create_account_form_input",
                 parent_application_page=self.parent_application_page,
-                parent_component=self,
             )
             self.create_account_form_input_button.proceed()
 
@@ -422,7 +413,6 @@ class Login(PageComponent):
                         x_path=create_account_steps.username_x_path,
                         input_type="username",
                         parent_application_page=self.parent_application_page,
-                        parent_component=self,
                     )
                     self.create_account_username_input.proceed()
 
@@ -430,7 +420,6 @@ class Login(PageComponent):
                         x_path=create_account_steps.password_x_path,
                         input_type="password",
                         parent_application_page=self.parent_application_page,
-                        parent_component=self,
                     )
                     self.create_account_password_input.proceed()
 
@@ -438,7 +427,6 @@ class Login(PageComponent):
                         x_path=create_account_steps.confirm_password_x_path,
                         input_type="password",
                         parent_application_page=self.parent_application_page,
-                        parent_component=self,
                     )
                     self.create_account_confirm_password_input.proceed()
 
@@ -447,7 +435,6 @@ class Login(PageComponent):
                             x_path=create_account_steps.mandatory_opt_in_checkbox_x_path,
                             button_type="create_account_consent",
                             parent_application_page=self.parent_application_page,
-                            parent_component=self,
                         )
                         self.create_account_consent_checkbox.proceed()
 
@@ -455,7 +442,6 @@ class Login(PageComponent):
                         x_path=create_account_steps.create_account_x_path,
                         button_type="create_account",
                         parent_application_page=self.parent_application_page,
-                        parent_component=self,
                     )
                     self.account_created_at = datetime.utcnow()
                     self.create_account_button.proceed()
@@ -546,7 +532,6 @@ class Login(PageComponent):
                 x_path=resend_verification_email_button.resend_verification_email_x_path,
                 button_type="resend_verification_email",
                 parent_application_page=self.parent_application_page,
-                parent_component=self,
             )
             self.account_created_at = datetime.utcnow()
             self.resend_verification_email_button.proceed()
