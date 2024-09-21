@@ -1,12 +1,13 @@
 import time
 from pydantic import BaseModel, Field
 from enum import Enum
+import json
 
+from utilities import minify_html_for_gpt_prompt, constants, generate_hash
 from utilities.selenium import get_selenium_driver, extract_iframe_urls
-from utilities import minify_html_for_gpt_prompt
 from utilities.gpt import get_gpt_response
 from utilities.logging import get_logger
-from utilities import constants
+from utilities.sql import get_sql_query_output, execute_sql_query
 from jobs.page_components import Button, Login
 
 
@@ -16,11 +17,44 @@ driver.set_page_load_timeout(15)
 
 
 class Job:
-    def __init__(self, url, title, user=None):
+    def __init__(self, url, title=None, user=None):
         self.url = url
-        self.title = title
+
+        job = Job.find_job_by_url(url)
+        if job is None:
+            self.hash_id = generate_hash(url)
+            self.title = title
+            self.save_to_db()
+            job = Job.find_job_by_url(url)
+
+        self.id = job["id"]
+        self.hash_id = job["job_hash_id"]
+        self.title = job["title"]
+
         self.application_page = ApplicationPage(url=url, parent_job=self)
         self.user = user
+
+    @staticmethod
+    def find_job_by_url(url):
+        job_hash_id = generate_hash(url)
+        job_query = f"""
+                        select *
+                        from jobs.jobs
+                        where job_hash_id = '{job_hash_id}'
+                    """
+        job = get_sql_query_output(job_query)
+        if job:
+            return job[0]
+        else:
+            return None
+
+    def save_to_db(self):
+        job_create_query = f"""
+            insert into jobs.jobs
+            (job_hash_id, job_url, title)
+            values ('{self.hash_id}', '{self.url}', '{self.title}')
+        """
+        return execute_sql_query(job_create_query)
 
 
 class ApplicationPage:
@@ -33,6 +67,57 @@ class ApplicationPage:
         self.head_step = None
         self.tail_step = None
 
+        self._get_application_steps()
+
+    def _get_application_steps(self):
+        application_steps_query = f"""
+                                        select *
+                                        from jobs.application_steps
+                                        where job_id = {self.parent_job.id}
+                                        and is_active;
+                                   """
+        application_steps = get_sql_query_output(application_steps_query)
+        if application_steps:
+            application_steps = application_steps[0]
+            head_step_class = globals()[application_steps["steps"]["class"]]
+            self.head_step = self.tail_step = head_step_class.from_dict(
+                input_dict=application_steps["steps"], parent_application_page=self
+            )
+
+            next_step = self.head_step.next
+            while next_step:
+                self.tail_step = next_step
+                next_step = next_step.next
+
+            return True
+        else:
+            return False
+
+    def _save_application_steps(self):
+        application_steps_dict = json.dumps(self.head_step.to_dict()).replace("'", "''")
+
+        application_steps_query = f"""
+                                        select *
+                                        from jobs.application_steps
+                                        where job_id = {self.parent_job.id}
+                                        and is_active;
+                                   """
+        current_application_steps = get_sql_query_output(application_steps_query)
+        if current_application_steps:
+            query = f"""
+                        update jobs.application_steps
+                        set steps = '{application_steps_dict}'
+                        where job_id = {self.parent_job.id}
+                        and is_active;
+                    """
+        else:
+            query = f"""
+                INSERT INTO jobs.application_steps
+                (job_id, steps)
+                VALUES ({self.parent_job.id}, '{application_steps_dict}');
+            """
+        return execute_sql_query(query)
+
     def _update_steps(self, step):
         if step.is_component_functional:
             if self.head_step is None:
@@ -42,6 +127,8 @@ class ApplicationPage:
                 self.tail_step.next = step
                 step.prev = self.tail_step
                 self.tail_step = step
+
+            self._save_application_steps()
 
         return
 
