@@ -101,11 +101,11 @@ try:
         (job_hash_id, job_url, is_reposted_job, repost_url, job_posted_at, 
         "source", job_description, company, title, "location", location_requirement, employment_type, technical_skills, 
         other_skills, employees_count, software_domain, experience_level, experience_requirement_min_years, 
-        experience_requirement_max_years, linkedin_easy_apply)
+        experience_requirement_max_years, linkedin_easy_apply, visa_sponsorship, spoken_language_requirement)
         SELECT job_hash_id, job_url, is_reposted_job, repost_url, job_posted_at, "source", 
         job_description, company, title, "location", location_requirement, employment_type, technical_skills, other_skills, 
         employees_count, software_domain, experience_level, experience_requirement_min_years, experience_requirement_max_years, 
-        linkedin_easy_apply
+        linkedin_easy_apply, visa_sponsorship, spoken_language_requirement
         FROM jobs.jobs_staging
         WHERE job_hash_id NOT IN (
                                     SELECT DISTINCT job_hash_id

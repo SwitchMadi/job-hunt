@@ -73,6 +73,16 @@ def extract_job_info(job_description, source):
             "Cyber Security",
             "prompt_group": 4,
         },
+        "12": {
+            "key": "visa_sponsorship",
+            "prompt": "Is visa sponsorship available? Yes / No / Cannot Determine",
+            "prompt_group": 5,
+        },
+        "13": {
+            "key": "spoken_language_requirement",
+            "prompt": "Spoken language requirement (comma separated)",
+            "prompt_group": 5,
+        },
     }
     gpt_resp = ""
     group_questions_prompt = ""
@@ -82,12 +92,13 @@ def extract_job_info(job_description, source):
             if question_obj["prompt_group"] == cur_group:
                 group_questions_prompt += f"{question_no}. {question_obj['prompt']}\n"
 
-        user_prompt = f"""For the following job description on this page, extract following info - 
+        user_prompt = f"""Job description -
+        {job_description}
+        
+        For the following job description, extract following info - 
         {group_questions_prompt}
         Answer format should strictly be - "Question number: Answer"
-
-        Job description -
-        {job_description}"""
+        """
 
         gpt_resp += f"{get_gpt_response(system_prompt, user_prompt)}\n"
         group_questions_prompt = ""
