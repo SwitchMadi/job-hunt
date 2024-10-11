@@ -5,16 +5,11 @@ s3_bucket: job-hunt-storage
 scraping:
   linkedin:
     login_pause: false
-    max_job_count: 500
+    max_job_count: 2000
     jobs_urls:
-      - https://www.linkedin.com/jobs/search/?f_E=4%2C5&f_TPR=r86400&f_WT=2&keywords=software%20engineer&origin=JOB_SEARCH_PAGE_JOB_FILTER&refresh=true
-      - https://www.linkedin.com/jobs/search/?f_E=4%2C5&f_TPR=r86400&f_WT=3&geoId=105214831&keywords=software%20engineer&location=Bengaluru%2C%20Karnataka%2C%20India&origin=JOB_SEARCH_PAGE_JOB_FILTER&refresh=true
-      - https://www.linkedin.com/jobs/search/?f_TPR=r86400&f_WT=2&geoId=102713980&keywords=engineering%20manager&location=India&origin=JOB_SEARCH_PAGE_JOB_FILTER&refresh=true
-      - https://www.linkedin.com/jobs/search/?f_TPR=r86400&f_WT=3&geoId=105214831&keywords=engineering%20manager&location=Bengaluru%2C%20Karnataka%2C%20India&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true
-      - https://www.linkedin.com/jobs/search/?f_E=4%2C5&f_TPR=r86400&f_WT=2&geoId=102713980&keywords=principal%20engineer&location=India&origin=JOB_SEARCH_PAGE_KEYWORD_AUTOCOMPLETE&refresh=true
-      - https://www.linkedin.com/jobs/search/?f_E=4%2C5&f_TPR=r86400&f_WT=3&geoId=105214831&keywords=principal%20engineer&location=Bengaluru%2C%20Karnataka%2C%20India&origin=JOB_SEARCH_PAGE_KEYWORD_AUTOCOMPLETE&refresh=true
-      - https://www.linkedin.com/jobs/search/?f_E=4%2C5&f_TPR=r86400&f_WT=2&geoId=102713980&keywords=director%20of%20engineering&location=India&origin=JOB_SEARCH_PAGE_KEYWORD_AUTOCOMPLETE&refresh=true
-      - https://www.linkedin.com/jobs/search/?f_E=4%2C5&f_TPR=r86400&f_WT=3&geoId=105214831&keywords=director%20of%20engineering&location=Bengaluru%2C%20Karnataka%2C%20India&origin=JOB_SEARCH_PAGE_KEYWORD_AUTOCOMPLETE&refresh=true
+      - https://www.linkedin.com/jobs/search/?currentJobId=3862330924&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=100506914&keywords=backend&origin=JOB_SEARCH_PAGE_KEYWORD_AUTOCOMPLETE&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?currentJobId=3786899771&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=100506914&keywords=software&origin=JOB_SEARCH_PAGE_KEYWORD_AUTOCOMPLETE&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?currentJobId=4028230540&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=100506914&keywords=python&origin=JOB_SEARCH_PAGE_KEYWORD_AUTOCOMPLETE&refresh=true&sortBy=R
 startup_input: C:\Users\JobHunt\Desktop\startup_input.yml
 user_email: bhaskar2choudhary@gmail.com
 openai_model: gpt-4o-mini-2024-07-18
