@@ -198,5 +198,4 @@ def extract_linkedin_jobs(jobs_url):
             logger.exception(f"An unexpected error occurred while scraping page - {e}")
             continue_scraping = False
 
-    driver.quit()
     return jobs

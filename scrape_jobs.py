@@ -11,6 +11,7 @@ from utilities import generate_hash, unzip_directory
 from utilities.sql import get_sql_connection, get_sql_query_output, execute_sql_query
 from utilities.logging import get_logger
 from utilities.aws.s3 import S3Bucket
+from utilities.selenium import get_selenium_driver
 
 logger = get_logger(name="scrape_jobs", file_name="job-hunt")
 config = yaml.safe_load(open("config.yml"))
@@ -115,5 +116,8 @@ try:
         drop table jobs.jobs_staging;
         """
         execute_sql_query(main_table_query)
+
+    driver = get_selenium_driver(headless=False)
+    driver.quit()
 except Exception as e:
     logger.exception(f"Unexpected error occurred - {e}")
