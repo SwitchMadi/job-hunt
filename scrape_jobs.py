@@ -80,6 +80,26 @@ try:
         df_jobs = pd.concat([df_jobs, df_dict], axis=1).drop("job_info", axis=1)
         df_jobs = df_jobs.replace({np.nan: None})
 
+        keep_columns = [
+            "company",
+            "title",
+            "location",
+            "location_requirement",
+            "employment_type",
+            "technical_skills",
+            "other_skills",
+            "employees_count",
+            "software_domain",
+            "experience_level",
+            "experience_requirement_min_years",
+            "experience_requirement_max_years",
+            "visa_sponsorship",
+            "spoken_language_requirement",
+        ]
+        for col in keep_columns:
+            if col not in df_jobs.columns:
+                df_jobs[col] = None
+
         con = get_sql_connection(con_type="sqlalchemy")
         df_jobs.to_sql(
             name="jobs_staging",
