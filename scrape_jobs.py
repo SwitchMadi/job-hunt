@@ -4,6 +4,7 @@ from sqlalchemy.types import Integer, Boolean
 from datetime import datetime
 import yaml
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 from jobs.sourcing.linkedin import extract_linkedin_jobs
 from jobs.sourcing import extract_job_info
@@ -71,10 +72,17 @@ try:
         if df_jobs.empty:
             continue
 
-        df_jobs["job_info"] = df_jobs.apply(
-            lambda row: extract_job_info(row["job_description"], source=row["source"]),
-            axis=1,
-        )
+        def extract_job_info_concurrently(func, df, max_workers=25):
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                results = list(
+                    executor.map(
+                        lambda row: func(row["job_description"], row["source"]),
+                        df.to_dict("records"),
+                    )
+                )
+            return results
+
+        df_jobs["job_info"] = extract_job_info_concurrently(extract_job_info, df_jobs)
 
         df_dict = pd.json_normalize(df_jobs["job_info"])
         df_jobs = pd.concat([df_jobs, df_dict], axis=1).drop("job_info", axis=1)
