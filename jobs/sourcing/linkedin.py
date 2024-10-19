@@ -25,7 +25,17 @@ def extract_linkedin_jobs(jobs_url):
     if config["scraping"]["linkedin"]["login_pause"]:
         input("Please log into Linkedin and then press any key to continue...")
 
-    driver.get(jobs_url)
+    try:
+        driver.get(jobs_url)
+    except TimeoutException:
+        driver.set_page_load_timeout(300)
+        try:
+            driver.get(jobs_url)
+        except TimeoutException:
+            logger.critical(
+                f"Failed to load linkedin URL even after increased timeout. URL - {jobs_url}"
+            )
+            return []
     time.sleep(5)
     driver.set_page_load_timeout(15)
 
