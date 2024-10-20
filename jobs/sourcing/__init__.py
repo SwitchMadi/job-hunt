@@ -88,6 +88,11 @@ def extract_job_info(job_description, source):
             "prompt": "Salary as mentioned",
             "prompt_group": 5,
         },
+        "15": {
+            "key": "description_language",
+            "prompt": "What language is the description majorly written in? Mention just one language.",
+            "prompt_group": 5,
+        },
     }
     gpt_resp = ""
     group_questions_prompt = ""
