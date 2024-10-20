@@ -103,6 +103,7 @@ try:
             "experience_requirement_max_years",
             "visa_sponsorship",
             "spoken_language_requirement",
+            "salary",
         ]
         for col in keep_columns:
             if col not in df_jobs.columns:
@@ -130,11 +131,11 @@ try:
         (job_hash_id, job_url, is_reposted_job, repost_url, job_posted_at, 
         "source", job_description, company, title, "location", location_requirement, employment_type, technical_skills, 
         other_skills, employees_count, software_domain, experience_level, experience_requirement_min_years, 
-        experience_requirement_max_years, linkedin_easy_apply, visa_sponsorship, spoken_language_requirement)
+        experience_requirement_max_years, linkedin_easy_apply, visa_sponsorship, spoken_language_requirement, salary)
         SELECT job_hash_id, job_url, is_reposted_job, repost_url, job_posted_at, "source", 
         job_description, company, title, "location", location_requirement, employment_type, technical_skills, other_skills, 
         employees_count, software_domain, experience_level, experience_requirement_min_years, experience_requirement_max_years, 
-        linkedin_easy_apply, visa_sponsorship, spoken_language_requirement
+        linkedin_easy_apply, visa_sponsorship, spoken_language_requirement, salary
         FROM jobs.jobs_staging
         WHERE job_hash_id NOT IN (
                                     SELECT DISTINCT job_hash_id

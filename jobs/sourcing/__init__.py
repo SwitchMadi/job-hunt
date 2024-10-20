@@ -83,6 +83,11 @@ def extract_job_info(job_description, source):
             "prompt": "Spoken language requirement (comma separated)",
             "prompt_group": 5,
         },
+        "14": {
+            "key": "salary",
+            "prompt": "Salary as mentioned",
+            "prompt_group": 5,
+        },
     }
     gpt_resp = ""
     group_questions_prompt = ""
