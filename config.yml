@@ -7,25 +7,25 @@ scraping:
     login_pause: false
     max_job_count: 1500
     jobs_urls:
-      - https://www.linkedin.com/jobs/search/?currentJobId=4034221608&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=100456013&keywords=software&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
-      - https://www.linkedin.com/jobs/search/?currentJobId=4051993158&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=105015875&keywords=software&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
-      - https://www.linkedin.com/jobs/search/?currentJobId=4049990838&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=101165590&keywords=software&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
-      - https://www.linkedin.com/jobs/search/?currentJobId=4048851379&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=101282230&keywords=software&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
-      - https://www.linkedin.com/jobs/search/?currentJobId=4026002464&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=105646813&keywords=software&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
-      - https://www.linkedin.com/jobs/search/?currentJobId=4051993157&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=105072130&keywords=software&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
-      - https://www.linkedin.com/jobs/search/?currentJobId=4052050088&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=102890719&keywords=software&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
-      - https://www.linkedin.com/jobs/search/?currentJobId=4039074786&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=100364837&keywords=software&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
-      - https://www.linkedin.com/jobs/search/?currentJobId=4004332716&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=106693272&keywords=software&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
-      - https://www.linkedin.com/jobs/search/?currentJobId=3999164242&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=103350119&keywords=software&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
-      - https://www.linkedin.com/jobs/search/?currentJobId=4029508022&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=105117694&keywords=software&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
-      - https://www.linkedin.com/jobs/search/?currentJobId=4010601787&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=104738515&keywords=software&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
-      - https://www.linkedin.com/jobs/search/?currentJobId=4052322984&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=104508036&keywords=software&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
-      - https://www.linkedin.com/jobs/search/?currentJobId=4034380070&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=106670623&keywords=software&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
-      - https://www.linkedin.com/jobs/search/?currentJobId=4051988967&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=100565514&keywords=software&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
-      - https://www.linkedin.com/jobs/search/?currentJobId=4051995510&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=103883259&keywords=software&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
-      - https://www.linkedin.com/jobs/search/?currentJobId=4021178958&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=105333783&keywords=software&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
-      - https://www.linkedin.com/jobs/search/?currentJobId=4052344096&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=100288700&keywords=software&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
-      - https://www.linkedin.com/jobs/search/?currentJobId=4049511309&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=103819153&keywords=software&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?currentJobId=4034221608&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=100456013&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?currentJobId=4051993158&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=105015875&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?currentJobId=4049990838&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=101165590&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?currentJobId=4048851379&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=101282230&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?currentJobId=4026002464&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=105646813&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?currentJobId=4051993157&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=105072130&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?currentJobId=4052050088&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=102890719&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?currentJobId=4039074786&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=100364837&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?currentJobId=4004332716&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=106693272&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?currentJobId=3999164242&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=103350119&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?currentJobId=4029508022&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=105117694&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?currentJobId=4010601787&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=104738515&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?currentJobId=4052322984&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=104508036&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?currentJobId=4034380070&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=106670623&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?currentJobId=4051988967&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=100565514&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?currentJobId=4051995510&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=103883259&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?currentJobId=4021178958&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=105333783&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?currentJobId=4052344096&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=100288700&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?currentJobId=4049511309&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=103819153&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
       - https://www.linkedin.com/jobs/search/?currentJobId=4051993158&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=105015875&keywords=backend&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
       - https://www.linkedin.com/jobs/search/?currentJobId=4049990838&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=101165590&keywords=backend&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
       - https://www.linkedin.com/jobs/search/?currentJobId=4048851379&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=101282230&keywords=backend&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
