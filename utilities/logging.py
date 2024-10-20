@@ -18,7 +18,7 @@ def get_logger(
     dotenv.load_dotenv()
     config = yaml.safe_load(open("config.yml"))
 
-    cloudwatch_log_group = config["cloudwatch_log_group"]
+    cloudwatch_log_group = os.getenv("CLOUDWATCH_LOG_GROUP")
     today = datetime.now(pytz.timezone("Asia/Kolkata")).date()
     today = f"{today.year}{str(today.month).zfill(2)}{str(today.day).zfill(2)}"
 
