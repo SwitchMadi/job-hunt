@@ -175,3 +175,7 @@ def decrypt_password(input_string):
     decoded_password = input_string.encode("utf-8")
     decrypted_password = cipher_suite.decrypt(decoded_password)
     return decrypted_password.decode("utf-8")
+
+
+def str_to_bool(value: str) -> bool:
+    return value.lower() in ("true", "1")

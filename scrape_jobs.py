@@ -14,7 +14,7 @@ from utilities.logging import get_logger
 from utilities.aws.s3 import S3Bucket
 from utilities.selenium import get_selenium_driver
 
-logger = get_logger(name="scrape_jobs", file_name="job-hunt")
+logger = get_logger(name="scrape_jobs")
 config = yaml.safe_load(open("config.yml"))
 
 try:

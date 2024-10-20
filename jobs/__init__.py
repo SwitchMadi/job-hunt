@@ -11,7 +11,7 @@ from utilities.sql import get_sql_query_output, execute_sql_query
 from jobs.page_components import Button, Login
 
 
-logger = get_logger(name="job", file_name="job-hunt")
+logger = get_logger(name="job")
 driver = get_selenium_driver(headless=False)
 driver.set_page_load_timeout(15)
 

@@ -9,7 +9,7 @@ from sqlalchemy.pool import NullPool
 from utilities.logging import get_logger
 
 
-logger = get_logger(name="sql", file_name="job-hunt")
+logger = get_logger(name="sql")
 
 
 def get_sql_connection(con_type="psycopg2"):

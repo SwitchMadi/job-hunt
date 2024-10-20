@@ -10,7 +10,7 @@ from utilities.logging import get_logger
 
 
 dotenv.load_dotenv()
-logger = get_logger(name="google", file_name="job-hunt")
+logger = get_logger(name="google")
 
 
 class InvalidGoogleOAuthCredentials(Exception):

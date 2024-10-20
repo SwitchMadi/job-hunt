@@ -8,7 +8,7 @@ import yaml
 from utilities.logging import get_logger
 
 dotenv.load_dotenv()
-logger = get_logger(name="gpt", file_name="job-hunt")
+logger = get_logger(name="gpt")
 client = OpenAI(api_key=os.getenv("OPENAI_KEY"))
 config = yaml.safe_load(open("config.yml"))
 

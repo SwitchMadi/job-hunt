@@ -15,7 +15,7 @@ from utilities.logging import get_logger
 from utilities import generate_password, encrypt_string, decrypt_password
 
 
-logger = get_logger(name="user", file_name="job-hunt")
+logger = get_logger(name="user")
 
 dotenv.load_dotenv()
 config = yaml.safe_load(open("config.yml"))

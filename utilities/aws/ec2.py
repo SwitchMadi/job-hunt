@@ -6,7 +6,7 @@ from utilities.aws import get_aws_client
 from utilities.logging import get_logger
 
 
-logger = get_logger(name="ec2", file_name="job-hunt")
+logger = get_logger(name="ec2")
 
 
 class EC2:

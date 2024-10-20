@@ -6,7 +6,7 @@ from utilities.logging import get_logger
 from utilities.google_services import get_google_credentials
 from user import User
 
-logger = get_logger(name="gmail", file_name="job-hunt")
+logger = get_logger(name="gmail")
 
 
 class Email:

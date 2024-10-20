@@ -13,14 +13,22 @@ from utilities.selenium import get_selenium_driver
 from utilities.logging import get_logger
 
 
-logger = get_logger(name="scrape_linkedin", file_name="job-hunt")
+logger = get_logger(name="scrape_linkedin")
 
 
 def extract_linkedin_jobs(jobs_url):
     config = yaml.safe_load(open("config.yml"))
 
     driver = get_selenium_driver(headless=False)
-    driver.get("https://linkedin.com")
+    driver.set_page_load_timeout(300)
+
+    try:
+        driver.get("https://linkedin.com")
+    except TimeoutException:
+        logger.critical(
+            f"Failed to load linkedin. Current timeout - 300. URL - https://linkedin.com"
+        )
+        return []
 
     if config["scraping"]["linkedin"]["login_pause"]:
         input("Please log into Linkedin and then press any key to continue...")
@@ -28,16 +36,13 @@ def extract_linkedin_jobs(jobs_url):
     try:
         driver.get(jobs_url)
     except TimeoutException:
-        driver.set_page_load_timeout(300)
-        try:
-            driver.get(jobs_url)
-        except TimeoutException:
-            logger.critical(
-                f"Failed to load linkedin URL even after increased timeout. URL - {jobs_url}"
-            )
-            return []
-    time.sleep(5)
+        logger.critical(
+            f"Failed to load linkedin URL. Current timeout - 300. URL - {jobs_url}"
+        )
+        return []
+
     driver.set_page_load_timeout(15)
+    time.sleep(5)
 
     try:
         jobs_count = driver.find_element(

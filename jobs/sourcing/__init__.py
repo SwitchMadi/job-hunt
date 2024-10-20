@@ -3,7 +3,7 @@ import re
 from utilities.logging import get_logger
 from utilities.gpt import get_gpt_response
 
-logger = get_logger(name="job_info_extraction", file_name="job-hunt")
+logger = get_logger(name="job_info_extraction")
 
 
 def extract_job_info(job_description, source):

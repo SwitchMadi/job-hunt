@@ -3,7 +3,7 @@ from googleapiclient.discovery import build
 from utilities.logging import get_logger
 from utilities.google_services import get_google_credentials
 
-logger = get_logger(name="drive", file_name="job-hunt")
+logger = get_logger(name="drive")
 
 
 class DriveResource:

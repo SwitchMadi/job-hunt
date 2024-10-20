@@ -8,7 +8,7 @@ from utilities.google_services import get_google_credentials
 from utilities.google_services.drive import DriveResource
 
 
-logger = get_logger(name="sheet", file_name="job-hunt")
+logger = get_logger(name="sheet")
 
 
 class Sheet:

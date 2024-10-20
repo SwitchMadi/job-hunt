@@ -15,7 +15,7 @@ from utilities.gpt import get_gpt_response
 from utilities.google_services.gmail import Gmail
 
 
-logger = get_logger(name="job", file_name="job-hunt")
+logger = get_logger(name="job")
 driver = get_selenium_driver(headless=False)
 driver.set_page_load_timeout(15)
 
