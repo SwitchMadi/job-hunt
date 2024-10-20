@@ -114,6 +114,7 @@ class EC2:
         logger.info(f"Instance stopped. instance_id - {self.instance_id}")
 
     def terminate_instance(self):
+        logger.info(f"Terminating instance...\ninstance_id - {self.instance_id}")
         response = self.client.terminate_instances(InstanceIds=[self.instance_id])
         terminated_instance_id = response["TerminatingInstances"][0]["InstanceId"]
         logger.info(f"Instance terminated. instance_id - {terminated_instance_id}")
