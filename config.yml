@@ -5,7 +5,7 @@ s3_bucket: job-hunt-storage
 scraping:
   linkedin:
     login_pause: false
-    max_job_count: 1500
+    max_job_count: 200
     jobs_urls:
       - https://www.linkedin.com/jobs/search/?currentJobId=4034221608&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=100456013&keywords=software&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
       - https://www.linkedin.com/jobs/search/?currentJobId=4051993158&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=105015875&keywords=software&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
