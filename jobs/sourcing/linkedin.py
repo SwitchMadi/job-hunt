@@ -16,7 +16,7 @@ from utilities.logging import get_logger
 logger = get_logger(name="scrape_linkedin")
 
 
-def extract_linkedin_jobs(jobs_url):
+def extract_linkedin_jobs(jobs_url, scraped_linkedin_job_ids):
     config = yaml.safe_load(open("config.yml"))
 
     driver = get_selenium_driver(headless=False)
@@ -83,6 +83,13 @@ def extract_linkedin_jobs(jobs_url):
                     parsed_url = urlparse(current_url)
                     query_params = parse_qs(parsed_url.query)
                     job_id = query_params.get("currentJobId", [None])[0]
+
+                    if job_id in scraped_linkedin_job_ids:
+                        logger.info(
+                            f"Skipping already scraped linkedin job id - {job_id}"
+                        )
+                        continue
+
                     linkedin_job_url = f"https://www.linkedin.com/jobs/view/{job_id}"
                     logger.info(f"Job collected - {linkedin_job_url}")
 

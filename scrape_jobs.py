@@ -45,7 +45,20 @@ try:
 
     for jobs_url in config["scraping"]["linkedin"]["jobs_urls"]:
         logger.info(f"Scraping url - {jobs_url}")
-        jobs = extract_linkedin_jobs(jobs_url)
+
+        linkedin_job_ids_query = """
+            select split_part(coalesce(repost_url, job_url), '/', 6) linkedin_job_id
+            from jobs.jobs j
+            where coalesce(repost_url, job_url) is not null
+            order by job_posted_at desc
+            limit 20000
+        """
+        df_linkedin_jobs_ids = get_sql_query_output(
+            query=linkedin_job_ids_query, output_as_dataframe=True
+        )
+        scraped_linkedin_job_ids = set(df_linkedin_jobs_ids["linkedin_job_id"])
+
+        jobs = extract_linkedin_jobs(jobs_url, scraped_linkedin_job_ids)
         if not jobs:
             continue
 
