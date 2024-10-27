@@ -17,6 +17,8 @@ scraping:
       - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=103350119&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
       - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=104738515&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
       - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=106670623&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=106204383&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=102454443&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
       - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=105015875&keywords=backend&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
       - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=101165590&keywords=backend&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
       - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=101282230&keywords=backend&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
@@ -27,6 +29,8 @@ scraping:
       - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=103350119&keywords=backend&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
       - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=104738515&keywords=backend&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
       - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=106670623&keywords=backend&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=106204383&keywords=backend&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=102454443&keywords=backend&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
       - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=105015875&keywords=python&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
       - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=101165590&keywords=python&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
       - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=101282230&keywords=python&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
@@ -37,5 +41,7 @@ scraping:
       - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=103350119&keywords=python&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
       - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=104738515&keywords=python&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
       - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=106670623&keywords=python&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=106204383&keywords=python&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=102454443&keywords=python&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
 startup_input: C:\Users\JobHunt\Desktop\startup_input.yml
 openai_model: gpt-4o-mini-2024-07-18
