@@ -7,6 +7,9 @@ scraping:
     login_pause: false
     max_job_count: 1500
     jobs_urls:
+      - https://www.linkedin.com/jobs/search/?f_TPR=r86400&geoId=102713980&keywords=data%20analyst&origin=JOB_SEARCH_PAGE_KEYWORD_AUTOCOMPLETE&refresh=true
+      - https://www.linkedin.com/jobs/search/?f_TPR=r86400&geoId=102713980&keywords=business%20analyst&origin=JOB_SEARCH_PAGE_KEYWORD_AUTOCOMPLETE&refresh=true
+      - https://www.linkedin.com/jobs/search/?f_TPR=r86400&geoId=102713980&keywords=data%20scientist&origin=JOB_SEARCH_PAGE_KEYWORD_AUTOCOMPLETE&refresh=true
       - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=105015875&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
       - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=101165590&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
       - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=101282230&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R

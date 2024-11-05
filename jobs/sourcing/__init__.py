@@ -64,13 +64,13 @@ def extract_job_info(job_description, source):
             "prompt_group": 4,
         },
         "11": {
-            "key": "software_domain",
-            "prompt": "Most matching just 1 software domain out of following? "
+            "key": "job_domain",
+            "prompt": "Most matching just 1 job domain out of following? "
             "Frontend Development / Backend Development / Full-stack Development / Mobile App Development / "
-            "Data Engineering / Data Science / Solution Architecture / Machine Learning / "
+            "Data Engineering / ML-AI / Solution Architecture / Machine Learning / "
             "Systems Analysis / Database Administration / Embedded Systems Development / "
-            "Network Engineering / DevOps / Quality Assurance / Business Analysis / "
-            "Cyber Security",
+            "Network Engineering / DevOps / Quality Assurance / Business Analysis / Data Analysis / Cyber Security"
+            "",
             "prompt_group": 4,
         },
         "12": {

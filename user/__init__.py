@@ -173,7 +173,7 @@ class User:
                     else job_field
                 )
                 filters[job_field] = f"({job_field_name} >= {preferences[True][0]})"
-            elif job_field in (["company", "software_domain"]):
+            elif job_field in (["company", "job_domain"]):
                 queries = {}
                 for is_preferred, values in preferences.items():
                     if is_preferred:
@@ -215,11 +215,11 @@ class User:
                     filters[job_field] += f"({f' {condition} '.join(query_list)}) and "
                 filters[job_field] = f"({filters[job_field].strip(' and ')})"
 
-        if filters.get("software_domain") and filters.get("title"):
-            filters["software_domain_and_title"] = (
-                f"({filters.get('software_domain')} or {filters.get('title')})"
+        if filters.get("job_domain") and filters.get("title"):
+            filters["job_domain_and_title"] = (
+                f"({filters.get('job_domain')} or {filters.get('title')})"
             )
-            del filters["software_domain"]
+            del filters["job_domain"]
             del filters["title"]
 
         filters = [query for _, query in filters.items()]
