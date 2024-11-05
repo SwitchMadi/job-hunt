@@ -123,7 +123,6 @@ def extract_job_info(job_description, source):
             answer = (
                 answer.split("?")[-1]
                 .split(":")[-1]
-                .split(" - ")[-1]
                 .split("\n")[-1]
                 .strip("-")
                 .strip()
