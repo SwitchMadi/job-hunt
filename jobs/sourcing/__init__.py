@@ -69,8 +69,7 @@ def extract_job_info(job_description, source):
             "Frontend Development / Backend Development / Full-stack Development / Mobile App Development / "
             "Data Engineering / ML-AI / Solution Architecture / Machine Learning / "
             "Systems Analysis / Database Administration / Embedded Systems Development / "
-            "Network Engineering / DevOps / Quality Assurance / Business Analysis / Data Analysis / Cyber Security"
-            "",
+            "Network Engineering / DevOps / Quality Assurance / Business Analysis / Data Analysis / Cyber Security",
             "prompt_group": 4,
         },
         "12": {
