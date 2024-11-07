@@ -105,16 +105,17 @@ class User:
 
         today = datetime.now(pytz.timezone("Asia/Kolkata")).date()
         cur_month = f"{today.year}{str(today.month).zfill(2)}"
+        sheet_name = f"SwitchMadi Jobs | Month {cur_month}"
 
         jobs_sheet = None
         for resource in self.drive_folder.get_folder_resources():
             if (resource["mimeType"] == "application/vnd.google-apps.spreadsheet") and (
-                resource["name"] == cur_month
+                resource["name"] == sheet_name
             ):
                 jobs_sheet = Sheet(sheet_id=resource["id"])
 
         if jobs_sheet is None:
-            jobs_sheet = Sheet(title=cur_month, folder_id=self.drive_folder.id)
+            jobs_sheet = Sheet(title=sheet_name, folder_id=self.drive_folder.id)
 
         self._jobs_sheet = jobs_sheet
         return self._jobs_sheet
