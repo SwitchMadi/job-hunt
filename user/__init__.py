@@ -94,6 +94,7 @@ class User:
                 parent_folder_id=root_folder.id,
             )
             user_folder.share(email=self.email)
+            user_folder.share(email=config["admin_email"])
 
         self._drive_folder = user_folder
         return self._drive_folder
