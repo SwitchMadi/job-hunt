@@ -166,13 +166,14 @@ class User:
                 filters[job_field] = (
                     f"(coalesce(job_posted_at, created_at) >= {time_ago})"
                 )
-            elif job_field in (["employees_count", "experience_requirement"]):
-                job_field_name = (
-                    "experience_requirement_min_years"
-                    if job_field == "experience_requirement"
-                    else job_field
+            elif job_field in (["employees_count", "experience_requirement_min_years"]):
+                filters[job_field] = (
+                    f"(({job_field} >= {preferences[True][0]}) or {job_field} is null)"
                 )
-                filters[job_field] = f"({job_field_name} >= {preferences[True][0]})"
+            elif job_field in (["experience_requirement_max_years"]):
+                filters[job_field] = (
+                    f"(({job_field} <= {preferences[True][0]}) or {job_field} is null)"
+                )
             elif job_field in (["company", "job_domain"]):
                 queries = {}
                 for is_preferred, values in preferences.items():
@@ -190,7 +191,13 @@ class User:
                     filters[job_field] += f"{query} and "
                 filters[job_field] = f"({filters[job_field].strip(' and ')})"
             elif job_field in (
-                ["title", "location", "location_requirement", "technical_skills"]
+                [
+                    "title",
+                    "location",
+                    "location_requirement",
+                    "technical_skills",
+                    "employment_type",
+                ]
             ):
                 queries = {}
                 for is_preferred, values in preferences.items():
@@ -207,12 +214,8 @@ class User:
                             )
 
                 filters[job_field] = ""
-                if job_field == "technical_skills":
-                    condition = "and"
-                else:
-                    condition = "or"
                 for _, query_list in queries.items():
-                    filters[job_field] += f"({f' {condition} '.join(query_list)}) and "
+                    filters[job_field] += f"({f' or '.join(query_list)}) and "
                 filters[job_field] = f"({filters[job_field].strip(' and ')})"
 
         if filters.get("job_domain") and filters.get("title"):
@@ -255,6 +258,7 @@ class User:
                 )
             and is_active
             and {self._preferred_jobs_query_filters(job_filter_id)}
+            order by coalesce(job_posted_at, created_at) desc
         """
         df_unshared_jobs = get_sql_query_output(query=query, output_as_dataframe=True)
 
@@ -268,21 +272,28 @@ class User:
             df_unshared_jobs = self.get_unshared_jobs(cur_filter["id"])
             skip_columns = [
                 "id",
+                "job_hash_id",
                 "job_posted_at",
                 "created_at",
                 "updated_at",
                 "source",
                 "job_description",
                 "is_active",
+                "is_reposted_job",
+                "repost_url",
+                "description_language",
             ]
             keep_columns = [
                 col for col in df_unshared_jobs.columns if col not in skip_columns
             ]
+            keep_columns.append("applied")
 
             df_unshared_jobs["job_posted_at_ist"] = df_unshared_jobs[
                 "job_posted_at_ist"
             ].astype(str)
             df_unshared_jobs = df_unshared_jobs.replace({np.nan: None})
+            df_unshared_jobs["applied"] = False
+
             tab_name = f"{today}-{cur_filter['name']}"[:50]
             self.jobs_sheet.add_new_tab(tab_name=tab_name)
             self.jobs_sheet.delete_tab(tab_name="Sheet1")
@@ -291,6 +302,8 @@ class User:
                 df=df_unshared_jobs[keep_columns], tab_name=tab_name, mode="append"
             )
             self.jobs_sheet.reset_tab_row_heights(tab_name=tab_name)
+            self.jobs_sheet.freeze_rows(tab_name, rows=1)
+            self.jobs_sheet.make_range_bold(tab_name, range_str="A1:Z1")
 
             df_unshared_jobs = df_unshared_jobs[["id"]].rename(columns={"id": "job_id"})
             df_unshared_jobs["user_id"] = self.id

@@ -132,6 +132,40 @@ class Sheet:
                 data_to_upload, value_input_option="USER_ENTERED"
             )  # Update sheet with new data
 
+        # Identify boolean columns and apply checkboxes
+        for col_name in df.select_dtypes(include="bool").columns:
+            col_index = (
+                df.columns.get_loc(col_name) + 1
+            )  # 1-based index for Google Sheets
+            end_row = row_count + len(df) + 1  # Determine where data ends
+
+            # Create request for checkboxes
+            requests = [
+                {
+                    "setDataValidation": {
+                        "range": {
+                            "sheetId": tab.id,
+                            "startRowIndex": 1,  # Start below headers
+                            "endRowIndex": end_row,
+                            "startColumnIndex": col_index - 1,
+                            "endColumnIndex": col_index,
+                        },
+                        "rule": {
+                            "condition": {
+                                "type": "BOOLEAN",
+                            },
+                            "showCustomUi": True,
+                        },
+                    }
+                }
+            ]
+
+            # Execute the batch update to apply checkboxes
+            body = {"requests": requests}
+            self.google_api_client.spreadsheets().batchUpdate(
+                spreadsheetId=self.drive_resource.id, body=body
+            ).execute()
+
         return True
 
     def reset_tab_row_heights(self, tab_name, height=21):
@@ -161,5 +195,72 @@ class Sheet:
             .execute()
         )
         logger.info(f"Height reset script run. Response -\n{response}")
+
+        return True
+
+    def freeze_rows(self, tab_name, rows=1):
+        tab = self.get_tab(tab_name)
+        requests = [
+            {
+                "updateSheetProperties": {
+                    "properties": {
+                        "sheetId": tab.id,
+                        "gridProperties": {"frozenRowCount": rows},
+                    },
+                    "fields": "gridProperties.frozenRowCount",
+                }
+            }
+        ]
+
+        body = {"requests": requests}
+        response = (
+            self.google_api_client.spreadsheets()
+            .batchUpdate(spreadsheetId=self.drive_resource.id, body=body)
+            .execute()
+        )
+        logger.info(f"First row frozen in tab {tab_name}. Response -\n{response}")
+
+        return True
+
+    def make_range_bold(self, tab_name, range_str):
+        from gspread.utils import a1_range_to_grid_range
+
+        """
+        Makes a specified range bold in a given tab using A1 notation.
+
+        Parameters:
+        - tab_name (str): Name of the tab.
+        - range_str (str): Range in A1 notation (e.g., "A1:B3").
+
+        """
+        tab = self.get_tab(tab_name)
+
+        # Convert A1 notation to grid range
+        grid_range = a1_range_to_grid_range(range_str)
+        grid_range["sheetId"] = tab.id
+
+        requests = [
+            {
+                "repeatCell": {
+                    "range": grid_range,
+                    "cell": {
+                        "userEnteredFormat": {
+                            "textFormat": {"bold": True}  # Set text to bold
+                        }
+                    },
+                    "fields": "userEnteredFormat.textFormat.bold",
+                }
+            }
+        ]
+
+        body = {"requests": requests}
+        response = (
+            self.google_api_client.spreadsheets()
+            .batchUpdate(spreadsheetId=self.drive_resource.id, body=body)
+            .execute()
+        )
+        logger.info(
+            f"Range {range_str} made bold in tab {tab_name}. Response -\n{response}"
+        )
 
         return True
