@@ -168,13 +168,19 @@ class User:
                 filters[job_field] = (
                     f"(coalesce(job_posted_at, created_at) >= {time_ago})"
                 )
-            elif job_field in (["employees_count", "experience_requirement_min_years"]):
+            elif job_field in (["employees_count"]):
                 filters[job_field] = (
                     f"(({job_field} >= {preferences[True][0]}) or {job_field} is null)"
                 )
+            elif job_field in (["experience_requirement_min_years"]):
+                filters[job_field] = (
+                    f"((experience_requirement_max_years >= {preferences[True][0]}) "
+                    f"or experience_requirement_max_years is null)"
+                )
             elif job_field in (["experience_requirement_max_years"]):
                 filters[job_field] = (
-                    f"(({job_field} <= {preferences[True][0]}) or {job_field} is null)"
+                    f"((experience_requirement_min_years <= {preferences[True][0]}) "
+                    f"or experience_requirement_min_years is null)"
                 )
             elif job_field in (["company", "job_domain"]):
                 queries = {}
