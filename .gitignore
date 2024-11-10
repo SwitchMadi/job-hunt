@@ -167,3 +167,5 @@ other
 /other/
 /utilities/aws/serverless/.aws-sam/
 /temp/
+/utilities/aws/serverless/samconfig.toml
+/.idea/
