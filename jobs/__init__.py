@@ -252,6 +252,10 @@ class ApplicationPage:
 
     def identify_steps(self):
         global driver
+
+        if self.head_step:
+            self.redo_steps()
+
         application_completed = False
         while not application_completed:
             user_prompt = (
@@ -381,3 +385,18 @@ class ApplicationPage:
         login_step = Login(parent_application_page=self)
         login_step.proceed()
         self._update_steps(login_step)
+
+    def redo_steps(self, stop_step=None):
+        logger.info("Re-doing all steps...")
+        driver.get(self.url)
+        time.sleep(10)
+
+        next_step = self.head_step
+        while True:
+            next_step.proceed()
+            next_step = next_step.next
+
+            if next_step is None or next_step is stop_step:
+                break
+
+        return

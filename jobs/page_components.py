@@ -222,7 +222,7 @@ class Login(PageComponent):
             self._identify_login_section_steps()
 
             self.is_component_functional = True
-            self._redo_steps_until_login()
+            self.parent_application_page.redo_steps()
 
             is_login_successful, login_failure_reason = self.is_login_successful
             if is_login_successful:
@@ -271,7 +271,7 @@ class Login(PageComponent):
                 logger.info(f"Verifying email...")
                 self._verify_email_address()
 
-        self._redo_steps_until_login()
+        self.parent_application_page.redo_steps(stop_step=self)
         return
 
     def _identify_login_section_steps(self):
@@ -285,7 +285,7 @@ class Login(PageComponent):
                 logger.info(
                     f"Retrying login to extract resend verification email button..."
                 )
-                self._redo_steps_until_login()
+                self.parent_application_page.redo_steps()
 
                 if self.first_step == "click_to_open_form_input":
                     self.login_form_input_button.proceed()
@@ -721,7 +721,6 @@ class Login(PageComponent):
 
                     if email_verification_link_found:
                         driver.get(email_verification_link.link)
-                        verification_email.mark_as_read()
                         email_verified = True
                         time.sleep(10)
                     else:
@@ -732,22 +731,6 @@ class Login(PageComponent):
                 logger.critical(
                     f"Verification email search failed.\nGPT response - {verification_email}"
                 )
-
-        return
-
-    def _redo_steps_until_login(self):
-        logger.info("Re-doing all steps until login...")
-        driver.get(self.parent_application_page.url)
-        time.sleep(10)
-
-        next_step = self.parent_application_page.head_step
-        continue_proceeding = True
-        while continue_proceeding:
-            if next_step is self.parent_application_page.tail_step:
-                continue_proceeding = False
-
-            next_step.proceed()
-            next_step = next_step.next
 
         return
 
@@ -818,7 +801,7 @@ class Login(PageComponent):
             parent_application_page=parent_application_page,
         )
 
-        instance.login_security_enabled = input_dict["login_section_url"]
+        instance.login_security_enabled = input_dict["login_security_enabled"]
 
         login_button_class = globals()[input_dict["login_button"]["class"]]
         instance.login_button = login_button_class.from_dict(
@@ -887,7 +870,9 @@ class Login(PageComponent):
                 )
             )
 
-        instance.create_account_security_enabled = input_dict["login_section_url"]
+        instance.create_account_security_enabled = input_dict[
+            "create_account_security_enabled"
+        ]
 
         create_account_button_class = globals()[
             input_dict["create_account_button"]["class"]
