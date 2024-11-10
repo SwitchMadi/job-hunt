@@ -1,3 +1,4 @@
 - Make sure that local .env file has right values set
-- Make sure that CLOUDWATCH_LOGS in local .env is set to false
+- Set CLOUDWATCH_LOGS in local .env to false
+- Remove relative path in local .env variables GOOGLE_SERVICE_ACCOUNT_KEY and GOOGLE_CLIENT_SECRET_KEY
 - Run ``sh deploy.sh``
