@@ -1,17 +1,45 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: 'AWS::Serverless-2016-10-31'
 Resources:
-  MyLambdaFunction:
+  JobHuntCommonLayer:
+    Type: 'AWS::Serverless::LayerVersion'
+    Properties:
+      LayerName: JobHuntCommonLayer
+      ContentUri: /Users/bhaskar/Desktop/SharedLayer
+      CompatibleRuntimes:
+        - python3.10
+
+  TriggerJobScrape:
     Type: 'AWS::Serverless::Function'
     Properties:
       FunctionName: TriggerJobScrape
-      Handler: scripts.lambdas.trigger_job_scrape.lambda_handler
+      Handler: __init__.lambda_handler
       Runtime: python3.10
-      CodeUri: /Users/bhaskar/Desktop/other/job-hunt/
+      CodeUri: /Users/bhaskar/Desktop/other/job-hunt/scripts/lambdas/trigger_job_scrape
       Timeout: 900
+      Layers:
+        - !Ref JobHuntCommonLayer
       Events:
         ScheduledEvent:
           Type: Schedule
           Properties:
-            Schedule: 'cron(0 5 * * ? *)'  # 10:30AM IST every day
-            Name: DailyTrigger
+            Schedule: 'cron(0 5 * * ? *)'  # 10:30 AM IST every day
+            Name: JobScrapeTrigger
+
+  ShareJobs:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      FunctionName: ShareJobs
+      Handler: __init__.lambda_handler
+      Runtime: python3.10
+      CodeUri: /Users/bhaskar/Desktop/other/job-hunt/scripts/lambdas/share_jobs
+      MemorySize: 1024
+      Timeout: 900
+      Layers:
+        - !Ref JobHuntCommonLayer
+      Events:
+        ScheduledEvent:
+          Type: Schedule
+          Properties:
+            Schedule: 'cron(30 14 * * ? *)'  # 8 PM IST every day
+            Name: ShareJobsTrigger

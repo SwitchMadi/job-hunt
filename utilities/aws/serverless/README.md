@@ -1,5 +1,3 @@
-- Move lambda's ``requirements.txt`` to template ``CodeUri`` temporarily for build process
-- Move to ``utilities/aws/serverless``
-- ``rm -rf .aws-sam``
-- ``sam build``
-- ``sam deploy --guided``
+- Make sure that local .env file has right values set
+- Make sure that CLOUDWATCH_LOGS in local .env is set to false
+- Run ``sh deploy.sh``
