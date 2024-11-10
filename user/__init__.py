@@ -273,6 +273,8 @@ class User:
         return df_unshared_jobs
 
     def share_jobs(self):
+        logger.info(f"Sharing jobs for {self.email}...")
+
         today = datetime.now(pytz.timezone("Asia/Kolkata")).date()
         today = f"{today.year}{str(today.month).zfill(2)}{str(today.day).zfill(2)}"
 
