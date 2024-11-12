@@ -226,13 +226,6 @@ class User:
                     filters[job_field] += f"({f' or '.join(query_list)}) and "
                 filters[job_field] = f"({filters[job_field].strip(' and ')})"
 
-        if filters.get("job_domain") and filters.get("title"):
-            filters["job_domain_and_title"] = (
-                f"({filters.get('job_domain')} or {filters.get('title')})"
-            )
-            del filters["job_domain"]
-            del filters["title"]
-
         filters = [query for _, query in filters.items()]
         filters = " and\n".join(filters)
 
