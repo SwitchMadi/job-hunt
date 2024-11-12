@@ -222,8 +222,9 @@ class User:
                             )
 
                 filters[job_field] = ""
-                for _, query_list in queries.items():
-                    filters[job_field] += f"({f' or '.join(query_list)}) and "
+                for is_preferred, query_list in queries.items():
+                    condition = "or" if is_preferred else "and"
+                    filters[job_field] += f"({f' {condition} '.join(query_list)}) and "
                 filters[job_field] = f"({filters[job_field].strip(' and ')})"
 
         filters = [query for _, query in filters.items()]
