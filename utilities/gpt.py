@@ -36,7 +36,7 @@ def get_gpt_response(system_prompt, user_prompt, response_format=None, sleep_tim
             resp = completion.choices[0].message
 
             if resp.refusal:
-                logger.debug(
+                logger.warn(
                     f"GPT could not respond with structured output - \n{resp.refusal}"
                 )
                 return False, resp.refusal
