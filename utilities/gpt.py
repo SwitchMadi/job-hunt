@@ -13,8 +13,15 @@ client = OpenAI(api_key=os.getenv("OPENAI_KEY"))
 config = yaml.safe_load(open("config.yml"))
 
 
-def get_gpt_response(system_prompt, user_prompt, response_format=None, sleep_time=1):
+def get_gpt_response(
+    system_prompt, user_prompt, response_format=None, sleep_time=1, images=[]
+):
     try:
+        user_content = [{"type": "text", "text": user_prompt}]
+
+        for image in images:
+            user_content.append({"type": "image_url", "image_url": {"url": image}})
+
         payload = {
             "model": config["openai_model"],
             "messages": [
@@ -24,7 +31,7 @@ def get_gpt_response(system_prompt, user_prompt, response_format=None, sleep_tim
                 },
                 {
                     "role": "user",
-                    "content": user_prompt,
+                    "content": user_content,
                 },
             ],
         }
