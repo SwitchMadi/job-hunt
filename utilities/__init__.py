@@ -108,6 +108,7 @@ def minify_html_for_gpt_prompt(html_content):
         "h1",
         "h2",
         "h3",
+        "div",
     ]
     elements = soup.find_all(relevant_tags)
 
@@ -128,6 +129,13 @@ def minify_html_for_gpt_prompt(html_content):
         for attr in list(elem.attrs):
             if attr not in ["id", "class", "href", "type", "name", "value", "display"]:
                 del elem[attr]
+
+    character_limit = 750
+    for tag in filtered_soup.find_all(True):  # True fetches all tags
+        if tag.string and len(tag.string.strip()) > character_limit:
+            # Trim the text and add ellipsis
+            trimmed_text = tag.string.strip()[:character_limit]
+            tag.string.replace_with(trimmed_text)
 
     # Return the prettified, filtered HTML
     return filtered_soup.prettify()
