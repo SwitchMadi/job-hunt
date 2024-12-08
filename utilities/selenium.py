@@ -53,6 +53,21 @@ def get_selenium_driver(headless=True):
     return driver
 
 
+def disable_browser_alerts():
+    global driver
+
+    # disable browser alerts
+    driver.execute_script(
+        """
+        window.alert = function() {};
+        window.confirm = function() { return true; };
+        window.prompt = function() { return null; };
+    """
+    )
+
+    return True
+
+
 def extract_iframe_urls(html_content):
     # Parse the HTML content with BeautifulSoup
     soup = BeautifulSoup(html_content, "html.parser")
