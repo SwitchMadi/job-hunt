@@ -29,6 +29,7 @@ def get_selenium_driver(headless=True):
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
         options.add_experimental_option("useAutomationExtension", False)
         options.add_argument("--disable-blink-features=AutomationControlled")
+        options.add_argument("--deny-permission-prompts")
 
         options.add_argument(
             f"user-data-dir={config['chrome_profile_path']}"
