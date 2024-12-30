@@ -4,11 +4,15 @@ from enum import Enum
 import json
 
 from utilities import minify_html_for_gpt_prompt, constants, generate_hash
-from utilities.selenium import get_selenium_driver, extract_iframe_urls
+from utilities.selenium import (
+    get_selenium_driver,
+    extract_iframe_urls,
+    disable_browser_alerts,
+)
 from utilities.gpt import get_gpt_response
 from utilities.logging import get_logger
 from utilities.sql import get_sql_query_output, execute_sql_query
-from jobs.page_components import Button, Login
+from jobs.page_components import Button, Login, TextInput, Email, TermsAndConditions
 
 
 logger = get_logger(name="job")
@@ -132,57 +136,6 @@ class ApplicationPage:
 
         return
 
-    def identify_popups(self):
-        global driver
-        driver.get(self.url)
-        time.sleep(10)
-
-        user_prompt = (
-            f"Analyze the following HTML page for any screen overlays or UI overlays such as cookie "
-            f"consent banners, pop-ups which is strictly not related to job application, or any other similar "
-            f"elements. For each overlay found, provide the XPath of one button to close the overlay."
-            f"Carefully analyse each button based on its html, class names & text if it can close the overlay. If the "
-            f"button doesn't seem to be closing the overlay then strictly ignore the overlay and do not give button in "
-            f"response.\nI will click the XPaths in the order you provide, so ensure the sequence is correct and "
-            f"can be clicked in that order.\n"
-            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}"
-        )
-
-        class OverlayActionButton(BaseModel):
-            x_path: str = Field(
-                ...,
-                description="For the overlay found, XPath of one button to close the overlay.",
-            )
-            button_result: str = Field(
-                ..., description="What will happen clicking this button?"
-            )
-
-        class OverlayActionButtons(BaseModel):
-            buttons: list[OverlayActionButton]
-
-        overlay_action_buttons_found, overlay_action_buttons = get_gpt_response(
-            constants.gpt["system_prompts"]["application_step_identification"],
-            user_prompt,
-            response_format=OverlayActionButtons,
-        )
-        if overlay_action_buttons_found:
-            for overlay_action_button in overlay_action_buttons.buttons:
-                close_overlay_button = Button(
-                    x_path=overlay_action_button.x_path,
-                    button_type="close_overlay",
-                    parent_application_page=self,
-                    click_result=overlay_action_button.button_result,
-                )
-                close_overlay_button.proceed()
-                self._update_steps(close_overlay_button)
-        else:
-            logger.warn(
-                f"GPT could/did not find overlay close buttons. Response - "
-                f"{overlay_action_buttons}"
-            )
-
-        return
-
     @property
     def original_application_page_identified(self):
         return isinstance(self.original_application_page, ApplicationPage)
@@ -190,6 +143,7 @@ class ApplicationPage:
     def identify_original_application_page(self):
         global driver
         driver.get(self.url)
+        disable_browser_alerts()
         time.sleep(10)
 
         # Get the total height of the page
@@ -207,6 +161,7 @@ class ApplicationPage:
         iframe_urls = list(set(iframe_urls))
         for iframe_url in iframe_urls:
             driver.get(iframe_url)
+            disable_browser_alerts()
             time.sleep(10)
             htmls[f"iframe_{iframe_urls.index(iframe_url)}"] = {
                 "url": iframe_url,
@@ -250,71 +205,193 @@ class ApplicationPage:
 
         return
 
-    def identify_steps(self):
+    def redo_steps(self, stop_step=None):
+        logger.info("Re-doing all steps...")
+        driver.get(self.url)
+        disable_browser_alerts()
+        time.sleep(10)
+
+        next_step = self.head_step
+        while True:
+            next_step.proceed()
+            next_step = next_step.next
+
+            if next_step is None or next_step is stop_step:
+                break
+
+        return
+
+    # Identify job page components
+    def identify_application_steps(self):
         global driver
+        driver.get(self.url)
+        disable_browser_alerts()
+        time.sleep(10)
 
-        if self.head_step:
-            self.redo_steps()
+        # if self.head_step:
+        #     self.redo_steps()
 
-        application_completed = False
-        while not application_completed:
-            user_prompt = (
-                f"Following HTML page is job application page for {self.parent_job.title}. Analyse the whole HTML"
-                f"very carefully for determining the immediate next step in job application. Respond with just 1 next "
-                f"step, not any further than 1 step. Login can be the least priority for next step if possible.\n"
-                f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}"
-            )
-
-            class JobApplicationStep(str, Enum):
-                start_application = "start_application"
-                select_application_data_source = "select_application_data_source"
-                login = "login"
-                job_application_completed = "job_application_completed"
-                page_not_found_error = "page_not_found_error"
-
-            class JobApplicationNextStep(BaseModel):
-                step: JobApplicationStep = Field(
-                    ...,
-                    description="What is the immediate & mandatory next step in the job application, based on the "
-                    "whole HTML.\n"
-                    "start_application - I have to start job application process by clicking somewhere\n"
-                    "select_application_data_source - The page is asking for selecting job application data input "
-                    "source like autofill using resume, manual input, apply using linkedin etc.\n"
-                    "login - If login is mandatory step before moving to any next step in job application.\n"
-                    "job_application_completed - Job application has been completed.\n"
-                    "page_not_found_error - HTML has error message saying page / job not found or expired",
-                )
-
-            next_step_found, next_step = get_gpt_response(
-                constants.gpt["system_prompts"]["application_step_identification"],
-                user_prompt,
-                response_format=JobApplicationNextStep,
-            )
-            if next_step_found:
-                if next_step.step == JobApplicationStep.page_not_found_error:
-                    logger.critical(
-                        f"Job has expired / not found. Title - {self.parent_job.title}"
-                    )
-                    return
-                if next_step.step == JobApplicationStep.start_application:
-                    self._extract_start_application_step_details()
-                elif (
-                    next_step.step == JobApplicationStep.select_application_data_source
-                ):
-                    self._extract_application_data_source_options_details()
-                elif next_step.step == JobApplicationStep.login:
-                    self._extract_login_step_details()
+        identification_completed = False
+        while not identification_completed:
+            elements = self._identify_current_page_elements()
+            if elements:
+                self._act_on_current_page_elements(elements)
             else:
-                application_completed = True
+                identification_completed = True
 
-    def _extract_start_application_step_details(self):
+    def _identify_current_page_elements(self):
+        global driver
+        user_prompt = (
+            f"Following HTML page is job application webpage for {self.parent_job.title}."
+            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
+            f"Analyse the whole HTML very carefully for determining the elements present on the job page."
+        )
+
+        class IsElementPresent(Enum):
+            true = True
+            false = False
+
+        class WebPageElements(BaseModel):
+            mandatory_login_signup: IsElementPresent = Field(
+                ...,
+                description="Whether mandatory login or signup step is there. If it's not mandatory in anyway "
+                "then you must return return false.",
+            )
+            start_application_button: IsElementPresent = Field(
+                ..., description="There is button to start application to the job"
+            )
+            next_button: IsElementPresent = Field(
+                ...,
+                description="There is button to go to next section of application. It's not submit application button.",
+            )
+            select_application_data_source: IsElementPresent = Field(
+                ...,
+                description="Select application data source like Linkedin, Indeed, upload resume etc.",
+            )
+            already_applied_alert: IsElementPresent = Field(
+                ...,
+                description="Page suggests that user has already applied to the job",
+            )
+            application_fields: IsElementPresent = Field(
+                ...,
+                description="Job page has form fields to fill application like name, college, experience etc.",
+            )
+            job_not_available_alert: IsElementPresent = Field(
+                ..., description="Page suggests that job is no longer available"
+            )
+            captcha: IsElementPresent = Field(
+                ...,
+                description="There is a mandatory captcha to proceed further. If it's dummy / empty html representing "
+                "captcha then return false.",
+            )
+            expand_collapse_section: IsElementPresent = Field(
+                ...,
+                description="Job page has sections which are in collapsed form (arrow / + buttons) and need to be "
+                "expanded to interact with",
+            )
+            cookies_prompt: IsElementPresent = Field(
+                ...,
+                description="Webpage has some prompt visible regarding cookies consent",
+            )
+
+        elements_found, elements = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=WebPageElements,
+        )
+        if elements_found:
+            return elements
+        else:
+            logger.error(
+                f"Couldn't identify current page elements for {self.parent_job.title}. URL - {self.url}"
+            )
+            return None
+
+    def _act_on_current_page_elements(self, elements):
+        if elements.already_applied_alert.value:
+            logger.warn(f"User has already applied to the job.")
+            return False
+
+        if elements.job_not_available_alert.value:
+            logger.warn(f"Job is not available anymore.")
+            return False
+
+        if elements.captcha.value:
+            logger.warn(f"There is captcha on the page so cannot move forward.")
+            return False
+
+        if elements.cookies_prompt.value:
+            self._identify_cookies_consent()
+
+        if elements.mandatory_login_signup.value:
+            pass
+
+        if elements.start_application_button.value:
+            self._identify_start_application_button()
+
+            latest_elements = self._identify_current_page_elements()
+            if latest_elements:
+                self._act_on_current_page_elements(latest_elements)
+
+        if elements.select_application_data_source.value:
+            pass
+
+        if elements.expand_collapse_section.value:
+            pass
+
+        if elements.application_fields.value:
+            job_fields = self._identify_application_fields()
+            self._act_on_job_fields(job_fields)
+
+    def _identify_cookies_consent(self, retry=False):
         global driver
 
         user_prompt = (
-            f"Following HTML page is job application page for {self.parent_job.title}. As a first step in "
-            f"the job application, I have to start application by clicking some button. Give XPath of the"
-            f"UI element clicking which I can start the job application.\n"
-            f"HTML : {minify_html_for_gpt_prompt(driver.page_source)}"
+            f"Following HTML page is job application webpage for {self.parent_job.title}."
+            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
+            f"The webpage has some prompt visible regarding cookies consent. Analyse the whole HTML very carefully and "
+            f"provide XPath of the button to accept to all cookies."
+        )
+
+        class ConsentAcceptanceButton(BaseModel):
+            x_path: str = Field(
+                ...,
+                description="For the cookies consent, XPath of the button to accept to all cookies.",
+            )
+
+        button_found, button = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=ConsentAcceptanceButton,
+        )
+        if button_found:
+            consent_acceptance_button = Button(
+                x_path=button.x_path,
+                button_type="accept_cookies",
+                parent_application_page=self,
+                click_result="Accepts cookies consent",
+            )
+            consent_acceptance_button.proceed()
+            if consent_acceptance_button.is_component_functional:
+                self._update_steps(consent_acceptance_button)
+            elif not retry:
+                logger.warn(f"Retrying to identify cookies consent...")
+                self._identify_cookies_consent(retry=True)
+        else:
+            logger.warn(
+                f"GPT could not find cookies acceptance button. Response - {button}"
+            )
+
+        return
+
+    def _identify_start_application_button(self, retry=False):
+        global driver
+
+        user_prompt = (
+            f"Following HTML page is job application webpage for {self.parent_job.title}."
+            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
+            f"As a first step in the job application, I have to start application by clicking some button. Give XPath "
+            f"of the UI element clicking which I can start the job application."
         )
 
         class StartApplication(BaseModel):
@@ -336,7 +413,10 @@ class ApplicationPage:
                 click_result="Starts job application",
             )
             start_application_button.proceed()
-            self._update_steps(start_application_button)
+            if start_application_button.is_component_functional:
+                self._update_steps(start_application_button)
+            elif not retry:
+                self._identify_start_application_button(retry=True)
         else:
             logger.critical(
                 f"Start application button not found.\nGPT response - {start_application_button}"
@@ -386,17 +466,69 @@ class ApplicationPage:
         login_step.proceed()
         self._update_steps(login_step)
 
-    def redo_steps(self, stop_step=None):
-        logger.info("Re-doing all steps...")
-        driver.get(self.url)
-        time.sleep(10)
+    def _identify_application_fields(self):
+        global driver
+        user_prompt = (
+            f"Following HTML page is job application webpage for {self.parent_job.title}."
+            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
+            f"The webpage has job application related fields. Analyse the whole HTML very carefully for extracting all "
+            f"the application fields."
+        )
 
-        next_step = self.head_step
-        while True:
-            next_step.proceed()
-            next_step = next_step.next
+        class FieldCategory(Enum):
+            email = "email"
+            password = "password"
+            tnc = "tnc"
+            work_experience = "work_experience"
+            other = "other"
 
-            if next_step is None or next_step is stop_step:
-                break
+        class FieldType(Enum):
+            textbox = "textbox"
+            checkbox = "checkbox"
+            dropdown = "dropdown"
+            addButton = "addButton"
 
-        return
+        class ApplicationField(BaseModel):
+            field_title: str = Field(
+                ...,
+                description="Application field title / question mentioned on the webpage",
+            )
+            field_category: FieldCategory = Field(
+                ...,
+                description="Application field category like email, work_experience, education, city etc.",
+            )
+            field_type: FieldType = Field(
+                ...,
+                description="Application field type like textbox, checkbox, dropdown etc.",
+            )
+
+        class JobFields(BaseModel):
+            job_fields: list[ApplicationField]
+
+        job_fields_found, job_fields = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=JobFields,
+        )
+        if job_fields_found:
+            return job_fields.job_fields
+        else:
+            logger.error(
+                f"Couldn't extract job fields for {self.parent_job.title}. URL - {self.url}"
+            )
+            return []
+
+    def _act_on_job_fields(self, job_fields):
+        for job_field in job_fields:
+            if job_field.field_category.value == "email":
+                email_field_step = Email(
+                    parent_application_page=self, field_info=job_field
+                )
+                email_field_step.proceed()
+                self._update_steps(email_field_step)
+            elif job_field.field_category.value == "tnc":
+                tnc_field_step = TermsAndConditions(
+                    parent_application_page=self, field_info=job_field
+                )
+                tnc_field_step.proceed()
+                self._update_steps(tnc_field_step)
