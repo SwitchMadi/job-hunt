@@ -137,6 +137,16 @@ def minify_html_for_gpt_prompt(html_content):
             trimmed_text = tag.string.strip()[:character_limit]
             tag.string.replace_with(trimmed_text)
 
+    for tag in filtered_soup.find_all():
+        # Check if the tag has no attributes
+        if not tag.attrs:
+            # Check if the tag is empty or contains only whitespace
+            if not tag.contents or all(
+                isinstance(content, str) and content.strip() == ""
+                for content in tag.contents
+            ):
+                tag.decompose()  # Remove the tag completely
+
     # Return the prettified, filtered HTML
     return filtered_soup.prettify()
 
