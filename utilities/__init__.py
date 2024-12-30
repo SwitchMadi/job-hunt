@@ -109,6 +109,7 @@ def minify_html_for_gpt_prompt(html_content):
         "h2",
         "h3",
         "div",
+        "span",
     ]
     elements = soup.find_all(relevant_tags)
 
