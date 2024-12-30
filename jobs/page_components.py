@@ -2,7 +2,10 @@ from abc import ABC, abstractmethod
 import time
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-from selenium.common.exceptions import ElementClickInterceptedException
+from selenium.common.exceptions import (
+    ElementClickInterceptedException,
+    ElementNotInteractableException,
+)
 from selenium.webdriver.common.action_chains import ActionChains
 from enum import Enum
 from pydantic import BaseModel, Field
@@ -61,6 +64,13 @@ class Button(PageComponent):
             element = driver.find_element(By.XPATH, self.x_path)
             driver.execute_script("arguments[0].scrollIntoView(true);", element)
             element.click()
+            time.sleep(10)
+        except ElementNotInteractableException as e:
+            logger.info(
+                f"element not interactable in class Button's proceed method.\n{e}\nButton instance - {vars(self)}"
+            )
+            element = driver.find_element(By.XPATH, self.x_path)
+            driver.execute_script("arguments[0].click();", element)
             time.sleep(10)
         except ElementClickInterceptedException as e:
             logger.info(
