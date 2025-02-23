@@ -12,8 +12,13 @@ from utilities.selenium import (
 from utilities.gpt import get_gpt_response
 from utilities.logging import get_logger
 from utilities.sql import get_sql_query_output, execute_sql_query
-from jobs.page_components import Button, Login, TextInput, Email, TermsAndConditions
-
+from jobs.page_components import Button, TextInput
+from jobs.page_components.application_data_source import ApplicationDataSource
+from jobs.page_components.cookies_consent import CookiesConsent
+from jobs.page_components.terms_and_conditions import TermsAndConditions
+from jobs.page_components.email import Email
+from jobs.page_components.login import Login
+from jobs.page_components.start_application import StartApplication
 
 logger = get_logger(name="job")
 driver = get_selenium_driver(headless=False)
@@ -258,7 +263,8 @@ class ApplicationPage:
                 "then you must return return false.",
             )
             start_application_button: IsElementPresent = Field(
-                ..., description="There is button to start application to the job"
+                ...,
+                description="There is button to start applying to the job. It's not next step button.",
             )
             next_button: IsElementPresent = Field(
                 ...,
@@ -286,7 +292,7 @@ class ApplicationPage:
             )
             expand_collapse_section: IsElementPresent = Field(
                 ...,
-                description="Job page has sections which are in collapsed form (arrow / + buttons) and need to be "
+                description="Job page has sections which are in collapsed form (arrow, + buttons etc. ) and need to be "
                 "expanded to interact with",
             )
             cookies_prompt: IsElementPresent = Field(
@@ -343,123 +349,22 @@ class ApplicationPage:
             job_fields = self._identify_application_fields()
             self._act_on_job_fields(job_fields)
 
-    def _identify_cookies_consent(self, retry=False):
-        global driver
+    def _identify_cookies_consent(self):
+        cookies_field = CookiesConsent(parent_application_page=self)
+        cookies_field.proceed()
+        self._update_steps(cookies_field)
 
-        user_prompt = (
-            f"Following HTML page is job application webpage for {self.parent_job.title}."
-            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
-            f"The webpage has some prompt visible regarding cookies consent. Analyse the whole HTML very carefully and "
-            f"provide XPath of the button to accept to all cookies."
-        )
-
-        class ConsentAcceptanceButton(BaseModel):
-            x_path: str = Field(
-                ...,
-                description="For the cookies consent, XPath of the button to accept to all cookies.",
-            )
-
-        button_found, button = get_gpt_response(
-            constants.gpt["system_prompts"]["application_step_identification"],
-            user_prompt,
-            response_format=ConsentAcceptanceButton,
-        )
-        if button_found:
-            consent_acceptance_button = Button(
-                x_path=button.x_path,
-                button_type="accept_cookies",
-                parent_application_page=self,
-                click_result="Accepts cookies consent",
-            )
-            consent_acceptance_button.proceed()
-            if consent_acceptance_button.is_component_functional:
-                self._update_steps(consent_acceptance_button)
-            elif not retry:
-                logger.warn(f"Retrying to identify cookies consent...")
-                self._identify_cookies_consent(retry=True)
-        else:
-            logger.warn(
-                f"GPT could not find cookies acceptance button. Response - {button}"
-            )
-
-        return
-
-    def _identify_start_application_button(self, retry=False):
-        global driver
-
-        user_prompt = (
-            f"Following HTML page is job application webpage for {self.parent_job.title}."
-            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
-            f"As a first step in the job application, I have to start application by clicking some button. Give XPath "
-            f"of the UI element clicking which I can start the job application."
-        )
-
-        class StartApplication(BaseModel):
-            x_path: str = Field(
-                ...,
-                description="XPath of the UI element to start the job application",
-            )
-
-        start_application_button_found, start_application_button = get_gpt_response(
-            constants.gpt["system_prompts"]["application_step_identification"],
-            user_prompt,
-            response_format=StartApplication,
-        )
-        if start_application_button_found:
-            start_application_button = Button(
-                x_path=start_application_button.x_path,
-                button_type="start_application",
-                parent_application_page=self,
-                click_result="Starts job application",
-            )
-            start_application_button.proceed()
-            if start_application_button.is_component_functional:
-                self._update_steps(start_application_button)
-            elif not retry:
-                self._identify_start_application_button(retry=True)
-        else:
-            logger.critical(
-                f"Start application button not found.\nGPT response - {start_application_button}"
-            )
+    def _identify_start_application_button(self):
+        start_application_field = StartApplication(parent_application_page=self)
+        start_application_field.proceed()
+        self._update_steps(start_application_field)
 
     def _extract_application_data_source_options_details(self):
-        global driver
-
-        user_prompt = (
-            f"Following HTML page is job application page for {self.parent_job.title}. As the next step in "
-            f"the job application, I have to select how I want to insert data in the application fields."
-            f"Priority is as follows -\n"
-            f"1. Manually insert data\n"
-            f"2. Autofill with resume\n"
-            f"Based on above priority give me XPath of just 1 UI element clicking which I can select data "
-            f"input strategy for the job application.\n"
-            f"HTML : {minify_html_for_gpt_prompt(driver.page_source)}"
+        application_data_source_field = ApplicationDataSource(
+            parent_application_page=self
         )
-
-        class DataInputOption(BaseModel):
-            x_path: str = Field(
-                ..., description="XPath of the UI element to start the job application"
-            )
-            strategy: str = Field(..., description="selected data input strategy")
-
-        data_input_option_found, data_input_option = get_gpt_response(
-            constants.gpt["system_prompts"]["application_step_identification"],
-            user_prompt,
-            response_format=DataInputOption,
-        )
-        if data_input_option_found:
-            data_input_option_button = Button(
-                x_path=data_input_option.x_path,
-                button_type="select_application_data_source",
-                parent_application_page=self,
-                click_result=data_input_option.strategy,
-            )
-            data_input_option_button.proceed()
-            self._update_steps(data_input_option_button)
-        else:
-            logger.critical(
-                f"Data input option not found / identified properly.\nGPT response - {data_input_option}"
-            )
+        application_data_source_field.proceed()
+        self._update_steps(application_data_source_field)
 
     def _extract_login_step_details(self):
         login_step = Login(parent_application_page=self)

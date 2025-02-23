@@ -7,6 +7,7 @@ import random
 import string
 from cryptography.fernet import Fernet
 import dotenv
+import re
 
 
 dotenv.load_dotenv()
@@ -198,3 +199,9 @@ def decrypt_password(input_string):
 
 def str_to_bool(value: str) -> bool:
     return value.lower() in ("true", "1")
+
+
+def pascal_to_snake_casing(name: str) -> str:
+    # Insert an underscore before each uppercase letter (except at the beginning)
+    s1 = re.sub(r"(?<!^)(?=[A-Z])", "_", name)
+    return s1.lower()
