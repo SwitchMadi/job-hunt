@@ -349,28 +349,7 @@ class ApplicationPage:
             job_fields = self._identify_application_fields()
             self._act_on_job_fields(job_fields)
 
-    def _identify_cookies_consent(self):
-        cookies_field = CookiesConsent(parent_application_page=self)
-        cookies_field.proceed()
-        self._update_steps(cookies_field)
-
-    def _identify_start_application_button(self):
-        start_application_field = StartApplication(parent_application_page=self)
-        start_application_field.proceed()
-        self._update_steps(start_application_field)
-
-    def _extract_application_data_source_options_details(self):
-        application_data_source_field = ApplicationDataSource(
-            parent_application_page=self
-        )
-        application_data_source_field.proceed()
-        self._update_steps(application_data_source_field)
-
-    def _extract_login_step_details(self):
-        login_step = Login(parent_application_page=self)
-        login_step.proceed()
-        self._update_steps(login_step)
-
+    # Identify application fields
     def _identify_application_fields(self):
         global driver
         user_prompt = (
@@ -437,3 +416,26 @@ class ApplicationPage:
                 )
                 tnc_field_step.proceed()
                 self._update_steps(tnc_field_step)
+
+    # Identifying individual components
+    def _identify_cookies_consent(self):
+        cookies_field = CookiesConsent(parent_application_page=self)
+        cookies_field.proceed()
+        self._update_steps(cookies_field)
+
+    def _identify_start_application_button(self):
+        start_application_field = StartApplication(parent_application_page=self)
+        start_application_field.proceed()
+        self._update_steps(start_application_field)
+
+    def _extract_application_data_source_options_details(self):
+        application_data_source_field = ApplicationDataSource(
+            parent_application_page=self
+        )
+        application_data_source_field.proceed()
+        self._update_steps(application_data_source_field)
+
+    def _extract_login_step_details(self):
+        login_step = Login(parent_application_page=self)
+        login_step.proceed()
+        self._update_steps(login_step)
