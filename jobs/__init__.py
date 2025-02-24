@@ -405,17 +405,9 @@ class ApplicationPage:
     def _act_on_job_fields(self, job_fields):
         for job_field in job_fields:
             if job_field.field_category.value == "email":
-                email_field_step = Email(
-                    parent_application_page=self, field_info=job_field
-                )
-                email_field_step.proceed()
-                self._update_steps(email_field_step)
+                self._identify_email_field(job_field)
             elif job_field.field_category.value == "tnc":
-                tnc_field_step = TermsAndConditions(
-                    parent_application_page=self, field_info=job_field
-                )
-                tnc_field_step.proceed()
-                self._update_steps(tnc_field_step)
+                self._identify_tnc_field(job_field)
 
     # Identifying individual components
     def _identify_cookies_consent(self):
@@ -439,3 +431,15 @@ class ApplicationPage:
         login_step = Login(parent_application_page=self)
         login_step.proceed()
         self._update_steps(login_step)
+
+    def _identify_email_field(self, job_field):
+        email_field_step = Email(parent_application_page=self, field_info=job_field)
+        email_field_step.proceed()
+        self._update_steps(email_field_step)
+
+    def _identify_tnc_field(self, job_field):
+        tnc_field_step = TermsAndConditions(
+            parent_application_page=self, field_info=job_field
+        )
+        tnc_field_step.proceed()
+        self._update_steps(tnc_field_step)
