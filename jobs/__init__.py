@@ -19,6 +19,7 @@ from jobs.page_components.terms_and_conditions import TermsAndConditions
 from jobs.page_components.email import Email
 from jobs.page_components.login import Login
 from jobs.page_components.start_application import StartApplication
+from jobs.page_components.next_page import NextPage
 
 logger = get_logger(name="job")
 driver = get_selenium_driver(headless=False)
@@ -349,6 +350,10 @@ class ApplicationPage:
             job_fields = self._identify_application_fields()
             self._act_on_job_fields(job_fields)
 
+        # last action after all on page components
+        if elements.next_button.value:
+            self._identify_next_page_button()
+
     # Identify application fields
     def _identify_application_fields(self):
         global driver
@@ -443,3 +448,8 @@ class ApplicationPage:
         )
         tnc_field_step.proceed()
         self._update_steps(tnc_field_step)
+
+    def _identify_next_page_button(self):
+        next_page_button = NextPage(parent_application_page=self)
+        next_page_button.proceed()
+        self._update_steps(next_page_button)
