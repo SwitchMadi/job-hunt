@@ -20,6 +20,8 @@ driver.set_page_load_timeout(15)
 
 def get_page_component_class_name(class_name):
     module_name = pascal_to_snake_casing(class_name)
+    if class_name == "VerifyAccount":
+        module_name = "login"
     try:
         return globals()[class_name]
     except KeyError:
@@ -151,8 +153,16 @@ class TextInput(PageComponent):
 
         try:
             element = driver.find_element(By.XPATH, self.x_path)
-            element.send_keys(self.input_text)
-            element.send_keys(Keys.RETURN)
+            if self.input_type == "otp_textbox":
+                element.click()
+                for otp_digit in str(
+                    self.parent_application_page.account_verification_otp
+                ):
+                    active_element = driver.switch_to.active_element
+                    active_element.send_keys(f"{otp_digit}")
+            else:
+                element.send_keys(self.input_text)
+                element.send_keys(Keys.RETURN)
         except Exception as e:
             logger.exception(
                 f"Unexpected error occurred in class TextInput's proceed method.\n{e}\n"

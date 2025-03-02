@@ -13,7 +13,7 @@ from jobs.page_components import (
 from utilities import minify_html_for_gpt_prompt, constants
 from utilities.google_services.gmail import Gmail
 from utilities.gpt import get_gpt_response
-from utilities.selenium import get_selenium_driver
+from utilities.selenium import get_selenium_driver, x_path_exists
 
 
 driver = get_selenium_driver(headless=False)
@@ -48,6 +48,8 @@ class Login(PageComponent):
         self.create_account_security_enabled = False
         self.create_account_button = None
         self.account_created_at = None
+
+        self.verify_account = None
 
     def proceed(self):
         if not self.login_steps_identified:
@@ -101,7 +103,10 @@ class Login(PageComponent):
 
             if self.is_verification_email_sent:
                 logger.info(f"Verifying email...")
-                self._verify_email_address()
+                self.verify_account = VerifyAccount(
+                    parent_application_page=self.parent_application_page
+                )
+                self.verify_account.proceed()
 
         self.parent_application_page.redo_steps(stop_step=self)
         return
@@ -129,7 +134,10 @@ class Login(PageComponent):
             self._trigger_email_verification_email()
 
             if self.is_verification_email_sent:
-                self._verify_email_address()
+                self.verify_account = VerifyAccount(
+                    parent_application_page=self.parent_application_page
+                )
+                self.verify_account.proceed()
             else:
                 raise Exception("It seems account verification email couldn't be sent.")
 
@@ -476,96 +484,6 @@ class Login(PageComponent):
                 f"Create account step success could not be determined.\nGPT response - {is_create_account_successful}"
             )
 
-    def _verify_email_address(self):
-        gmail = Gmail(user=self.parent_application_page.parent_job.user)
-
-        five_minutes_ago_unix = int(self.account_created_at.timestamp())
-        query = f"after:{five_minutes_ago_unix} is:unread"
-
-        email_verified = False
-
-        while not email_verified:
-            emails = gmail.get_emails(query=query)
-
-            email_prompt_info = [
-                {
-                    "email_id": email.message_id,
-                    "sender": email.sender,
-                    "subject": email.title,
-                }
-                for email in emails
-            ]
-            user_prompt = (
-                f"While applying for job title {self.parent_application_page.parent_job.title}, I just "
-                f"created an account on following URL - {driver.current_url}.\n Following emails are what I "
-                f"received in my inbox -\n{email_prompt_info}\nOut of above emails, is there any email "
-                f"which is account activation / email id verification email for the account creation?"
-            )
-
-            class VerificationEmailFound(Enum):
-                true = True
-                false = False
-
-            class VerificationEmail(BaseModel):
-                verification_email_found: VerificationEmailFound = Field(
-                    ...,
-                    description="Whether verification email found or not",
-                )
-                email_id: str = Field(
-                    ...,
-                    description="Email id of the verification email",
-                )
-
-            verification_email_search_succeeded, verification_email = get_gpt_response(
-                constants.gpt["system_prompts"]["application_step_identification"],
-                user_prompt,
-                response_format=VerificationEmail,
-            )
-
-            if verification_email_search_succeeded:
-                if verification_email.verification_email_found.value:
-                    verification_email = [
-                        email
-                        for email in emails
-                        if email.message_id == verification_email.email_id
-                    ][0]
-
-                    user_prompt = (
-                        f"While applying for job title {self.parent_application_page.parent_job.title}, I just "
-                        f"created an account on following URL - {driver.current_url}.\n Following email is the "
-                        f"verification email. Extract the link, by clicking which I can verify my email.\n"
-                        f"Email - \nTitle - {verification_email.title}\nSender - {verification_email.sender}\n"
-                        f"Body - {verification_email.body}"
-                    )
-
-                    class EmailVerificationLink(BaseModel):
-                        link: str = Field(..., description="Email verification link")
-
-                    email_verification_link_found, email_verification_link = (
-                        get_gpt_response(
-                            constants.gpt["system_prompts"][
-                                "application_step_identification"
-                            ],
-                            user_prompt,
-                            response_format=EmailVerificationLink,
-                        )
-                    )
-
-                    if email_verification_link_found:
-                        driver.get(email_verification_link.link)
-                        email_verified = True
-                        time.sleep(10)
-                    else:
-                        raise logger.critical(
-                            f"Email verification link couldn't be extracted.\nGPT response - {email_verification_link}"
-                        )
-            else:
-                logger.critical(
-                    f"Verification email search failed.\nGPT response - {verification_email}"
-                )
-
-        return
-
     def to_dict(self):
         return {
             "class": self.__class__.__name__,
@@ -597,6 +515,7 @@ class Login(PageComponent):
             ),
             "create_account_security_enabled": self.create_account_security_enabled,
             "create_account_button": self.create_account_button.to_dict(),
+            "verify_account": self.verify_account.to_dict(),
             "next": self.next.to_dict() if self.next else None,
         }
 
@@ -713,6 +632,256 @@ class Login(PageComponent):
             input_dict=input_dict["create_account_button"],
             parent_application_page=parent_application_page,
         )
+
+        instance.verify_account = VerifyAccount.from_dict(
+            input_dict=input_dict["verify_account"],
+            parent_application_page=parent_application_page,
+        )
+
+        if input_dict["next"]:
+            next_class = get_page_component_class_name(
+                class_name=input_dict["next"]["class"]
+            )
+            next_component = next_class.from_dict(
+                input_dict["next"], parent_application_page
+            )
+
+            instance.next = next_component
+            next_component.prev = instance
+
+        return instance
+
+
+class VerifyAccount(PageComponent):
+    def __init__(self, parent_application_page):
+        self.parent_application_page = parent_application_page
+
+        self.otp_text_box = None
+        self.verify_button = None
+        self.component_identified = False
+        self.verification_method = None
+
+        self.next = None
+        self.prev = None
+        self.is_component_functional = False
+
+    def proceed(self):
+        if not self.component_identified:
+            self._identify()
+
+        verification_email = self._identify_verification_email()
+        verification_info = self._extract_verification_info(verification_email)
+
+        if self.verification_method == "link":
+            driver.get(verification_info)
+        else:
+            self.parent_application_page.account_verification_otp = verification_info
+            self.otp_text_box.proceed()
+
+            if self.verify_button:
+                self.verify_button.proceed()
+
+    def _identify(self, retry=False):
+        global driver
+
+        user_prompt = (
+            f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title}."
+            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
+            f"In previous step I submitted email id and I have been sent email for account verification. Current page"
+            f"has account verification component. Verification is through either a link or an OTP/code sent to my "
+            f"email. Help me identify what is the verification method (link or OTP/code)? If it's an OTP/code or code "
+            f"based verification then what is XPath of text box to submit OTP/code. If there are multiple text boxes "
+            f"then give me XPath of first text box for first digit of the OTP/code. Also give me XPath of submit or "
+            f"verify button if there is any."
+        )
+
+        class VerificationMethod(Enum):
+            link = "link"
+            otp_code = "otp_code"
+
+        class VerifyAccountComponent(BaseModel):
+            verification_method: VerificationMethod = Field(
+                ...,
+                description="What is account verification method (Link or OTP/code sent over email)?",
+            )
+            otp_text_box_x_path: str = Field(
+                ...,
+                description="XPath of text box for OTP submission. If there are multiple text boxes for each OTP/code "
+                "digit then give XPath of the first text box for first digit.",
+            )
+            verify_button_x_path: str = Field(
+                ...,
+                description="If there is any verify or submit button to submit the OTP/code then XPath of the verify or"
+                " submit button.",
+            )
+
+        component_identified, component = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=VerifyAccountComponent,
+        )
+
+        if component_identified:
+            self.verification_method = component.verification_method.value
+
+            if self.verification_method == "link":
+                self.is_component_functional = True
+                self.component_identified = True
+            elif x_path_exists(component.otp_text_box_x_path) and x_path_exists(
+                component.verify_button_x_path
+            ):
+                self.otp_text_box = TextInput(
+                    x_path=component.otp_text_box_x_path,
+                    input_type="otp_textbox",
+                    parent_application_page=self.parent_application_page,
+                )
+
+                self.verify_button = Button(
+                    x_path=component.verify_button_x_path,
+                    button_type="verify_otp",
+                    parent_application_page=self,
+                    click_result="Submits OTP for account verification",
+                )
+
+                self.is_component_functional = True
+                self.component_identified = True
+            elif not retry:
+                self._identify(retry=True)
+            else:
+                raise Exception(
+                    f"Couldn't identify verify account component for {self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+                )
+        else:
+            raise Exception(
+                f"Couldn't identify verify account component for {self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+            )
+
+    def _identify_verification_email(self):
+        gmail = Gmail(user=self.parent_application_page.parent_job.user)
+
+        ten_minutes_ago_unix = datetime.now().timestamp() - 10 * 60
+        query = f"after:{int(ten_minutes_ago_unix)} is:unread"
+
+        email_identified = False
+        while not email_identified:
+            emails = gmail.get_emails(query=query)
+
+            email_prompt_info = [
+                {
+                    "email_id": email.message_id,
+                    "sender": email.sender,
+                    "subject": email.title,
+                }
+                for email in emails
+            ]
+            user_prompt = (
+                f"While applying for job title {self.parent_application_page.parent_job.title} at a company called "
+                f"{self.parent_application_page.parent_job.company}, I just created an account on following URL - "
+                f"{driver.current_url}.\n Following emails are what I received in my inbox -\n{email_prompt_info}\nOut "
+                f"of above emails, is there any email which is account activation / email id verification email for the"
+                f" account creation?"
+            )
+
+            class VerificationEmailFound(Enum):
+                true = True
+                false = False
+
+            class VerificationEmail(BaseModel):
+                verification_email_found: VerificationEmailFound = Field(
+                    ...,
+                    description="Whether verification email found or not",
+                )
+                email_id: str = Field(
+                    ...,
+                    description="Email id of the verification email",
+                )
+
+            verification_email_search_succeeded, verification_email = get_gpt_response(
+                constants.gpt["system_prompts"]["application_step_identification"],
+                user_prompt,
+                response_format=VerificationEmail,
+            )
+            email_identified = verification_email.verification_email_found.value
+
+            if email_identified:
+                return [
+                    email
+                    for email in emails
+                    if email.message_id == verification_email.email_id
+                ][0]
+
+    def _extract_verification_info(self, email):
+        if self.verification_method == "link":
+            info_extraction_prompt = "Extract the verification link, by clicking which I can verify my email."
+        else:
+            info_extraction_prompt = (
+                "Extract the verification OTP/code, using which I can verify my email."
+            )
+
+        user_prompt = (
+            f"While applying for job title {self.parent_application_page.parent_job.title}, I just "
+            f"created an account on following URL - {driver.current_url}.\n Following email is the "
+            f"verification email. {info_extraction_prompt}\n"
+            f"Email - \nTitle - {email.title}\nSender - {email.sender}\n"
+            f"Body - {email.body}"
+        )
+
+        class EmailVerificationInfo(BaseModel):
+            verification_link: str = Field(..., description="Email verification link")
+            verification_otp: int = Field(
+                ..., description="Email verification OTP/code"
+            )
+
+        email_verification_info_found, email_verification_info = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=EmailVerificationInfo,
+        )
+
+        if email_verification_info_found:
+            return (
+                email_verification_info.verification_link
+                if self.verification_method == "link"
+                else email_verification_info.verification_otp
+            )
+        else:
+            raise logger.critical(
+                f"Email verification {self.verification_method} couldn't be extracted.\nGPT response - {email_verification_info}"
+            )
+
+    def to_dict(self):
+        return {
+            "class": self.__class__.__name__,
+            "otp_text_box": self.otp_text_box.to_dict(),
+            "verify_button": self.verify_button.to_dict(),
+            "verification_method": self.verification_method,
+            "next": self.next.to_dict() if self.next else None,
+        }
+
+    @classmethod
+    def from_dict(cls, input_dict, parent_application_page):
+        instance = cls(
+            parent_application_page=parent_application_page,
+        )
+
+        otp_text_box_class = get_page_component_class_name(
+            class_name=input_dict["otp_text_box"]["class"]
+        )
+        instance.otp_text_box = otp_text_box_class.from_dict(
+            input_dict=input_dict["otp_text_box"],
+            parent_application_page=parent_application_page,
+        )
+
+        verify_button_class = get_page_component_class_name(
+            class_name=input_dict["verify_button"]["class"]
+        )
+        instance.verify_button = verify_button_class.from_dict(
+            input_dict=input_dict["verify_button"],
+            parent_application_page=parent_application_page,
+        )
+
+        instance.verification_method = input_dict["verification_method"]
+        instance.component_identified = True
 
         if input_dict["next"]:
             next_class = get_page_component_class_name(

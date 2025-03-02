@@ -17,7 +17,7 @@ from jobs.page_components.application_data_source import ApplicationDataSource
 from jobs.page_components.cookies_consent import CookiesConsent
 from jobs.page_components.terms_and_conditions import TermsAndConditions
 from jobs.page_components.email import Email
-from jobs.page_components.login import Login
+from jobs.page_components.login import Login, VerifyAccount
 from jobs.page_components.start_application import StartApplication
 from jobs.page_components.next_page import NextPage
 
@@ -27,19 +27,21 @@ driver.set_page_load_timeout(15)
 
 
 class Job:
-    def __init__(self, url, title=None, user=None):
+    def __init__(self, url, title=None, company=None, user=None):
         self.url = url
 
         job = Job.find_job_by_url(url)
         if job is None:
             self.hash_id = generate_hash(url)
             self.title = title
+            self.company = company
             self.save_to_db()
             job = Job.find_job_by_url(url)
 
         self.id = job["id"]
         self.hash_id = job["job_hash_id"]
         self.title = job["title"]
+        self.company = job["company"]
 
         self.application_page = ApplicationPage(url=url, parent_job=self)
         self.user = user
@@ -61,8 +63,8 @@ class Job:
     def save_to_db(self):
         job_create_query = f"""
             insert into jobs.jobs
-            (job_hash_id, job_url, title)
-            values ('{self.hash_id}', '{self.url}', '{self.title}')
+            (job_hash_id, job_url, title, company)
+            values ('{self.hash_id}', '{self.url}', '{self.title}', '{self.company}')
         """
         return execute_sql_query(job_create_query)
 
@@ -76,6 +78,8 @@ class ApplicationPage:
         self.original_application_page = ApplicationPage
         self.head_step = None
         self.tail_step = None
+
+        self.account_verification_otp = None
 
         self._get_application_steps()
 
@@ -258,10 +262,15 @@ class ApplicationPage:
             false = False
 
         class WebPageElements(BaseModel):
-            mandatory_login_signup: IsElementPresent = Field(
+            mandatory_account_login_signup: IsElementPresent = Field(
                 ...,
-                description="Whether mandatory login or signup step is there. If it's not mandatory in anyway "
-                "then you must return return false.",
+                description="Whether mandatory account login or signup step is there. If it's not mandatory in anyway "
+                "then you must return false.",
+            )
+            account_verification: IsElementPresent = Field(
+                ...,
+                description="Whether mandatory account verification step is there. If it's not mandatory in anyway "
+                "then you must return false.",
             )
             start_application_button: IsElementPresent = Field(
                 ...,
@@ -281,7 +290,7 @@ class ApplicationPage:
             )
             application_fields: IsElementPresent = Field(
                 ...,
-                description="Job page has form fields to fill application like name, college, experience etc.",
+                description="Job page has form fields to fill application like name, college, experience, email etc.",
             )
             job_not_available_alert: IsElementPresent = Field(
                 ..., description="Page suggests that job is no longer available"
@@ -330,8 +339,11 @@ class ApplicationPage:
         if elements.cookies_prompt.value:
             self._identify_cookies_consent()
 
-        if elements.mandatory_login_signup.value:
+        if elements.mandatory_account_login_signup.value:
             pass
+
+        if elements.account_verification.value:
+            self._identify_verify_email_field()
 
         if elements.start_application_button.value:
             self._identify_start_application_button()
@@ -453,3 +465,8 @@ class ApplicationPage:
         next_page_button = NextPage(parent_application_page=self)
         next_page_button.proceed()
         self._update_steps(next_page_button)
+
+    def _identify_verify_email_field(self):
+        verify_account_component = VerifyAccount(parent_application_page=self)
+        verify_account_component.proceed()
+        self._update_steps(verify_account_component)
