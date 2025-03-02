@@ -84,6 +84,7 @@ class CookiesConsent(PageComponent):
         instance = cls(
             parent_application_page=parent_application_page,
         )
+
         field_component_class = get_page_component_class_name(
             class_name=input_dict["field_component"]["class"]
         )
@@ -91,6 +92,8 @@ class CookiesConsent(PageComponent):
             input_dict=input_dict["field_component"],
             parent_application_page=parent_application_page,
         )
+
+        instance.component_identified = True
 
         if input_dict["next"]:
             next_class = get_page_component_class_name(
