@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field
+from enum import Enum
 
 from jobs.page_components import PageComponent, Button, get_page_component_class_name
 from utilities import minify_html_for_gpt_prompt, constants
@@ -33,44 +34,59 @@ class ApplicationDataSource(PageComponent):
         user_prompt = (
             f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title}."
             f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
-            f"As the next step in the job application, I have to select how I want to insert data in the application "
-            f"fields. Priority is as follows -\n"
-            f"1. Manually insert data\n"
-            f"2. Autofill with resume\n"
-            f"Based on above priority give me XPath of just 1 UI element clicking which I can select data "
-            f"input strategy for the job application."
+            f"On current page there is certain section where options are given to select application data source "
+            f"strategy like Linkedin, Indeed, upload resume or manually input data etc. First identify the section and "
+            f"then resolve following query strictly for the identified section only - \n"
+            f"Out of the given application data source options in the identified section is there an explicit option to"
+            f" choose data input strategy as manual input? If yes then give XPath of the button. The button must only "
+            f"be for choosing data input strategy as manual, not to actually start inputting application data. If there"
+            f" is no such button then return false."
         )
 
-        class DataInputOption(BaseModel):
-            x_path: str = Field(
-                ..., description="XPath of the UI element to start the job application"
-            )
-            strategy: str = Field(..., description="selected data input strategy")
+        class IsElementPresent(Enum):
+            true = True
+            false = False
 
-        data_input_option_found, data_input_option = get_gpt_response(
+        class ManualDataInputOption(BaseModel):
+            manual_data_input_option_present: IsElementPresent = Field(
+                ...,
+                description="Out of the given application data source options, is there an option to opt for manual "
+                "data input as primary method? This button should only be for selecting data strategy. "
+                "Return false if no such button found.",
+            )
+            manual_data_input_x_path: str = Field(
+                ...,
+                description="If the is option to select manual data input strategy then XPath of the button to opt for "
+                "manually inputting application data",
+            )
+
+        manual_data_input_option_searched, manual_data_input_option = get_gpt_response(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
-            response_format=DataInputOption,
+            response_format=ManualDataInputOption,
         )
 
-        if data_input_option_found:
-            self.field_component = Button(
-                x_path=data_input_option.x_path,
-                button_type="select_application_data_source",
-                parent_application_page=self,
-                click_result=data_input_option.strategy,
-            )
-
-            self.field_component.proceed()
-            if self.field_component.is_component_functional:
-                self.is_component_functional = True
-                self.component_identified = True
-            elif not retry:
-                self._identify(retry=True)
-            else:
-                raise Exception(
-                    f"Data input option not found / identified for {self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+        if manual_data_input_option_searched:
+            if manual_data_input_option.manual_data_input_option_present.value:
+                self.field_component = Button(
+                    x_path=manual_data_input_option.manual_data_input_x_path,
+                    button_type="select_application_data_source",
+                    parent_application_page=self,
+                    click_result="Select manual data input",
                 )
+
+                self.field_component.proceed()
+                if self.field_component.is_component_functional:
+                    self.is_component_functional = True
+                    self.component_identified = True
+                elif not retry:
+                    self._identify(retry=True)
+                else:
+                    raise Exception(
+                        f"Data input option not found / identified for {self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+                    )
+            else:
+                return
         else:
             raise Exception(
                 f"Data input option not found / identified for {self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"

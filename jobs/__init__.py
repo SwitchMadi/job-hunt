@@ -368,7 +368,16 @@ class ApplicationPage:
                 return
 
         if elements.select_application_data_source.value:
-            pass
+            is_manual_input_functional = (
+                self._extract_application_data_source_options_details()
+            )
+
+            if is_manual_input_functional:
+                latest_elements = self._identify_current_page_elements()
+                if latest_elements:
+                    self._act_on_current_page_elements(latest_elements)
+
+                return
 
         if elements.expand_collapse_section.value:
             pass
@@ -460,6 +469,8 @@ class ApplicationPage:
         )
         application_data_source_field.proceed()
         self._update_steps(application_data_source_field)
+
+        return application_data_source_field.is_component_functional
 
     def _extract_login_step_details(self):
         login_step = Login(parent_application_page=self)
