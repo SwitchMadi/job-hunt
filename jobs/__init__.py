@@ -287,7 +287,13 @@ class ApplicationPage:
             )
             next_button: IsElementPresent = Field(
                 ...,
-                description="There is button to go to next section of application. It's not submit application button.",
+                description="There is button to go to next section of application. Don't consider submit application "
+                "button as next button.",
+            )
+            submit_button: IsElementPresent = Field(
+                ...,
+                description="There is button to go to submit the application. Button for going to next page is not "
+                "submit button.",
             )
             select_application_data_source: IsElementPresent = Field(
                 ...,
