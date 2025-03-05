@@ -660,6 +660,7 @@ class VerifyAccount(PageComponent):
         self.verify_button = None
         self.component_identified = False
         self.verification_method = None
+        self.incorrectly_tagged = False
 
         self.next = None
         self.prev = None
@@ -668,6 +669,13 @@ class VerifyAccount(PageComponent):
     def proceed(self):
         if not self.component_identified:
             self._identify()
+
+        if self.incorrectly_tagged:
+            logger.warn(
+                f"Page identified incorrectly as having account verification component for "
+                f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+            )
+            return
 
         verification_email = self._identify_verification_email()
         verification_info = self._extract_verification_info(verification_email)
@@ -692,27 +700,39 @@ class VerifyAccount(PageComponent):
             f"email. Help me identify what is the verification method (link or OTP/code)? If it's an OTP/code or code "
             f"based verification then what is XPath of text box to submit OTP/code. If there are multiple text boxes "
             f"then give me XPath of first text box for first digit of the OTP/code. Also give me XPath of submit or "
-            f"verify button if there is any."
+            f"verify button if there is any.\n"
+            f"If current page is not talking about verification via link or OTP then this is not an account "
+            f"verification page and return false."
         )
+
+        class IsVerificationPage(Enum):
+            true = True
+            false = False
 
         class VerificationMethod(Enum):
             link = "link"
             otp_code = "otp_code"
 
         class VerifyAccountComponent(BaseModel):
+            is_verification_page: IsVerificationPage = Field(
+                ...,
+                description="Whether current page is explicitly talking about verification via link or OTP?",
+            )
             verification_method: VerificationMethod = Field(
                 ...,
-                description="What is account verification method (Link or OTP/code sent over email)?",
+                description="If it is verification page then what is account verification method (Link or OTP/code sent"
+                " over email)?",
             )
             otp_text_box_x_path: str = Field(
                 ...,
-                description="XPath of text box for OTP submission. If there are multiple text boxes for each OTP/code "
-                "digit then give XPath of the first text box for first digit.",
+                description="If it is verification page then what is XPath of text box for OTP submission. If there are"
+                " multiple text boxes for each OTP/code digit then give XPath of the first text box for "
+                "first digit.",
             )
             verify_button_x_path: str = Field(
                 ...,
-                description="If there is any verify or submit button to submit the OTP/code then XPath of the verify or"
-                " submit button.",
+                description="If it is verification page and there is any verify or submit button to submit the OTP/code"
+                " then XPath of the verify or submit button.",
             )
 
         component_identified, component = get_gpt_response(
@@ -722,35 +742,39 @@ class VerifyAccount(PageComponent):
         )
 
         if component_identified:
-            self.verification_method = component.verification_method.value
+            if component.is_verification_page.value:
+                self.verification_method = component.verification_method.value
 
-            if self.verification_method == "link":
-                self.is_component_functional = True
-                self.component_identified = True
-            elif x_path_exists(component.otp_text_box_x_path) and x_path_exists(
-                component.verify_button_x_path
-            ):
-                self.otp_text_box = TextInput(
-                    x_path=component.otp_text_box_x_path,
-                    input_type="otp_textbox",
-                    parent_application_page=self.parent_application_page,
-                )
+                if self.verification_method == "link":
+                    self.is_component_functional = True
+                    self.component_identified = True
+                elif x_path_exists(component.otp_text_box_x_path) and x_path_exists(
+                    component.verify_button_x_path
+                ):
+                    self.otp_text_box = TextInput(
+                        x_path=component.otp_text_box_x_path,
+                        input_type="otp_textbox",
+                        parent_application_page=self.parent_application_page,
+                    )
 
-                self.verify_button = Button(
-                    x_path=component.verify_button_x_path,
-                    button_type="verify_otp",
-                    parent_application_page=self,
-                    click_result="Submits OTP for account verification",
-                )
+                    self.verify_button = Button(
+                        x_path=component.verify_button_x_path,
+                        button_type="verify_otp",
+                        parent_application_page=self,
+                        click_result="Submits OTP for account verification",
+                    )
 
-                self.is_component_functional = True
-                self.component_identified = True
-            elif not retry:
-                self._identify(retry=True)
+                    self.is_component_functional = True
+                    self.component_identified = True
+                elif not retry:
+                    self._identify(retry=True)
+                else:
+                    raise Exception(
+                        f"Couldn't identify verify account component for {self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+                    )
             else:
-                raise Exception(
-                    f"Couldn't identify verify account component for {self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
-                )
+                self.incorrectly_tagged = True
+                return
         else:
             raise Exception(
                 f"Couldn't identify verify account component for {self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
@@ -793,7 +817,7 @@ class VerifyAccount(PageComponent):
                 )
                 email_id: str = Field(
                     ...,
-                    description="Email id of the verification email",
+                    description="Email id of the latest verification email for the given job & company",
                 )
 
             verification_email_search_succeeded, verification_email = get_gpt_response(

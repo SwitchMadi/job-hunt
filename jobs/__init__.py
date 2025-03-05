@@ -264,13 +264,12 @@ class ApplicationPage:
         class WebPageElements(BaseModel):
             mandatory_account_login_signup: IsElementPresent = Field(
                 ...,
-                description="Whether mandatory account login or signup step is there. If it's not mandatory in anyway "
-                "then you must return false.",
+                description="Whether mandatory account login or signup step is there. If the page content suggests in "
+                "anyway that login is not required then return false.",
             )
             account_verification: IsElementPresent = Field(
                 ...,
-                description="Whether mandatory account verification step is there. If it's not mandatory in anyway "
-                "then you must return false.",
+                description="Whether current page is explicitly talking about verification via link or OTP?",
             )
             start_application_button: IsElementPresent = Field(
                 ...,
