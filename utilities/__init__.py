@@ -89,6 +89,16 @@ def minify_html_for_gpt_prompt(html_content):
     # Parse the HTML content
     soup = BeautifulSoup(html_content, "html.parser")
 
+    # Find all elements with style attribute
+    for element in soup.find_all(style=True):
+        try:
+            if element and element.has_attr("style"):
+                style = element["style"].lower()
+                if "display:none" in style.replace(" ", ""):
+                    element.decompose()  # Remove element and its children
+        except TypeError:
+            pass
+
     # Remove script and style tags
     for script_or_style in soup(["script", "style"]):
         script_or_style.decompose()
