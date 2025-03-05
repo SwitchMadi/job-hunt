@@ -150,6 +150,16 @@ class ApplicationPage:
     def original_application_page_identified(self):
         return isinstance(self.original_application_page, ApplicationPage)
 
+    @property
+    def start_application_button_processed(self):
+        cur_application_step = self.head_step
+        while cur_application_step:
+            if isinstance(self.head_step, StartApplication):
+                return True
+            cur_application_step = cur_application_step.next
+
+        return False
+
     def identify_original_application_page(self):
         global driver
         driver.get(self.url)
@@ -238,8 +248,8 @@ class ApplicationPage:
         disable_browser_alerts()
         time.sleep(10)
 
-        # if self.head_step:
-        #     self.redo_steps()
+        if self.head_step:
+            self.redo_steps()
 
         identification_completed = False
         while not identification_completed:
@@ -344,12 +354,18 @@ class ApplicationPage:
         if elements.account_verification.value:
             self._identify_verify_email_field()
 
-        if elements.start_application_button.value:
-            self._identify_start_application_button()
+        if (
+            elements.start_application_button.value
+            and not self.start_application_button_processed
+        ):
+            is_start_application_functional = self._identify_start_application_button()
 
-            latest_elements = self._identify_current_page_elements()
-            if latest_elements:
-                self._act_on_current_page_elements(latest_elements)
+            if is_start_application_functional:
+                latest_elements = self._identify_current_page_elements()
+                if latest_elements:
+                    self._act_on_current_page_elements(latest_elements)
+
+                return
 
         if elements.select_application_data_source.value:
             pass
@@ -435,6 +451,8 @@ class ApplicationPage:
         start_application_field = StartApplication(parent_application_page=self)
         start_application_field.proceed()
         self._update_steps(start_application_field)
+
+        return start_application_field.is_component_functional
 
     def _extract_application_data_source_options_details(self):
         application_data_source_field = ApplicationDataSource(
