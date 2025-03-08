@@ -2,6 +2,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from selenium.common.exceptions import InvalidSelectorException
 from bs4 import BeautifulSoup
 import yaml
 
@@ -99,8 +100,11 @@ def extract_iframe_urls(html_content):
 def x_path_exists(x_path):
     global driver
 
-    elements = driver.find_elements(By.XPATH, x_path)
-    if elements:
-        return True
-    else:
+    try:
+        elements = driver.find_elements(By.XPATH, x_path)
+        if elements:
+            return True
+        else:
+            return False
+    except InvalidSelectorException:
         return False
