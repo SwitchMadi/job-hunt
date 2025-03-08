@@ -400,17 +400,29 @@ class ApplicationPage:
     def _identify_application_fields(self):
         global driver
         user_prompt = (
-            f"Following HTML page is job application webpage for {self.parent_job.title}."
+            f"Following HTML page is job application webpage for {self.parent_job.title} at a company called "
+            f"{self.parent_job.company}.\n"
             f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
             f"The webpage has job application related fields. Analyse the whole HTML very carefully for extracting all "
             f"the application fields."
         )
 
         class FieldCategory(Enum):
+            first_name = "first_name"
+            last_name = "last_name"
+            name_prefix = "name_prefix"
             email = "email"
+            phone_number = "phone_number"
+            address = "address"
             password = "password"
             tnc = "tnc"
+            work_permit = "work_permit"
+            previous_association_with_the_company = (
+                "previous_association_with_the_company"
+            )
             work_experience = "work_experience"
+            education = "education"
+            resume_upload = "resume_upload"
             other = "other"
 
         class FieldType(Enum):
@@ -418,6 +430,7 @@ class ApplicationPage:
             checkbox = "checkbox"
             dropdown = "dropdown"
             addButton = "addButton"
+            upload = "upload"
 
         class ApplicationField(BaseModel):
             field_title: str = Field(
