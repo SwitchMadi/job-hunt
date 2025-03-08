@@ -90,12 +90,12 @@ def minify_html_for_gpt_prompt(html_content):
     soup = BeautifulSoup(html_content, "html.parser")
 
     # Find all elements with style attribute
-    for element in soup.find_all(style=True):
+    for tag in soup.find_all(style=True):
         try:
-            if element and element.has_attr("style"):
-                style = element["style"].lower()
+            if tag and tag.has_attr("style"):
+                style = tag["style"].lower()
                 if "display:none" in style.replace(" ", ""):
-                    element.decompose()  # Remove element and its children
+                    tag.decompose()  # Remove element and its children
         except TypeError:
             pass
 
@@ -121,46 +121,38 @@ def minify_html_for_gpt_prompt(html_content):
         "h3",
         "div",
         "span",
+        "li",
+        "ul",
     ]
-    elements = soup.find_all(relevant_tags)
 
-    # Include any other tag if it has text content < 100 characters
     for tag in soup.find_all(True):
-        if tag.name not in relevant_tags and 0 < len(tag.get_text(strip=True)) < 100:
-            elements.append(tag)
-
-    # Create a new BeautifulSoup object to hold the filtered elements
-    filtered_soup = BeautifulSoup(features="html.parser")
-
-    for elem in elements:
-        # Copy the element to the new soup object
-        filtered_soup.append(elem.extract())
-
-    # Remove unnecessary attributes from the filtered elements
-    for elem in filtered_soup.find_all(True):
-        for attr in list(elem.attrs):
+        # Remove unnecessary attributes from the tags
+        for attr in list(tag.attrs):
             if attr not in ["id", "class", "href", "type", "name", "value", "display"]:
-                del elem[attr]
+                del tag[attr]
 
-    character_limit = 750
-    for tag in filtered_soup.find_all(True):  # True fetches all tags
-        if tag.string and len(tag.string.strip()) > character_limit:
-            # Trim the text and add ellipsis
-            trimmed_text = tag.string.strip()[:character_limit]
-            tag.string.replace_with(trimmed_text)
-
-    for tag in filtered_soup.find_all():
         # Check if the tag has no attributes
-        if not tag.attrs:
+        if (not tag.attrs) or (tag.name not in relevant_tags):
             # Check if the tag is empty or contains only whitespace
             if not tag.contents or all(
                 isinstance(content, str) and content.strip() == ""
                 for content in tag.contents
             ):
                 tag.decompose()  # Remove the tag completely
+                continue
+
+            tag.unwrap()
+            continue
+
+        # TODO: Following logic needs to be tested and fixed if necessary
+        character_limit = 750
+        if tag.string and len(tag.string.strip()) > character_limit:
+            # Trim the text and add ellipsis
+            trimmed_text = tag.string.strip()[:character_limit]
+            tag.string.replace_with(trimmed_text)
 
     # Return the prettified, filtered HTML
-    return filtered_soup.prettify()
+    return soup.prettify()
 
 
 def generate_password():
