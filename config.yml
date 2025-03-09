@@ -1,6 +1,7 @@
 chrome_profile_path: C:\Users\JobHunt\Desktop\job-hunt\chrome_profiles
 chromedriver: C:\Users\JobHunt\Desktop\job-hunt\chromedriver.exe
 log_folder: C:\Users\JobHunt\Desktop\job-hunt\logs
+other_files_folder: /Users/bhaskar/Desktop/garbage or not/job-hunt-data
 s3_bucket: job-hunt-storage
 scraping:
   linkedin:

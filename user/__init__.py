@@ -7,12 +7,17 @@ from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 import os
 import dotenv
+import json
 
 from utilities.sql import get_sql_query_output, execute_sql_query, get_sql_connection
 from utilities.google_services.drive import DriveResource
 from utilities.google_services.sheet import Sheet
 from utilities.logging import get_logger
-from utilities import generate_password, encrypt_string, decrypt_password
+from utilities import generate_password, encrypt_string, decrypt_password, constants
+from utilities.gpt.file_assistant import query_file
+from utilities.gpt import get_gpt_response
+from utilities.aws.s3 import S3Bucket
+from user.resume import Resume
 
 
 logger = get_logger(name="user")
@@ -36,6 +41,8 @@ class User:
         self.id = user["id"]
         self.hash_id = user["user_hash_id"]
         self.name = user["name"]
+        self.resume = user["resume"]
+        self.parsed_resume = user["parsed_resume"]
         self.password = decrypt_password(user["password"])
 
         self._drive_folder = None
@@ -63,6 +70,36 @@ class User:
             values ('{self.hash_id}', '{self.email}', '{self.name}', '{self.password}')
         """
         return execute_sql_query(user_create_query)
+
+    def update_to_db(self, **fields):
+        if not fields:
+            raise ValueError("At least one field must be provided to update.")
+
+        def format_sql_value(value):
+            # Handle SQL NULL for None values.
+            if value is None:
+                return "NULL"
+            # For strings, escape single quotes and wrap in single quotes.
+            elif isinstance(value, str):
+                return "'" + value.replace("'", "''") + "'"
+            # Convert booleans to SQL-compatible TRUE/FALSE.
+            elif isinstance(value, bool):
+                return "TRUE" if value else "FALSE"
+            # For other types (int, float, etc.) use the string representation.
+            else:
+                return str(value)
+
+        # Build the SET clause dynamically using the formatted values.
+        set_clause = ", ".join(
+            f"{field} = {format_sql_value(value)}" for field, value in fields.items()
+        )
+
+        user_update_query = f"""
+            UPDATE users.users
+            SET {set_clause}
+            WHERE id = {self.id}
+        """
+        return execute_sql_query(user_update_query)
 
     def add_job_preference(self, job_field, value):
         job_preference_query = f"""
@@ -398,3 +435,55 @@ class User:
         execute_sql_query(query)
 
         return
+
+    def save_resume(self, file_local_path):
+        s3 = S3Bucket(bucket_name=config["s3_bucket"])
+
+        file_extension = file_local_path.split(".")[-1]
+        file_s3_path = f"user_data/resumes/{self.hash_id}.{file_extension}"
+        s3.upload_data(file_local_path=file_local_path, file_s3_path=file_s3_path)
+        self.update_to_db(resume=file_s3_path)
+        self.resume = file_s3_path
+
+        return True
+
+    def parse_resume(self):
+        if not self.resume:
+            logger.warn(f"We don't have user's resume. user_id - {self.id}")
+            return
+
+        logger.info(f"Downloading resume for user_id - {self.id}...")
+        s3 = S3Bucket(bucket_name=config["s3_bucket"])
+
+        file_name = self.resume.split("/")[-1]
+        file_local_path = f"{config['other_files_folder']}/{file_name}"
+
+        s3.fetch_data(file_s3_path=self.resume, file_local_path=file_local_path)
+
+        logger.info(f"Parsing resume for user_id - {self.id}...")
+        resume_summary = query_file(
+            query="Extract resume content in structured manner. Do not leave any information and do not add any of "
+            "your comments.",
+            file=file_local_path,
+        )
+
+        user_prompt = (
+            f"Following is resume summary for a candidate named {self.name}. Extract information from the resume into"
+            f"structured output as mentioned in response_format.\n"
+            f"Resume summary -\n"
+            f"{resume_summary}"
+        )
+        resume_info_extracted, resume_info = get_gpt_response(
+            constants.gpt["system_prompts"]["resume_parser"],
+            user_prompt,
+            response_format=Resume,
+        )
+
+        if resume_info_extracted:
+            resume_info = resume_info.model_dump(mode="json")
+            self.update_to_db(parsed_resume=json.dumps(resume_info))
+            self.parsed_resume = resume_info
+            return True
+        else:
+            logger.error(f"Couldn't extract resume fields for user_id - {self.id}")
+            return False
