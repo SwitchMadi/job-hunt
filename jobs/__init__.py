@@ -245,7 +245,7 @@ class ApplicationPage:
     def extract_field_answer(
         self,
         question,
-        answer_type: Literal["text", "enum"],
+        answer_type,
         closest_answer=None,
         options=[],
     ):
@@ -273,7 +273,7 @@ class ApplicationPage:
                     description="Correct option based on closet answer",
                 )
 
-        else:
+        elif answer_type == "text":
             user_prompt += (
                 f"Following is context having user resume data using which you have to find answer -\n"
                 f"{self.parent_job.user.parsed_resume}\n"
@@ -284,6 +284,9 @@ class ApplicationPage:
                     ...,
                     description="Correct answer based on user data",
                 )
+
+        else:
+            raise Exception(f"Unknown parameter - {answer_type}")
 
         user_prompt += "Give me correct answer for this."
 
