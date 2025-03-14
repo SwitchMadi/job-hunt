@@ -13,7 +13,7 @@ from jobs.page_components import (
 from utilities import minify_html_for_gpt_prompt, constants
 from utilities.google_services.gmail import Gmail
 from utilities.gpt import get_gpt_response
-from utilities.selenium import get_selenium_driver, x_path_exists
+from utilities.selenium import get_selenium_driver, element_exists
 
 
 driver = get_selenium_driver(headless=False)
@@ -768,7 +768,7 @@ class VerifyAccount(PageComponent):
                 if self.verification_method == "link":
                     self.is_component_functional = True
                     self.component_identified = True
-                elif x_path_exists(component.otp_text_box_x_path) and x_path_exists(
+                elif element_exists(component.otp_text_box_x_path) and element_exists(
                     component.verify_button_x_path
                 ):
                     self.otp_text_box = TextInput(

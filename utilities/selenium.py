@@ -98,7 +98,7 @@ def extract_iframe_urls(html_content):
     return iframe_urls
 
 
-def x_path_exists(x_path):
+def element_exists(x_path):
     global driver
 
     try:
