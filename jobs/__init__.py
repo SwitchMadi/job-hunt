@@ -2,6 +2,7 @@ import time
 from pydantic import BaseModel, Field
 from enum import Enum
 import json
+from typing import Literal
 
 from utilities import minify_html_for_gpt_prompt, constants, generate_hash
 from utilities.selenium import (
@@ -240,6 +241,68 @@ class ApplicationPage:
                 break
 
         return
+
+    def extract_field_answer(
+        self,
+        question,
+        answer_type: Literal["text", "enum"],
+        closest_answer=None,
+        options=[],
+    ):
+        user_prompt = (
+            f"While filling job application for {self.parent_job.title} at a company called "
+            f"{self.parent_job.company}, I need you to help me answer following question -\n{question}\n"
+        )
+
+        if answer_type == "enum":
+            options_list = "\n".join(
+                f"{i + 1}. {option}" for i, option in enumerate(options)
+            )
+            user_prompt += (
+                f"Answer to the question is '{closest_answer}', but I have to select out of following "
+                f"options -\n{options_list}\n"
+            )
+
+            FieldAnswerOptions = Enum(
+                "FieldAnswerOptions", {option: option for option in options}
+            )
+
+            class FieldAnswer(BaseModel):
+                answer: FieldAnswerOptions = Field(
+                    ...,
+                    description="Correct option based on closet answer",
+                )
+
+        else:
+            user_prompt += (
+                f"Following is context having user resume data using which you have to find answer -\n"
+                f"{self.parent_job.user.parsed_resume}\n"
+            )
+
+            class FieldAnswer(BaseModel):
+                answer: str = Field(
+                    ...,
+                    description="Correct answer based on user data",
+                )
+
+        user_prompt += "Give me correct answer for this."
+
+        field_answer_found, field_answer = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=FieldAnswer,
+        )
+        if field_answer_found:
+            return (
+                field_answer.answer
+                if answer_type == "text"
+                else field_answer.answer.value
+            )
+        else:
+            logger.error(
+                f"Couldn't extract field answer for {self.parent_job.title}. URL - {self.url}"
+            )
+            return None
 
     # Identify job page components
     def identify_application_steps(self):
