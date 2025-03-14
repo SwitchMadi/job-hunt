@@ -43,8 +43,8 @@ class Job:
         self.title = job["title"]
         self.company = job["company"]
 
-        self.application_page = ApplicationPage(url=url, parent_job=self)
         self.user = user
+        self.application_page = ApplicationPage(url=url, parent_job=self)
 
     @staticmethod
     def find_job_by_url(url):
