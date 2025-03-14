@@ -808,6 +808,7 @@ class VerifyAccount(PageComponent):
 
         email_identified = False
         while not email_identified:
+            time.sleep(2)
             emails = gmail.get_emails(query=query)
 
             email_prompt_info = [
@@ -815,6 +816,7 @@ class VerifyAccount(PageComponent):
                     "email_id": email.message_id,
                     "sender": email.sender,
                     "subject": email.title,
+                    "time": datetime.fromtimestamp(email.time),
                 }
                 for email in emails
             ]
