@@ -5,6 +5,7 @@ from selenium.webdriver.common.by import By
 from selenium.common.exceptions import InvalidSelectorException
 from bs4 import BeautifulSoup
 import yaml
+import time
 
 
 driver = None
@@ -108,3 +109,83 @@ def x_path_exists(x_path):
             return False
     except InvalidSelectorException:
         return False
+
+
+def start_observer():
+    """
+    Injects a MutationObserver into the page that looks for a new element
+    that is rendered and visible (i.e. not hidden via display:none or zero dimensions).
+    When found, the element is stored in window.__observedElement.
+    """
+    global driver
+
+    script = """
+    if (!window.__observedElement) {
+      window.__observedElement = null;
+      var observer = new MutationObserver(function(mutations) {
+        for (var mutation of mutations) {
+          for (var node of mutation.addedNodes) {
+            if (node.nodeType !== Node.ELEMENT_NODE) continue;
+            var computedStyle = window.getComputedStyle(node);
+            if (computedStyle.display === "none") continue;
+            if (node.offsetWidth === 0 && node.offsetHeight === 0) continue;
+            window.__observedElement = node;
+            observer.disconnect();
+            return;
+          }
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    }
+    """
+    driver.execute_script(script)
+
+
+def get_observed_element(timeout=10, poll_frequency=0.5):
+    """
+    Polls the global variable window.__observedElement until it is non-null
+    or until the timeout is reached.
+
+    Returns:
+        The observed WebElement if found.
+
+    Raises:
+        Exception if no element is found within the timeout.
+    """
+    global driver
+
+    end_time = time.time() + timeout
+    while time.time() < end_time:
+        element = driver.execute_script("return window.__observedElement;")
+        if element is not None:
+            return element
+        time.sleep(poll_frequency)
+    raise Exception("Timeout waiting for new element")
+
+
+def get_element_xpath(element):
+    """Returns the full XPath of a Selenium WebElement using JavaScript."""
+    global driver
+
+    return driver.execute_script(
+        """
+        function getElementXPath(element) {
+            if (element.id !== '')
+                return 'id(\"' + element.id + '\")';
+            if (element === document.body)
+                return element.tagName.toLowerCase();
+
+            var ix = 0;
+            var siblings = element.parentNode.childNodes;
+            for (var i = 0; i < siblings.length; i++) {
+                var sibling = siblings[i];
+                if (sibling === element)
+                    return getElementXPath(element.parentNode) + '/' + element.tagName.toLowerCase() + '[' + (ix + 1) + ']';
+                if (sibling.nodeType === 1 && sibling.tagName === element.tagName)
+                    ix++;
+            }
+        }
+        return getElementXPath(arguments[0]);
+    """,
+        element,
+    )
