@@ -220,6 +220,7 @@ class Login(PageComponent):
                         self.login_username_input = TextInput(
                             x_path=login_step.username_x_path,
                             input_type="username",
+                            input_text=self.parent_application_page.parent_job.user.email,
                             parent_application_page=self.parent_application_page,
                         )
                         self.login_username_input.proceed()
@@ -227,6 +228,7 @@ class Login(PageComponent):
                         self.login_password_input = TextInput(
                             x_path=login_step.password_x_path,
                             input_type="password",
+                            input_text=self.parent_application_page.parent_job.user.password,
                             parent_application_page=self.parent_application_page,
                         )
                         self.login_password_input.proceed()
@@ -328,6 +330,7 @@ class Login(PageComponent):
                     self.create_account_username_input = TextInput(
                         x_path=create_account_steps.username_x_path,
                         input_type="username",
+                        input_text=self.parent_application_page.parent_job.user.email,
                         parent_application_page=self.parent_application_page,
                     )
                     self.create_account_username_input.proceed()
@@ -335,6 +338,7 @@ class Login(PageComponent):
                     self.create_account_password_input = TextInput(
                         x_path=create_account_steps.password_x_path,
                         input_type="password",
+                        input_text=self.parent_application_page.parent_job.user.password,
                         parent_application_page=self.parent_application_page,
                     )
                     self.create_account_password_input.proceed()
@@ -342,6 +346,7 @@ class Login(PageComponent):
                     self.create_account_confirm_password_input = TextInput(
                         x_path=create_account_steps.confirm_password_x_path,
                         input_type="password",
+                        input_text=self.parent_application_page.parent_job.user.password,
                         parent_application_page=self.parent_application_page,
                     )
                     self.create_account_confirm_password_input.proceed()
@@ -543,6 +548,9 @@ class Login(PageComponent):
             input_dict=input_dict["login_username_input"],
             parent_application_page=parent_application_page,
         )
+        instance.login_username_input.input_text = (
+            parent_application_page.parent_job.user.email
+        )
 
         login_password_input_class = globals()[
             input_dict["login_password_input"]["class"]
@@ -550,6 +558,9 @@ class Login(PageComponent):
         instance.login_password_input = login_password_input_class.from_dict(
             input_dict=input_dict["login_password_input"],
             parent_application_page=parent_application_page,
+        )
+        instance.login_password_input.input_text = (
+            parent_application_page.parent_job.user.password
         )
 
         instance.login_security_enabled = input_dict["login_security_enabled"]
@@ -589,6 +600,9 @@ class Login(PageComponent):
                 parent_application_page=parent_application_page,
             )
         )
+        instance.create_account_username_input.input_text = (
+            parent_application_page.parent_job.user.email
+        )
 
         create_account_password_input_class = globals()[
             input_dict["create_account_password_input"]["class"]
@@ -599,6 +613,9 @@ class Login(PageComponent):
                 parent_application_page=parent_application_page,
             )
         )
+        instance.create_account_password_input.input_text = (
+            parent_application_page.parent_job.user.password
+        )
 
         create_account_confirm_password_input_class = globals()[
             input_dict["create_account_confirm_password_input"]["class"]
@@ -608,6 +625,9 @@ class Login(PageComponent):
                 input_dict=input_dict["create_account_confirm_password_input"],
                 parent_application_page=parent_application_page,
             )
+        )
+        instance.create_account_confirm_password_input.input_text = (
+            parent_application_page.parent_job.user.password
         )
 
         if input_dict["create_account_consent_checkbox"]:
@@ -683,7 +703,7 @@ class VerifyAccount(PageComponent):
         if self.verification_method == "link":
             driver.get(verification_info)
         else:
-            self.parent_application_page.account_verification_otp = verification_info
+            self.otp_text_box.input_text = verification_info
             self.otp_text_box.proceed()
 
             if self.verify_button:

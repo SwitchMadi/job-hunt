@@ -138,10 +138,12 @@ class TextInput(PageComponent):
         x_path,
         input_type,
         parent_application_page,
+        input_text=None,
     ):
         global driver
         self.x_path = x_path
         self.input_type = input_type
+        self.input_text = input_text
         self.parent_application_page = parent_application_page
         self.is_component_functional = True
 
@@ -151,13 +153,14 @@ class TextInput(PageComponent):
     def proceed(self):
         global driver
 
+        if self.input_text is None:
+            raise Exception("input_text cannot be undefined.")
+
         try:
             element = driver.find_element(By.XPATH, self.x_path)
             if self.input_type == "otp_textbox":
                 element.click()
-                for otp_digit in str(
-                    self.parent_application_page.account_verification_otp
-                ):
+                for otp_digit in str(self.input_text):
                     active_element = driver.switch_to.active_element
                     active_element.send_keys(f"{otp_digit}")
             else:
@@ -171,19 +174,6 @@ class TextInput(PageComponent):
             self.is_component_functional = False
 
         return
-
-    @property
-    def input_text(self):
-        if self.input_type == "username":
-            input_text = self.parent_application_page.parent_job.user.email
-        elif self.input_type == "password":
-            input_text = self.parent_application_page.parent_job.user.password
-        else:
-            raise Exception(
-                f"Invalid input_type for class TextInput - {self.input_type}"
-            )
-
-        return input_text
 
     def to_dict(self):
         return {
