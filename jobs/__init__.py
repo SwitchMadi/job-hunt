@@ -2,7 +2,7 @@ import time
 from pydantic import BaseModel, Field
 from enum import Enum
 import json
-from typing import Literal
+from typing import Optional
 
 from utilities import minify_html_for_gpt_prompt, constants, generate_hash
 from utilities.selenium import (
@@ -258,10 +258,17 @@ class ApplicationPage:
             options_list = "\n".join(
                 f"{i + 1}. {option}" for i, option in enumerate(options)
             )
-            user_prompt += (
-                f"Answer to the question is '{closest_answer}', but I have to select out of following "
-                f"options -\n{options_list}\n"
-            )
+            if closest_answer:
+                user_prompt += (
+                    f"Answer to the question is '{closest_answer}', but I have to select out of following "
+                    f"options -\n{options_list}\n"
+                )
+            else:
+                user_prompt += (
+                    f"I have to select an option out of following options -\n{options_list}\n If based on "
+                    f"the given context there is no answer that makes sense then pick the option which is "
+                    f"safest from a candidate's point of view."
+                )
 
             FieldAnswerOptions = Enum(
                 "FieldAnswerOptions", {option: option for option in options}
@@ -270,25 +277,33 @@ class ApplicationPage:
             class FieldAnswer(BaseModel):
                 answer: FieldAnswerOptions = Field(
                     ...,
-                    description="Correct option based on closet answer",
+                    description="Correct option based on input",
                 )
 
         elif answer_type == "text":
             user_prompt += (
-                f"Following is context having user resume data using which you have to find answer -\n"
-                f"{self.parent_job.user.parsed_resume}\n"
+                f"Answer should be precise and as short as you can write. Also answer should reflect that these are my "
+                f"words, not Chat GPT's words. Answer like human candidate and not a language model. If based on the "
+                f"given context there is no answer then don't answer the question at all.\n"
             )
 
             class FieldAnswer(BaseModel):
-                answer: str = Field(
+                answer: Optional[str] = Field(
                     ...,
-                    description="Correct answer based on user data",
+                    description="Correct answer based on user data. Answer should be precise and as short as you can "
+                    "write. Also answer should reflect that these are my words, not Chat GPT's words.",
                 )
 
         else:
             raise Exception(f"Unknown parameter - {answer_type}")
 
-        user_prompt += "Give me correct answer for this."
+        if closest_answer is None:
+            user_prompt += (
+                f"Following is context having user resume data using which you have to find answer -\n"
+                f"{self.parent_job.user.parsed_resume}\n"
+            )
+
+        user_prompt += "Give me correct answer for the question."
 
         field_answer_found, field_answer = get_gpt_response(
             constants.gpt["system_prompts"]["application_step_identification"],
