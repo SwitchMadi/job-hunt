@@ -487,3 +487,11 @@ class User:
         else:
             logger.error(f"Couldn't extract resume fields for user_id - {self.id}")
             return False
+
+    @property
+    def first_name(self):
+        return self.name.split(" ")[0]
+
+    @property
+    def last_name(self):
+        return self.name.split(" ")[-1]
