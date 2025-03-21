@@ -2,10 +2,15 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import InvalidSelectorException
+from selenium.common.exceptions import (
+    InvalidSelectorException,
+    StaleElementReferenceException,
+)
 from bs4 import BeautifulSoup
 import yaml
 import time
+from PIL import Image
+import os
 
 
 driver = None
@@ -122,7 +127,7 @@ def start_observer():
     script = """
     if (!window.__observedElement) {
       window.__observedElement = null;
-      var observer = new MutationObserver(function(mutations) {
+      window.__observer = new MutationObserver(function(mutations) {
         for (var mutation of mutations) {
           for (var node of mutation.addedNodes) {
             if (node.nodeType !== Node.ELEMENT_NODE) continue;
@@ -130,12 +135,11 @@ def start_observer():
             if (computedStyle.display === "none") continue;
             if (node.offsetWidth === 0 && node.offsetHeight === 0) continue;
             window.__observedElement = node;
-            observer.disconnect();
             return;
           }
         }
       });
-      observer.observe(document.body, { childList: true, subtree: true });
+      window.__observer.observe(document.body, { childList: true, subtree: true });
     }
     """
     driver.execute_script(script)
@@ -156,9 +160,16 @@ def get_observed_element(timeout=10, poll_frequency=0.5):
 
     end_time = time.time() + timeout
     while time.time() < end_time:
-        element = driver.execute_script("return window.__observedElement;")
-        if element is not None:
-            return element
+        try:
+            element = driver.execute_script("return window.__observedElement;")
+            if element is not None:
+                # Disconnect the observer from JS.
+                driver.execute_script(
+                    "if(window.__observer){ window.__observer.disconnect(); window.__observer = null; }"
+                )
+                return element
+        except StaleElementReferenceException:
+            pass
         time.sleep(poll_frequency)
     raise Exception("Timeout waiting for new element")
 
@@ -171,8 +182,8 @@ def get_element_xpath(element):
         """
         function getElementXPath(element) {
             if (element.id !== '')
-                return 'id(\"' + element.id + '\")';
-            if (element === document.body)
+                return 'id("' + element.id + '")';
+            if (element === document.documentElement)
                 return element.tagName.toLowerCase();
 
             var ix = 0;
@@ -186,7 +197,7 @@ def get_element_xpath(element):
             }
         }
         return getElementXPath(arguments[0]);
-    """,
+        """,
         element,
     )
 
