@@ -189,3 +189,102 @@ def get_element_xpath(element):
     """,
         element,
     )
+
+
+def take_element_screenshot(x_path, padding=40):
+    global driver
+
+    # Locate the element (adjust the XPath accordingly)
+    element = driver.find_element(By.XPATH, x_path)
+
+    # Scroll the element into view
+    driver.execute_script(
+        "arguments[0].scrollIntoView({block: 'center', inline: 'center'});", element
+    )
+    time.sleep(1)  # Wait for any scrolling animations/rendering
+
+    # Retrieve the element's bounding rectangle relative to the viewport
+    rect = driver.execute_script(
+        "return arguments[0].getBoundingClientRect();", element
+    )
+
+    # Get the device pixel ratio
+    dpr = driver.execute_script("return window.devicePixelRatio")
+
+    # Compute coordinates for cropping (adjust with padding if needed)
+    left = int((rect["left"] - padding) * dpr)
+    top = int((rect["top"] - padding) * dpr)
+    width = int((rect["width"] + 2 * padding) * dpr)
+    height = int((rect["height"] + 2 * padding) * dpr)
+
+    # Take a screenshot of the visible area (viewport)
+    driver.save_screenshot("full_screenshot.png")
+
+    # Open the screenshot and crop using the calculated coordinates
+    image = Image.open("full_screenshot.png")
+    cropped_image = image.crop((left, top, left + width, top + height))
+    screenshot_file = "element_with_padding.png"
+    cropped_image.save(screenshot_file)
+
+    absolute_path = os.path.abspath(screenshot_file)
+    return absolute_path
+
+
+def get_xpath_by_text(text):
+    global driver
+
+    element = driver.find_element(By.XPATH, f"//*[text()='{text}']")
+    # Function to generate XPath of the element
+    return driver.execute_script(
+        """
+        function absoluteXPath(element) {
+            var comp, comps = [];
+            var parent = null;
+            var xpath = '';
+            var getPos = function(element) {
+                var position = 1, sibling = element.previousSibling;
+                while (sibling) {
+                    if (sibling.nodeType === Node.ELEMENT_NODE && sibling.nodeName === element.nodeName) {
+                        position++;
+                    }
+                    sibling = sibling.previousSibling;
+                }
+                return position;
+            }
+            if (element instanceof Document) {
+                return '/';
+            }
+            for (; element && !(element instanceof Document); element = element.nodeType === Node.ATTRIBUTE_NODE ? element.ownerElement : element.parentNode) {
+                comp = comps[comps.length] = {};
+                switch (element.nodeType) {
+                    case Node.TEXT_NODE:
+                        comp.name = 'text()';
+                        break;
+                    case Node.ATTRIBUTE_NODE:
+                        comp.name = '@' + element.nodeName;
+                        break;
+                    case Node.PROCESSING_INSTRUCTION_NODE:
+                        comp.name = 'processing-instruction()';
+                        break;
+                    case Node.COMMENT_NODE:
+                        comp.name = 'comment()';
+                        break;
+                    case Node.ELEMENT_NODE:
+                        comp.name = element.nodeName;
+                        break;
+                }
+                comp.position = getPos(element);
+            }
+            for (var i = comps.length - 1; i >= 0; i--) {
+                comp = comps[i];
+                xpath += '/' + comp.name.toLowerCase();
+                if (comp.position !== null && comp.position > 1) {
+                    xpath += '[' + comp.position + ']';
+                }
+            }
+            return xpath;
+        }
+        return absoluteXPath(arguments[0]);
+    """,
+        element,
+    )
