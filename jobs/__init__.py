@@ -2,7 +2,6 @@ import time
 from pydantic import BaseModel, Field
 from enum import Enum
 import json
-from typing import Optional
 
 from utilities import minify_html_for_gpt_prompt, constants, generate_hash
 from utilities.selenium import (
@@ -242,86 +241,6 @@ class ApplicationPage:
 
         return
 
-    def extract_field_answer(
-        self,
-        question,
-        answer_type,
-        closest_answer=None,
-        options=[],
-    ):
-        user_prompt = (
-            f"While filling job application for {self.parent_job.title} at a company called "
-            f"{self.parent_job.company}, I need you to help me answer following question -\n{question}\n"
-        )
-
-        if answer_type == "enum":
-            options_list = "\n".join(
-                f"{i + 1}. {option}" for i, option in enumerate(options)
-            )
-            if closest_answer:
-                user_prompt += (
-                    f"Answer to the question is '{closest_answer}', but I have to select out of following "
-                    f"options -\n{options_list}\n"
-                )
-            else:
-                user_prompt += (
-                    f"I have to select an option out of following options -\n{options_list}\n If based on "
-                    f"the given context there is no answer that makes sense then pick the option which is "
-                    f"safest from a candidate's point of view."
-                )
-
-            FieldAnswerOptions = Enum(
-                "FieldAnswerOptions", {option: option for option in options}
-            )
-
-            class FieldAnswer(BaseModel):
-                answer: FieldAnswerOptions = Field(
-                    ...,
-                    description="Correct option based on input",
-                )
-
-        elif answer_type == "text":
-            user_prompt += (
-                f"Answer should be precise and as short as you can write. Also answer should reflect that these are my "
-                f"words, not Chat GPT's words. Answer like human candidate and not a language model. If based on the "
-                f"given context there is no answer then don't answer the question at all.\n"
-            )
-
-            class FieldAnswer(BaseModel):
-                answer: Optional[str] = Field(
-                    ...,
-                    description="Correct answer based on user data. Answer should be precise and as short as you can "
-                    "write. Also answer should reflect that these are my words, not Chat GPT's words.",
-                )
-
-        else:
-            raise Exception(f"Unknown parameter - {answer_type}")
-
-        if closest_answer is None:
-            user_prompt += (
-                f"Following is context having user resume data using which you have to find answer -\n"
-                f"{self.parent_job.user.parsed_resume}\n"
-            )
-
-        user_prompt += "Give me correct answer for the question."
-
-        field_answer_found, field_answer = get_gpt_response(
-            constants.gpt["system_prompts"]["application_step_identification"],
-            user_prompt,
-            response_format=FieldAnswer,
-        )
-        if field_answer_found:
-            return (
-                field_answer.answer
-                if answer_type == "text"
-                else field_answer.answer.value
-            )
-        else:
-            logger.error(
-                f"Couldn't extract field answer for {self.parent_job.title}. URL - {self.url}"
-            )
-            return None
-
     # Identify job page components
     def identify_application_steps(self):
         global driver
@@ -491,7 +410,7 @@ class ApplicationPage:
         class FieldCategory(Enum):
             first_name = "first_name"
             last_name = "last_name"
-            name_prefix = "name_prefix"
+            salutation_prefix = "salutation_prefix"
             email = "email"
             phone_number = "phone_number"
             address = "address"
@@ -506,13 +425,6 @@ class ApplicationPage:
             resume_upload = "resume_upload"
             other = "other"
 
-        class FieldType(Enum):
-            textbox = "textbox"
-            checkbox = "checkbox"
-            dropdown = "dropdown"
-            addButton = "addButton"
-            upload = "upload"
-
         class ApplicationField(BaseModel):
             field_title: str = Field(
                 ...,
@@ -521,10 +433,6 @@ class ApplicationPage:
             field_category: FieldCategory = Field(
                 ...,
                 description="Application field category like email, work_experience, education, city etc.",
-            )
-            field_type: FieldType = Field(
-                ...,
-                description="Application field type like textbox, checkbox, dropdown etc.",
             )
 
         class JobFields(BaseModel):
@@ -549,6 +457,8 @@ class ApplicationPage:
                 self._identify_email_field(job_field)
             elif job_field.field_category.value == "tnc":
                 self._identify_tnc_field(job_field)
+            else:
+                self._complete_application_field_identification(job_field)
 
     # Identifying individual components
     def _identify_cookies_consent(self):

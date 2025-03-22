@@ -1,4 +1,4 @@
-from selenium import webdriver
+from seleniumwire import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -11,8 +11,14 @@ import yaml
 import time
 from PIL import Image
 import os
+import logging
+import platform
+import subprocess
+import sys
+import glob
 
 
+logging.getLogger("seleniumwire").setLevel(logging.ERROR)
 driver = None
 
 
@@ -57,6 +63,8 @@ def get_selenium_driver(headless=True):
         driver.execute_script(
             "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
         )
+
+        import_seleniumwire_ca_cert()
 
     return driver
 
@@ -171,7 +179,8 @@ def get_observed_element(timeout=10, poll_frequency=0.5):
         except StaleElementReferenceException:
             pass
         time.sleep(poll_frequency)
-    raise Exception("Timeout waiting for new element")
+
+    return None
 
 
 def get_element_xpath(element):
@@ -299,3 +308,121 @@ def get_xpath_by_text(text):
     """,
         element,
     )
+
+
+def simulate_empty_area_click():
+    global driver
+
+    js_script = """
+    const eventOpts = { bubbles: true, cancelable: true, view: window };
+    const body = document.body;
+
+    body.dispatchEvent(new MouseEvent('mousedown', eventOpts));
+    body.dispatchEvent(new MouseEvent('mouseup', eventOpts));
+    body.dispatchEvent(new MouseEvent('click', eventOpts));
+    """
+
+    driver.execute_script(js_script)
+
+
+def find_ca_cert():
+    interpreter_dir = os.path.dirname(sys.executable)
+
+    possible_paths = [
+        os.path.expanduser("~/.seleniumwire/ca.crt"),
+        os.path.join(interpreter_dir, "lib", "site-packages", "seleniumwire", "ca.crt"),
+    ]
+
+    # Handle cases with versioned Python folder (e.g., python3.10)
+    lib_path = os.path.join(interpreter_dir, "..", "lib")
+    versioned_python_dirs = glob.glob(os.path.join(lib_path, "python*"))
+
+    for version_dir in versioned_python_dirs:
+        possible_paths.append(
+            os.path.join(version_dir, "site-packages", "seleniumwire", "ca.crt")
+        )
+
+    for path in possible_paths:
+        cert_path = os.path.abspath(path)
+        if os.path.exists(cert_path):
+            return cert_path
+
+    raise FileNotFoundError(f"CA certificate not found in paths: {possible_paths}")
+
+
+def is_cert_already_installed(cert_path):
+    system = platform.system()
+    if system == "Darwin":  # macOS
+        result = subprocess.run(
+            ["security", "find-certificate", "-a", "-c", "Selenium Wire", "-Z"],
+            capture_output=True,
+            text=True,
+        )
+        return "SHA-1" in result.stdout
+
+    elif system == "Windows":
+        result = subprocess.run(
+            ["certutil", "-store", "Root"], capture_output=True, text=True, shell=True
+        )
+        return "Selenium Wire" in result.stdout
+
+    elif system == "Linux":
+        cert_filename = os.path.basename(cert_path)
+        return os.path.exists(
+            os.path.join("/usr/local/share/ca-certificates/", cert_filename)
+        )
+
+    else:
+        raise OSError(f"Unsupported OS: {system}")
+
+
+def import_seleniumwire_ca_cert():
+    system = platform.system()
+    ca_cert_path = find_ca_cert()
+
+    if is_cert_already_installed(ca_cert_path):
+        logging.info("Certificate is already installed.")
+        return
+
+    if system == "Darwin":  # macOS
+        try:
+            subprocess.run(
+                [
+                    "sudo",
+                    "security",
+                    "add-trusted-cert",
+                    "-d",
+                    "-r",
+                    "trustRoot",
+                    "-k",
+                    "/Library/Keychains/System.keychain",
+                    ca_cert_path,
+                ],
+                check=True,
+            )
+            print("Certificate successfully imported on macOS.")
+        except subprocess.CalledProcessError as e:
+            print("Error importing certificate on macOS:", e)
+
+    elif system == "Windows":
+        try:
+            subprocess.run(
+                ["certutil", "-addstore", "-f", "Root", ca_cert_path],
+                shell=True,
+                check=True,
+            )
+            print("Certificate successfully imported on Windows.")
+        except subprocess.CalledProcessError as e:
+            print("Error importing certificate on Windows:", e)
+
+    elif system == "Linux":
+        try:
+            target_cert = "/usr/local/share/ca-certificates/seleniumwire_ca.crt"
+            subprocess.run(["sudo", "cp", ca_cert_path, target_cert], check=True)
+            subprocess.run(["sudo", "update-ca-certificates"], check=True)
+            print("Certificate successfully imported on Linux.")
+        except subprocess.CalledProcessError as e:
+            print("Error importing certificate on Linux:", e)
+
+    else:
+        raise OSError(f"Unsupported OS: {system}")
