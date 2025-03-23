@@ -17,6 +17,9 @@ from utilities.selenium import (
     get_observed_element,
     get_element_xpath,
     simulate_empty_area_click,
+    start_network_observer,
+    get_observed_network_calls,
+    stop_network_observer,
 )
 from utilities.logging import get_logger
 from utilities import pascal_to_snake_casing
@@ -221,18 +224,18 @@ class SearchField(PageComponent):
     def validate_search_field(cls, x_path, field_title):
         global driver
 
-        # Clear previous network requests
-        driver.requests.clear()
+        start_network_observer()
 
         element = driver.find_element(By.XPATH, x_path)
         driver.execute_script("arguments[0].scrollIntoView(true);", element)
 
-        # Send specialKey to trigger search
         special_key = "special_key"
         element.send_keys(special_key)
-        time.sleep(2)  # Adjust based on realistic wait times for API calls
+        time.sleep(2)  # Allow API calls to trigger
 
-        # Known tracking/analytics domains to exclude
+        captured_requests = get_observed_network_calls()
+        stop_network_observer()
+
         tracking_domains = [
             "firebase.com",
             "google-analytics.com",
@@ -247,29 +250,30 @@ class SearchField(PageComponent):
             "inkedin.com/li/track",
         ]
 
-        # Function to filter out tracking requests
         def is_tracking_domain(url):
             return any(domain in url for domain in tracking_domains)
 
-        # Criteria 1: Network call with specialKey (excluding tracking domains)
         is_search_field = False
-        for request in driver.requests:
-            if request.response and not is_tracking_domain(request.url):
-                # Check URL params
-                if special_key in request.url:
-                    is_search_field = True
-                    break
-                # Check POST request payload
-                if request.method == "POST" and request.body:
-                    try:
-                        body_str = request.body.decode("utf-8")
-                        if special_key in body_str:
-                            is_search_field = True
-                            break
-                    except:
-                        pass  # skip if decoding fails
+        for request in captured_requests:
+            if not is_tracking_domain(request["url"]):
+                # Check decoded query params
+                for key, value in request.get("decodedQueryParams", {}).items():
+                    if special_key == value:
+                        is_search_field = True
+                        break
 
-        simulate_empty_area_click()
+                # Check POST body
+                if (
+                    not is_search_field
+                    and request["method"] == "POST"
+                    and request["body"]
+                ):
+                    if special_key in request["body"]:
+                        is_search_field = True
+                        break
+
+                if is_search_field:
+                    break
 
         simulate_empty_area_click(field_title)
         return is_search_field

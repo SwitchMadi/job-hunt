@@ -9,6 +9,8 @@ from selenium.common.exceptions import (
     InvalidSelectorException,
     StaleElementReferenceException,
 )
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
 from bs4 import BeautifulSoup
 import yaml
 import time
@@ -479,3 +481,98 @@ def import_seleniumwire_ca_cert():
 
     else:
         raise OSError(f"Unsupported OS: {system}")
+
+
+def start_network_observer():
+    global driver
+
+    driver.execute_script(
+        """
+        window.capturedRequests = [];
+        if (!window.__networkObserverInstalled) {
+            (function() {
+                function decodeQueryParams(url) {
+                    let params = {};
+                    try {
+                        let queryString = url.split('?')[1];
+                        if (queryString) {
+                            queryString.split('&').forEach(function(part) {
+                                let [key, value] = part.split('=');
+                                params[decodeURIComponent(key)] = decodeURIComponent(value || '');
+                            });
+                        }
+                    } catch (e) {}
+                    return params;
+                }
+
+                window._originalFetch = window.fetch;
+                window.fetch = function(input, init = {}) {
+                    const url = typeof input === 'string' ? input : input.url;
+                    const method = init.method || 'GET';
+                    const body = init.body || '';
+
+                    if (!window.capturedRequests.some(r => r.url === url && r.method === method && r.body === body)) {
+                        window.capturedRequests.push({
+                            type: 'fetch',
+                            url: url,
+                            method: method,
+                            body: body,
+                            decodedQueryParams: decodeQueryParams(url)
+                        });
+                    }
+
+                    return window._originalFetch.apply(this, arguments);
+                };
+
+                window._originalXHROpen = XMLHttpRequest.prototype.open;
+                window._originalXHRSend = XMLHttpRequest.prototype.send;
+
+                XMLHttpRequest.prototype.open = function(method, url) {
+                    this._requestMethod = method;
+                    this._requestUrl = url;
+                    return window._originalXHROpen.apply(this, arguments);
+                };
+
+                XMLHttpRequest.prototype.send = function(body) {
+                    if (!window.capturedRequests.some(r => r.url === this._requestUrl && r.method === this._requestMethod && r.body === (body || ''))) {
+                        window.capturedRequests.push({
+                            type: 'xhr',
+                            url: this._requestUrl,
+                            method: this._requestMethod,
+                            body: body || '',
+                            decodedQueryParams: decodeQueryParams(this._requestUrl)
+                        });
+                    }
+
+                    return window._originalXHRSend.apply(this, arguments);
+                };
+
+                window.__networkObserverInstalled = true;
+            })();
+        }
+    """
+    )
+
+
+def stop_network_observer():
+    global driver
+
+    driver.execute_script(
+        """
+        if (window._originalFetch) {
+            window.fetch = window._originalFetch;
+        }
+        if (window._originalXHROpen && window._originalXHRSend) {
+            XMLHttpRequest.prototype.open = window._originalXHROpen;
+            XMLHttpRequest.prototype.send = window._originalXHRSend;
+        }
+        window.__networkObserverInstalled = false;
+        window.capturedRequests = [];
+    """
+    )
+
+
+def get_observed_network_calls():
+    global driver
+
+    return driver.execute_script("return window.capturedRequests || [];")
