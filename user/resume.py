@@ -54,7 +54,21 @@ class SocialLink(BaseModel):
     url: str = Field(..., description="URL of the profile or personal website")
 
 
+class Salutation(Enum):
+    MR = "Mr."
+    MRS = "Mrs."
+    MS = "Ms."
+    MISS = "Miss"
+    DR = "Dr."
+    PROF = "Prof."
+
+
 class PersonalDetails(BaseModel):
+    salutation: Optional[Salutation] = Field(
+        ...,
+        description="Most appropriate salutation / title / name prefix of the"
+        " candidate",
+    )
     name: str = Field(..., description="Full name of the candidate")
     phone: Optional[Phone] = Field(
         None, description="Phone details with country code and number"
