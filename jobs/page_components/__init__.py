@@ -218,7 +218,7 @@ class TextInput(PageComponent):
 
 class SearchField(PageComponent):
     @classmethod
-    def validate_search_field(cls, x_path):
+    def validate_search_field(cls, x_path, field_title):
         global driver
 
         # Clear previous network requests
@@ -271,6 +271,7 @@ class SearchField(PageComponent):
 
         simulate_empty_area_click()
 
+        simulate_empty_area_click(field_title)
         return is_search_field
 
 

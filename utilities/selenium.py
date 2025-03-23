@@ -308,64 +308,42 @@ def take_element_screenshot(x_path, padding=40):
 def get_xpath_by_text(text):
     global driver
 
-    element = driver.find_element(By.XPATH, f"//*[text()='{text}']")
-    # Function to generate XPath of the element
-    return driver.execute_script(
-        """
-        function absoluteXPath(element) {
-            var comp, comps = [];
-            var parent = null;
-            var xpath = '';
-            var getPos = function(element) {
-                var position = 1, sibling = element.previousSibling;
-                while (sibling) {
-                    if (sibling.nodeType === Node.ELEMENT_NODE && sibling.nodeName === element.nodeName) {
-                        position++;
-                    }
-                    sibling = sibling.previousSibling;
-                }
-                return position;
-            }
-            if (element instanceof Document) {
-                return '/';
-            }
-            for (; element && !(element instanceof Document); element = element.nodeType === Node.ATTRIBUTE_NODE ? element.ownerElement : element.parentNode) {
-                comp = comps[comps.length] = {};
-                switch (element.nodeType) {
-                    case Node.TEXT_NODE:
-                        comp.name = 'text()';
-                        break;
-                    case Node.ATTRIBUTE_NODE:
-                        comp.name = '@' + element.nodeName;
-                        break;
-                    case Node.PROCESSING_INSTRUCTION_NODE:
-                        comp.name = 'processing-instruction()';
-                        break;
-                    case Node.COMMENT_NODE:
-                        comp.name = 'comment()';
-                        break;
-                    case Node.ELEMENT_NODE:
-                        comp.name = element.nodeName;
-                        break;
-                }
-                comp.position = getPos(element);
-            }
-            for (var i = comps.length - 1; i >= 0; i--) {
-                comp = comps[i];
-                xpath += '/' + comp.name.toLowerCase();
-                if (comp.position !== null && comp.position > 1) {
-                    xpath += '[' + comp.position + ']';
-                }
-            }
-            return xpath;
+    js_script = """
+    function getElementXPath(el) {
+        if (el.tagName.toLowerCase() === 'html') {
+            return '/html[1]';
         }
-        return absoluteXPath(arguments[0]);
-    """,
-        element,
-    )
+        if (el === document.body) {
+            return '/html[1]/body[1]';
+        }
+
+        const siblings = Array.from(el.parentNode.children).filter(e => e.tagName === el.tagName);
+        const ix = siblings.indexOf(el) + 1;
+
+        return getElementXPath(el.parentNode) + '/' + el.tagName.toLowerCase() + '[' + ix + ']';
+    }
+
+    function findSmallestElementByText(text) {
+        const allElements = Array.from(document.querySelectorAll('body *'));
+        const matchingElements = allElements.filter(el => el.textContent.trim() === text.trim());
+
+        if (matchingElements.length === 0) {
+            return null;
+        }
+
+        matchingElements.sort((a, b) => a.textContent.length - b.textContent.length);
+        return getElementXPath(matchingElements[0]);
+    }
+
+    return findSmallestElementByText(arguments[0]);
+    """
+
+    xpath = driver.execute_script(js_script, text)
+
+    return xpath
 
 
-def simulate_empty_area_click():
+def simulate_empty_area_click(text_to_click=None):
     global driver
 
     js_script = """
@@ -378,6 +356,26 @@ def simulate_empty_area_click():
     """
 
     driver.execute_script(js_script)
+
+    # Clicking address bar and then pressing escape to close any dropdown
+    action = ActionChains(driver)
+    current_os = platform.system()
+
+    if current_os == "Darwin":  # macOS
+        action.key_down(Keys.COMMAND).send_keys("l").key_up(Keys.COMMAND).perform()
+    else:  # Windows and Linux
+        action.key_down(Keys.ALT).send_keys("d").key_up(Keys.ALT).perform()
+
+    action.send_keys(Keys.ESCAPE).perform()
+
+    # if text_to_click is set, then click the text to simulate empty area click
+    if text_to_click:
+        text_x_path = get_xpath_by_text(text_to_click)
+        if text_x_path:
+            element = driver.find_element(By.XPATH, text_x_path)
+            element.click()
+
+    return
 
 
 def find_ca_cert():
