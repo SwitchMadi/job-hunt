@@ -13,7 +13,7 @@ from typing import Optional
 
 from utilities.selenium import (
     get_selenium_driver,
-    start_observer,
+    start_dom_mutation_observer,
     get_observed_element,
     get_element_xpath,
     simulate_empty_area_click,
@@ -315,7 +315,7 @@ class DropDown(PageComponent):
             parent_application_page=self.parent_application_page,
         )
 
-        start_observer()
+        start_dom_mutation_observer()
         self.dropdown_button.proceed()
         observed_element = get_observed_element()
         observed_element_x_path = get_element_xpath(observed_element)
@@ -455,7 +455,7 @@ class ApplicationField(PageComponent):
                 simulate_empty_area_click()
                 return "search_field"
 
-            start_observer()
+            start_dom_mutation_observer()
             element = driver.find_element(By.XPATH, x_path)
             element.click()
             observed_element = get_observed_element()

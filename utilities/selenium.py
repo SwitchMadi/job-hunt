@@ -179,7 +179,7 @@ def element_exists(x_path):
         return False
 
 
-def start_observer():
+def start_dom_mutation_observer():
     """
     Injects a MutationObserver into the page that looks for a new element
     that is rendered and visible (i.e. not hidden via display:none or zero dimensions).
