@@ -12,7 +12,7 @@ from utilities.selenium import (
 from utilities.gpt import get_gpt_response
 from utilities.logging import get_logger
 from utilities.sql import get_sql_query_output, execute_sql_query
-from jobs.page_components import Button, TextInput
+from jobs.page_components import Button, TextInput, ApplicationField
 from jobs.page_components.application_data_source import ApplicationDataSource
 from jobs.page_components.cookies_consent import CookiesConsent
 from jobs.page_components.terms_and_conditions import TermsAndConditions
@@ -412,6 +412,7 @@ class ApplicationPage:
             last_name = "last_name"
             salutation_prefix = "salutation_prefix"
             email = "email"
+            phone_country_code = "phone_country_code"
             phone_number = "phone_number"
             address = "address"
             password = "password"
@@ -425,7 +426,7 @@ class ApplicationPage:
             resume_upload = "resume_upload"
             other = "other"
 
-        class ApplicationField(BaseModel):
+        class ApplicationFieldInfo(BaseModel):
             field_title: str = Field(
                 ...,
                 description="Application field title / question mentioned on the webpage",
@@ -436,7 +437,7 @@ class ApplicationPage:
             )
 
         class JobFields(BaseModel):
-            job_fields: list[ApplicationField]
+            job_fields: list[ApplicationFieldInfo]
 
         job_fields_found, job_fields = get_gpt_response(
             constants.gpt["system_prompts"]["application_step_identification"],
@@ -508,3 +509,13 @@ class ApplicationPage:
         verify_account_component = VerifyAccount(parent_application_page=self)
         verify_account_component.proceed()
         self._update_steps(verify_account_component)
+
+    def _complete_application_field_identification(self, job_field):
+        application_field = ApplicationField(
+            parent_application_page=self,
+            title=job_field.field_title,
+            category=job_field.field_category.value,
+        )
+        application_field_component = application_field.get_field_component()
+        application_field_component.proceed()
+        self._update_steps(application_field_component)

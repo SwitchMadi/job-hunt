@@ -42,7 +42,7 @@ class User:
         self.hash_id = user["user_hash_id"]
         self.name = user["name"]
         self.resume = user["resume"]
-        self.parsed_resume = user["parsed_resume"]
+        self.parsed_resume = user["parsed_resume"] or {}
         self.password = decrypt_password(user["password"])
 
         self._drive_folder = None

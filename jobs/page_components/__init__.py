@@ -222,6 +222,17 @@ class TextInput(PageComponent):
 
 
 class SearchField(PageComponent):
+    def __init__(self, x_path, title, category, parent_application_page):
+        self.x_path = x_path
+        self.title = title
+        self.category = category
+        self.parent_application_page = parent_application_page
+
+        self.is_component_functional = False
+
+        self.next = None
+        self.prev = None
+
     @classmethod
     def validate_search_field(cls, x_path, field_title):
         global driver
@@ -285,21 +296,19 @@ class SearchField(PageComponent):
 
 class DropDown(PageComponent):
     def __init__(
-        self, x_path, title, parent_application_page, options=[], option_chosen=None
+        self, x_path, title, category, parent_application_page, option_chosen=None
     ):
         self.x_path = x_path
         self.title = title
+        self.category = category
         self.parent_application_page = parent_application_page
-
-        if options:
-            self.options = options
-            self.options_identified = True
-        else:
-            self.options_identified = True
-
-        self.options = options
         self.option_chosen = option_chosen
-        self.dropdown_button = None
+        self.dropdown_button = Button(
+            x_path=self.x_path,
+            button_type="dropdown",
+            parent_application_page=self.parent_application_page,
+        )
+
         self.is_component_functional = False
 
         self.next = None
@@ -317,16 +326,9 @@ class DropDown(PageComponent):
         option.click()
 
     def extract_options(self, retry=False):
-        self.dropdown_button = Button(
-            x_path=self.x_path,
-            button_type="dropdown",
-            parent_application_page=self.parent_application_page,
-        )
-
         start_dom_mutation_observer()
         self.dropdown_button.proceed()
         observed_element = get_observed_element()
-        observed_element_x_path = get_element_xpath(observed_element)
 
         global driver
 
@@ -357,7 +359,7 @@ class DropDown(PageComponent):
                 {"text": option.text, "x_path": option.x_path} for option in options
             ]
             self.options_identified = True
-            self.dropdown_button.proceed()
+            simulate_empty_area_click(self.title)
             return
         else:
             if not retry:
@@ -370,23 +372,14 @@ class DropDown(PageComponent):
             return
 
 
-class ApplicationField(PageComponent):
-    def __init__(self, parent_application_page, field_info=None):
+class ApplicationField:
+    def __init__(self, parent_application_page, title, category):
         self.parent_application_page = parent_application_page
-        self.field_info = field_info
+        self.title = title
+        self.category = category
 
-        self.field_component = None
-        self.component_identified = False
-
-        self.next = None
-        self.prev = None
-        self.is_component_functional = False
-
-    def proceed(self):
-        if not self.component_identified:
-            return self._identify()
-
-        self.field_component.proceed()
+        self.field_type = None
+        self.x_path = None
 
     def _identify(self, retry=False):
         global driver
@@ -394,8 +387,8 @@ class ApplicationField(PageComponent):
             f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title}."
             f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
             f"The webpage has following application field for applying to the job -\n"
-            f"Field title - {self.field_info.field_title}\n"
-            f"Field category - {self.field_info.field_category.value}\n"
+            f"Field title - {self.title}\n"
+            f"Field category - {self.category.value}\n"
             f"Analyse the whole HTML very carefully for extracting XPath of the application field."
         )
 
@@ -423,44 +416,49 @@ class ApplicationField(PageComponent):
             response_format=ApplicationFieldInfo,
         )
         if application_field_found:
-            print(application_field)
-            self.field_info = Button(
-                x_path=application_field.x_path,
-                button_type="tnc_consent",
-                parent_application_page=self.parent_application_page,
-            )
-
-            self.field_component.proceed()
-            if self.field_component.is_component_functional:
-                self.is_component_functional = True
-                self.component_identified = True
-            elif not retry:
-                self._identify(retry=True)
-            else:
-                raise Exception(
-                    f"Couldn't extract TnC field for {self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
-                )
+            self.field_type = application_field.field_type.value
+            self.x_path = application_field.x_path
+        elif not retry:
+            self._identify(retry=True)
         else:
             raise Exception(
-                f"Couldn't extract following application field {self.field_info.field_category} for "
+                f"Couldn't extract following application field {self.category} for "
                 f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
             )
 
-    def _get_field_component(self, application_field):
-        if application_field.field_type.value == "text_box":
-            field_component = TextInput(
-                x_path=application_field.x_path,
-                input_type=self.field_info.field_category,
+    def get_field_component(self):
+        self._identify()
+
+        self.field_type = self.revalidate_field_type(
+            field_type=self.field_type, x_path=self.x_path, field_title=self.title
+        )
+
+        if self.field_type == "text_box":
+            return TextInput(
+                x_path=self.x_path,
+                input_type=self.category,
                 parent_application_page=self.parent_application_page,
             )
-            field_component.input_text = self.field_value
+        elif self.field_type == "dropdown":
+            return DropDown(
+                x_path=self.x_path,
+                title=self.title,
+                category=self.category,
+                parent_application_page=self.parent_application_page,
+            )
+        elif self.field_type == "search_field":
+            return SearchField(
+                x_path=self.x_path,
+                title=self.title,
+                category=self.category,
+                parent_application_page=self.parent_application_page,
+            )
 
     @classmethod
-    def revalidate_field_type(cls, field_type, x_path):
+    def revalidate_field_type(cls, field_type, x_path, field_title):
         if field_type == "text_box":
-            is_search_field = SearchField.validate_search_field(x_path)
+            is_search_field = SearchField.validate_search_field(x_path, field_title)
             if is_search_field:
-                simulate_empty_area_click()
                 return "search_field"
 
             start_dom_mutation_observer()
@@ -470,21 +468,29 @@ class ApplicationField(PageComponent):
             if observed_element is None:
                 return "text_box"
             else:
-                simulate_empty_area_click()
+                simulate_empty_area_click(field_title)
                 return "dropdown"
 
         return field_type
 
-    @property
-    def field_value(self):
-        if self.field_info.field_category.value == "first_name":
-            return self.parent_application_page.parent_job.user.first_name
-        elif self.field_info.field_category.value == "last_name":
-            return self.parent_application_page.parent_job.user.last_name
-        elif self.field_info.field_category.value == "email":
-            return self.parent_application_page.parent_job.user.email
-        elif self.field_info.field_category.value == "password":
-            return self.parent_application_page.parent_job.user.password
+    @classmethod
+    def get_field_value(cls, field_category, user):
+        if field_category == "first_name":
+            return user.first_name
+        elif field_category == "last_name":
+            return user.last_name
+        elif field_category == "email":
+            return user.email
+        elif field_category == "password":
+            return user.password
+        elif field_category == "salutation_prefix":
+            return user.parsed_resume.get("personal_details", {}).get("salutation")
+        elif field_category == "phone_country_code":
+            return (
+                user.parsed_resume.get("personal_details", {})
+                .get("phone", {})
+                .get("country_code")
+            )
 
     @classmethod
     def extract_field_answer(
@@ -570,39 +576,3 @@ class ApplicationField(PageComponent):
                 f"Couldn't extract field answer for {job_title}. URL - {job_url}"
             )
             return None
-
-    def to_dict(self):
-        return {
-            "class": self.__class__.__name__,
-            "field_component": self.field_component.to_dict(),
-            "next": self.next.to_dict() if self.next else None,
-        }
-
-    @classmethod
-    def from_dict(cls, input_dict, parent_application_page):
-        instance = cls(
-            parent_application_page=parent_application_page,
-        )
-
-        field_component_class = get_page_component_class_name(
-            class_name=input_dict["field_component"]["class"]
-        )
-        instance.field_component = field_component_class.from_dict(
-            input_dict=input_dict["field_component"],
-            parent_application_page=parent_application_page,
-        )
-
-        instance.component_identified = True
-
-        if input_dict["next"]:
-            next_class = get_page_component_class_name(
-                class_name=input_dict["next"]["class"]
-            )
-            next_component = next_class.from_dict(
-                input_dict["next"], parent_application_page
-            )
-
-            instance.next = next_component
-            next_component.prev = instance
-
-        return instance
