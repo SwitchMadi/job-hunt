@@ -81,7 +81,9 @@ class Button(PageComponent):
 
         try:
             element = driver.find_element(By.XPATH, self.x_path)
-            driver.execute_script("arguments[0].scrollIntoView(true);", element)
+            driver.execute_script(
+                "arguments[0].scrollIntoView({block: 'center'});", element
+            )
             element.click()
             time.sleep(10)
         except ElementNotInteractableException as e:
@@ -227,7 +229,9 @@ class SearchField(PageComponent):
         start_network_observer()
 
         element = driver.find_element(By.XPATH, x_path)
-        driver.execute_script("arguments[0].scrollIntoView(true);", element)
+        driver.execute_script(
+            "arguments[0].scrollIntoView({block: 'center'});", element
+        )
 
         special_key = "special_key"
         element.send_keys(special_key)
