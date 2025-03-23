@@ -162,7 +162,7 @@ try:
         """
         execute_sql_query(main_table_query)
 
-    driver = get_selenium_driver(headless=False)
+    driver = get_selenium_driver()
     driver.quit()
 except Exception as e:
     logger.exception(f"Unexpected error occurred - {e}")

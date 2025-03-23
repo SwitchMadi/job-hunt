@@ -19,7 +19,7 @@ logger = get_logger(name="scrape_linkedin")
 def extract_linkedin_jobs(jobs_url, scraped_linkedin_job_ids):
     config = yaml.safe_load(open("config.yml"))
 
-    driver = get_selenium_driver(headless=False)
+    driver = get_selenium_driver()
     driver.set_page_load_timeout(300)
 
     try:

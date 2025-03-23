@@ -16,7 +16,7 @@ from utilities.gpt import get_gpt_response
 from utilities.selenium import get_selenium_driver, element_exists
 
 
-driver = get_selenium_driver(headless=False)
+driver = get_selenium_driver()
 driver.set_page_load_timeout(15)
 
 

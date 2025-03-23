@@ -22,7 +22,7 @@ from jobs.page_components.start_application import StartApplication
 from jobs.page_components.next_page import NextPage
 
 logger = get_logger(name="job")
-driver = get_selenium_driver(headless=False)
+driver = get_selenium_driver()
 driver.set_page_load_timeout(15)
 
 

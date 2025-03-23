@@ -25,7 +25,7 @@ from utilities.gpt import get_gpt_response
 
 
 logger = get_logger(name="job")
-driver = get_selenium_driver(headless=False)
+driver = get_selenium_driver()
 driver.set_page_load_timeout(15)
 
 

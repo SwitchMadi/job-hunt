@@ -1,4 +1,7 @@
-from seleniumwire import webdriver
+from selenium import webdriver
+from seleniumwire import webdriver as webdriver_wire
+import undetected_chromedriver as uc
+from selenium_stealth import stealth
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -18,53 +21,105 @@ import sys
 import glob
 
 
-logging.getLogger("seleniumwire").setLevel(logging.ERROR)
 driver = None
 
 
-def get_selenium_driver(headless=True):
+def get_selenium_driver():
     global driver
 
+    config = yaml.safe_load(open("config.yml"))
+
+    driver_type = config["selenium_driver_type"]
+    headless = config["selenium_headless"]
+
     if driver is None:
-        config = yaml.safe_load(open("config.yml"))
+        if driver_type == "undetected":
+            # Start undetected Chrome
+            options = uc.ChromeOptions()
 
-        # Setup Chrome options
-        options = Options()
-        if headless:
-            options.add_argument("--headless")
-        else:
-            options.add_argument("start-maximized")  # open Browser in maximized mode
-        options.add_argument("disable-infobars")  # disabling infobars
-        options.add_argument("--disable-extensions")  # disabling extensions
-        options.add_argument(
-            "--disable-dev-shm-usage"
-        )  # overcome limited resource problems
-        options.add_argument("--no-sandbox")  # Bypass OS security model
-        options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        options.add_experimental_option("useAutomationExtension", False)
-        options.add_argument("--disable-blink-features=AutomationControlled")
-        options.add_argument("--deny-permission-prompts")
+            if headless:
+                options.add_argument("--headless")
+            else:
+                options.add_argument(
+                    "--start-maximized"
+                )  # open Browser in maximized mode
 
-        options.add_argument(
-            f"user-data-dir={config['chrome_profile_path']}"
-        )  # User Data directory
-        if config.get("user_email"):
             options.add_argument(
-                f"profile-directory={config['user_email']}"
-            )  # Profile directory
+                "--disable-blink-features=AutomationControlled"
+            )  # disables detection feature
 
-        # Set up service
-        service = Service(executable_path=config["chromedriver"])
+            options.add_argument(
+                f"--user-data-dir={config['chrome_profile_path']}"
+            )  # User Data directory
+            if config.get("user_email"):
+                options.add_argument(
+                    f"--profile-directory={config['user_email']}"
+                )  # Profile directory
 
-        # Start browser
-        driver = webdriver.Chrome(service=service, options=options)
+            # Create driver
+            driver = uc.Chrome(options=options)
+        else:
+            # Setup Chrome options
+            options = Options()
+            if headless:
+                options.add_argument("--headless")
+            else:
+                options.add_argument(
+                    "start-maximized"
+                )  # open Browser in maximized mode
+            options.add_argument("disable-infobars")  # disabling infobars
+            options.add_argument("--disable-extensions")  # disabling extensions
+            options.add_argument(
+                "--disable-dev-shm-usage"
+            )  # overcome limited resource problems
+            options.add_argument("--no-sandbox")  # Bypass OS security model
+            options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            options.add_experimental_option("useAutomationExtension", False)
+            options.add_argument("--disable-blink-features=AutomationControlled")
+            options.add_argument("--deny-permission-prompts")
 
-        # This script attempts to set navigator.webdriver to undefined
-        driver.execute_script(
-            "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
-        )
+            user_agent = (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/122.0.0.0 Safari/537.36"
+            )
+            options.add_argument(f"user-agent={user_agent}")
 
-        import_seleniumwire_ca_cert()
+            options.add_argument("window-size=1920,1080")
+            options.add_argument("window-position=0,0")
+
+            options.add_argument(
+                f"user-data-dir={config['chrome_profile_path']}"
+            )  # User Data directory
+            if config.get("user_email"):
+                options.add_argument(
+                    f"profile-directory={config['user_email']}"
+                )  # Profile directory
+
+            # Set up service
+            service = Service(executable_path=config["chromedriver"])
+
+            # Start browser
+            if driver_type == "selenium_wire":
+                driver = webdriver_wire.Chrome(service=service, options=options)
+                logging.getLogger("seleniumwire").setLevel(logging.ERROR)
+                import_seleniumwire_ca_cert()
+            else:
+                driver = webdriver.Chrome(service=service, options=options)
+
+            # This script attempts to set navigator.webdriver to undefined
+            driver.execute_script(
+                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+            )
+
+            stealth(
+                driver,
+                languages=["en-US", "en"],
+                vendor="Google Inc.",
+                platform="Win32",
+                webgl_vendor="Intel Inc.",
+                renderer="Intel Iris OpenGL Engine",
+                fix_hairline=True,
+            )
 
     return driver
 
