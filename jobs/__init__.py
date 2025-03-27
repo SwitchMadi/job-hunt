@@ -164,7 +164,7 @@ class ApplicationPage:
         global driver
         driver.get(self.url)
         disable_browser_alerts()
-        time.sleep(10)
+        time.sleep(2)
 
         # Get the total height of the page
         total_height = driver.execute_script("return document.body.scrollHeight")
@@ -182,7 +182,7 @@ class ApplicationPage:
         for iframe_url in iframe_urls:
             driver.get(iframe_url)
             disable_browser_alerts()
-            time.sleep(10)
+            time.sleep(2)
             htmls[f"iframe_{iframe_urls.index(iframe_url)}"] = {
                 "url": iframe_url,
                 "page_source": driver.page_source,
@@ -229,7 +229,7 @@ class ApplicationPage:
         logger.info("Re-doing all steps...")
         driver.get(self.url)
         disable_browser_alerts()
-        time.sleep(10)
+        time.sleep(2)
 
         next_step = self.head_step
         while True:
@@ -246,7 +246,7 @@ class ApplicationPage:
         global driver
         driver.get(self.url)
         disable_browser_alerts()
-        time.sleep(10)
+        time.sleep(2)
 
         if self.head_step:
             self.redo_steps()

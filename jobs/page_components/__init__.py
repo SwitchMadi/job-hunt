@@ -86,14 +86,14 @@ class Button(PageComponent):
                 "arguments[0].scrollIntoView({block: 'center'});", element
             )
             element.click()
-            time.sleep(10)
+            time.sleep(2)
         except ElementNotInteractableException as e:
             logger.info(
                 f"element not interactable in class Button's proceed method.\n{e}\nButton instance - {vars(self)}"
             )
             element = driver.find_element(By.XPATH, self.x_path)
             driver.execute_script("arguments[0].click();", element)
-            time.sleep(10)
+            time.sleep(2)
         except ElementClickInterceptedException as e:
             logger.info(
                 f"element click intercepted in class Button's proceed method.\n{e}\nButton instance - {vars(self)}"
@@ -101,7 +101,7 @@ class Button(PageComponent):
             element = driver.find_element(By.XPATH, self.x_path)
             actions = ActionChains(driver)
             actions.move_to_element(element).click().perform()
-            time.sleep(10)
+            time.sleep(2)
         except Exception as e:
             if self.attempt <= self.max_attempt:
                 logger.info(
