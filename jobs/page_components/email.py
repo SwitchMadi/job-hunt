@@ -53,8 +53,7 @@ class Email(PageComponent):
         if email_field_found:
             self.field_component = TextInput(
                 x_path=email_field.x_path,
-                input_type="username",
-                input_text=self.parent_application_page.parent_job.user.email,
+                category="username",
                 parent_application_page=self.parent_application_page,
             )
 
@@ -90,9 +89,6 @@ class Email(PageComponent):
         instance.field_component = field_component_class.from_dict(
             input_dict=input_dict["field_component"],
             parent_application_page=parent_application_page,
-        )
-        instance.field_component.input_text = (
-            parent_application_page.parent_job.user.email
         )
 
         instance.component_identified = True

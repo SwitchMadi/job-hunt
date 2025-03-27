@@ -153,15 +153,16 @@ class TextInput(PageComponent):
     def __init__(
         self,
         x_path,
-        input_type,
+        category,
         parent_application_page,
         input_text=None,
     ):
         global driver
         self.x_path = x_path
-        self.input_type = input_type
-        self.input_text = input_text
+        self.category = category
+        self._answer = input_text
         self.parent_application_page = parent_application_page
+
         self.is_component_functional = True
 
         self.next = None
@@ -170,18 +171,15 @@ class TextInput(PageComponent):
     def proceed(self):
         global driver
 
-        if self.input_text is None:
-            raise Exception("input_text cannot be undefined.")
-
         try:
             element = driver.find_element(By.XPATH, self.x_path)
-            if self.input_type == "otp_textbox":
+            if self.category == "otp_textbox":
                 element.click()
-                for otp_digit in str(self.input_text):
+                for otp_digit in str(self.answer):
                     active_element = driver.switch_to.active_element
                     active_element.send_keys(f"{otp_digit}")
             else:
-                element.send_keys(self.input_text)
+                element.send_keys(self.answer)
                 element.send_keys(Keys.RETURN)
         except Exception as e:
             logger.exception(
@@ -196,7 +194,7 @@ class TextInput(PageComponent):
         return {
             "class": self.__class__.__name__,
             "x_path": self.x_path,
-            "input_type": self.input_type,
+            "category": self.category,
             "next": self.next.to_dict() if self.next else None,
         }
 
@@ -204,7 +202,7 @@ class TextInput(PageComponent):
     def from_dict(cls, input_dict, parent_application_page):
         instance = cls(
             x_path=input_dict["x_path"],
-            input_type=input_dict["input_type"],
+            category=input_dict["category"],
             parent_application_page=parent_application_page,
         )
 
@@ -220,6 +218,28 @@ class TextInput(PageComponent):
             next_component.prev = instance
 
         return instance
+
+    @property
+    def answer(self):
+        if self._answer is not None:
+            return self._answer
+
+        answer = ApplicationField.get_field_value(
+            field_category=self.category,
+            user=self.parent_application_page.parent_job.user,
+        )
+        if not answer:
+            answer = ApplicationField.extract_field_answer(
+                job_title=self.parent_application_page.parent_job.title,
+                job_url=self.parent_application_page.url,
+                company_name=self.parent_application_page.parent_job.company,
+                question=self.category,
+                answer_type="text",
+                parsed_resume=self.parent_application_page.parent_job.user.parsed_resume,
+            )
+
+        self._answer = answer
+        return self._answer
 
 
 class SearchField(PageComponent):
@@ -657,7 +677,7 @@ class ApplicationField:
         if self.field_type == "text_box":
             return TextInput(
                 x_path=self.x_path,
-                input_type=self.category,
+                category=self.category,
                 parent_application_page=self.parent_application_page,
             )
         elif self.field_type == "dropdown":
