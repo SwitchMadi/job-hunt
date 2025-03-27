@@ -12,7 +12,7 @@ from utilities.selenium import (
 from utilities.gpt import get_gpt_response
 from utilities.logging import get_logger
 from utilities.sql import get_sql_query_output, execute_sql_query
-from jobs.page_components import Button, TextInput, ApplicationField
+from jobs.page_components import ApplicationField
 from jobs.page_components.application_data_source import ApplicationDataSource
 from jobs.page_components.cookies_consent import CookiesConsent
 from jobs.page_components.terms_and_conditions import TermsAndConditions
