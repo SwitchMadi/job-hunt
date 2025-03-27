@@ -229,6 +229,9 @@ class SearchField(PageComponent):
         self.category = category
         self.parent_application_page = parent_application_page
 
+        self.options_container_x_path = None
+        self._answer = None
+
         self.is_component_functional = False
 
         self.next = None
@@ -293,6 +296,125 @@ class SearchField(PageComponent):
 
         simulate_empty_area_click(field_title)
         return is_search_field
+
+    def proceed(self):
+        input_count = min(2, len(self.answer.split(" ")))
+        while input_count >= 0:
+            if input_count > 0:
+                input_key = " ".join(self.answer.split(" ")[:input_count])
+            else:
+                input_key = "a"
+
+            element = driver.find_element(By.XPATH, self.x_path)
+
+            if not self.options_container_x_path:
+                start_dom_mutation_observer()
+                element.send_keys(input_key)
+                time.sleep(2)
+                options_container = get_observed_element()
+                self.options_container_x_path = get_element_xpath(options_container)
+            else:
+                element.send_keys(input_key)
+                time.sleep(2)
+
+            options = DropDown.extract_dropdown_options(
+                job_title=self.parent_application_page.parent_job.title,
+                job_url=self.parent_application_page.url,
+                question=self.title,
+                options_container_x_path=self.options_container_x_path,
+            )
+            if options:
+                closest_option = (
+                    self.answer
+                    if [option for option in options if option["text"] == self.answer]
+                    else None
+                )
+
+                if closest_option is None:
+                    closest_option = ApplicationField.extract_field_answer(
+                        job_title=self.parent_application_page.parent_job.title,
+                        job_url=self.parent_application_page.url,
+                        company_name=self.parent_application_page.parent_job.company,
+                        question=self.title,
+                        answer_type="enum",
+                        options=[option["text"] for option in options],
+                        closest_answer=self.answer,
+                    )
+
+                option = [
+                    option for option in options if option["text"] == closest_option
+                ][0]
+                option_element = driver.find_element(By.XPATH, option["x_path"])
+                option_element.click()
+            else:
+                input_count -= 1
+
+        if element_exists(self.options_container_x_path):
+            raise Exception(
+                f"Couldn't proceed on following search field {self.category} for "
+                f"{self.parent_application_page.parent_job.title}. "
+                f"URL - {self.parent_application_page.url}"
+            )
+
+        self.is_component_functional = True
+        return
+
+    @property
+    def answer(self):
+        if self._answer is not None:
+            return self._answer
+
+        answer = ApplicationField.get_field_value(
+            field_category=self.category,
+            user=self.parent_application_page.parent_job.user,
+        )
+        if not answer:
+            answer = ApplicationField.extract_field_answer(
+                job_title=self.parent_application_page.parent_job.title,
+                job_url=self.parent_application_page.url,
+                company_name=self.parent_application_page.parent_job.company,
+                question=self.title,
+                answer_type="text",
+                parsed_resume=self.parent_application_page.parent_job.user.parsed_resume,
+            )
+
+        self._answer = answer
+        return self._answer
+
+    def to_dict(self):
+        return {
+            "class": self.__class__.__name__,
+            "x_path": self.x_path,
+            "title": self.title,
+            "category": self.category,
+            "options_container_x_path": self.options_container_x_path,
+            "next": self.next.to_dict() if self.next else None,
+        }
+
+    @classmethod
+    def from_dict(cls, input_dict, parent_application_page):
+        instance = cls(
+            x_path=input_dict["x_path"],
+            title=input_dict["title"],
+            category=input_dict["category"],
+            parent_application_page=parent_application_page,
+        )
+
+        instance.options_container_x_path = input_dict["options_container_x_path"]
+        instance.is_component_functional = True
+
+        if input_dict["next"]:
+            next_class = get_page_component_class_name(
+                class_name=input_dict["next"]["class"]
+            )
+            next_component = next_class.from_dict(
+                input_dict["next"], parent_application_page
+            )
+
+            instance.next = next_component
+            next_component.prev = instance
+
+        return instance
 
 
 class DropDown(PageComponent):
