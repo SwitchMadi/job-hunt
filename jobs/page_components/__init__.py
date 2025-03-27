@@ -470,6 +470,7 @@ class DropDown(PageComponent):
                     job_title=self.parent_application_page.parent_job.title,
                     job_url=self.parent_application_page.url,
                     company_name=self.parent_application_page.parent_job.company,
+                    question=self.title,
                     answer_type="enum",
                     options=[option["text"] for option in options],
                     parsed_resume=self.parent_application_page.parent_job.user.parsed_resume,
