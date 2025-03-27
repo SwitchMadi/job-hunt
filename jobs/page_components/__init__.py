@@ -444,14 +444,14 @@ class DropDown(PageComponent):
         while (option is None) or element_exists(self.options_container_x_path):
             if option is None:
                 if not self.options:
-                    self._extract_options()
+                    self._extract_dropdown_options()
                 else:
                     self.dropdown_button.proceed()
 
                 options = self.options
             else:
                 if not option.get("children"):
-                    self._extract_options(parent_option=option)
+                    self._extract_dropdown_options(parent_option=option)
 
                 options = option["children"]
 
@@ -483,7 +483,7 @@ class DropDown(PageComponent):
 
         return
 
-    def _extract_options(self, parent_option=None):
+    def _extract_dropdown_options(self, parent_option=None):
         global driver
 
         if not self.options_container_x_path:
