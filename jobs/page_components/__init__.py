@@ -370,7 +370,7 @@ class DropDown(PageComponent):
             options_container = get_observed_element()
             self.options_container_x_path = get_element_xpath(options_container)
 
-        options = ApplicationField.extract_options(
+        options = DropDown.extract_dropdown_options(
             job_title=self.parent_application_page.parent_job.title,
             job_url=self.parent_application_page.url,
             question=self.title,
@@ -383,6 +383,54 @@ class DropDown(PageComponent):
             self.options = options
 
         return
+
+    @classmethod
+    def extract_dropdown_options(
+        cls, job_title, job_url, question, options_container_x_path, retry=False
+    ):
+        global driver
+
+        options_container = driver.find_element(By.XPATH, options_container_x_path)
+
+        user_prompt = (
+            f"Following HTML page is job application webpage for {job_title}."
+            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
+            f"There is a dropdown/menu options on this page with title as following -\n{question}\n"
+            f"I am using javascript mutation observer to observer DOM changes. When I clicked the dropdown/menu options"
+            f", the observer observed that following element was added to the DOM -\n"
+            f"{options_container.get_attribute('outerHTML')}\n"
+            f"Extract all options available in dropdown menu."
+        )
+
+        class Option(BaseModel):
+            text: str = Field(..., description="Text shown in the dropdown option")
+            x_path: str = Field(..., description="XPath of the option")
+
+        class DropdownOptions(BaseModel):
+            options: list[Option]
+
+        options_found, options = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=DropdownOptions,
+        )
+        if options_found:
+            return [
+                {"text": option.text, "x_path": option.x_path} for option in options
+            ]
+        else:
+            if not retry:
+                return DropDown.extract_dropdown_options(
+                    job_title=job_title,
+                    job_url=job_url,
+                    question=question,
+                    options_container_x_path=options_container_x_path,
+                    retry=True,
+                )
+
+            raise Exception(
+                f"Couldn't extract dropdown fields for {job_title}. URL - {job_url}"
+            )
 
     def to_dict(self):
         return {
@@ -626,51 +674,3 @@ class ApplicationField:
                 f"Couldn't extract field answer for {job_title}. URL - {job_url}"
             )
             return None
-
-    @classmethod
-    def extract_options(
-        cls, job_title, job_url, question, options_container_x_path, retry=False
-    ):
-        global driver
-
-        options_container = driver.find_element(By.XPATH, options_container_x_path)
-
-        user_prompt = (
-            f"Following HTML page is job application webpage for {job_title}."
-            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
-            f"There is a dropdown on this page with title as following -\n{question}\n"
-            f"I am using javascript mutation observer to observer DOM changes. When I clicked the dropdown, the "
-            f"observer observed that following element was added to the DOM -\n"
-            f"{options_container.get_attribute('outerHTML')}\n"
-            f"Extract all options available in dropdown menu."
-        )
-
-        class Option(BaseModel):
-            text: str = Field(..., description="Text shown in the dropdown option")
-            x_path: str = Field(..., description="XPath of the option")
-
-        class DropdownOptions(BaseModel):
-            options: list[Option]
-
-        options_found, options = get_gpt_response(
-            constants.gpt["system_prompts"]["application_step_identification"],
-            user_prompt,
-            response_format=DropdownOptions,
-        )
-        if options_found:
-            return [
-                {"text": option.text, "x_path": option.x_path} for option in options
-            ]
-        else:
-            if not retry:
-                return ApplicationField.extract_options(
-                    job_title=job_title,
-                    job_url=job_url,
-                    question=question,
-                    options_container_x_path=options_container_x_path,
-                    retry=True,
-                )
-
-            raise Exception(
-                f"Couldn't extract dropdown fields for {job_title}. URL - {job_url}"
-            )
