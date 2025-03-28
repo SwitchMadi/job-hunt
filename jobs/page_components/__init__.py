@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from selenium.webdriver.common.by import By
 from pydantic import BaseModel, Field
 from enum import Enum
-from typing import Optional
+from typing import Optional, List
 
 from utilities.selenium import (
     get_selenium_driver,
@@ -53,6 +53,7 @@ class ApplicationField:
 
         self.field_type = None
         self.x_path = None
+        self.options = []
 
     def _identify(self, retry=False):
         global driver
@@ -73,6 +74,12 @@ class ApplicationField:
             addButton = "add_button"
             upload = "upload"
 
+        class Option(BaseModel):
+            text: str = Field(
+                ..., description="Text of the checkbox / radio button option"
+            )
+            x_path: str = Field(..., description="XPath of the checkbox / radio button")
+
         class ApplicationFieldInfo(BaseModel):
             x_path: str = Field(
                 ...,
@@ -81,6 +88,10 @@ class ApplicationField:
             field_type: FieldType = Field(
                 ...,
                 description="Application field type like textbox, checkbox, dropdown etc.",
+            )
+            options: Optional[List[Option]] = Field(
+                ...,
+                description="Options to select from if the field_type is either checkbox or radio button",
             )
 
         application_field_found, application_field = get_gpt_response(
@@ -91,6 +102,11 @@ class ApplicationField:
         if application_field_found:
             self.field_type = application_field.field_type.value
             self.x_path = application_field.x_path
+            if application_field.options:
+                self.options = [
+                    {"text": option.text, "x_path": option.x_path}
+                    for option in application_field.options
+                ]
         elif not retry:
             self._identify(retry=True)
         else:
@@ -103,7 +119,10 @@ class ApplicationField:
         self._identify()
 
         self.field_type = self.revalidate_field_type(
-            field_type=self.field_type, x_path=self.x_path, field_title=self.title
+            field_type=self.field_type,
+            x_path=self.x_path,
+            field_title=self.title,
+            options=self.options,
         )
 
         if self.field_type == "text_box":
@@ -132,9 +151,29 @@ class ApplicationField:
                 category=self.category,
                 parent_application_page=self.parent_application_page,
             )
+        elif self.field_type == "radio_button":
+            from jobs.page_components.radio_button import RadioButton
+
+            return RadioButton(
+                x_path=self.x_path,
+                title=self.title,
+                category=self.category,
+                options=self.options,
+                parent_application_page=self.parent_application_page,
+            )
+        elif self.field_type == "check_box":
+            from jobs.page_components.check_box import CheckBox
+
+            return CheckBox(
+                x_path=self.x_path,
+                title=self.title,
+                category=self.category,
+                options=self.options,
+                parent_application_page=self.parent_application_page,
+            )
 
     @classmethod
-    def revalidate_field_type(cls, field_type, x_path, field_title):
+    def revalidate_field_type(cls, field_type, x_path, field_title, options=[]):
         if field_type == "text_box":
             from jobs.page_components.search_field import SearchField
 
@@ -146,11 +185,18 @@ class ApplicationField:
             element = driver.find_element(By.XPATH, x_path)
             element.click()
             observed_element = get_observed_element()
+
             if observed_element is None:
                 return "text_box"
             else:
                 simulate_empty_area_click(field_title)
                 return "dropdown"
+        elif field_type == "check_box":
+            from jobs.page_components.check_box import CheckBox
+
+            multiple_correct = CheckBox.validate_checkbox(options)
+            if not multiple_correct:
+                return "radio_button"
 
         return field_type
 
@@ -181,6 +227,7 @@ class ApplicationField:
         company_name,
         question,
         answer_type,
+        multiple_correct=False,
         closest_answer=None,
         options=[],
         parsed_resume=None,
@@ -210,17 +257,29 @@ class ApplicationField:
                 "FieldAnswerOptions", {option: option for option in options}
             )
 
-            class FieldAnswer(BaseModel):
-                answer: FieldAnswerOptions = Field(
-                    ...,
-                    description="Correct option based on input",
-                )
+            if multiple_correct:
+
+                class FieldAnswer(BaseModel):
+                    answers: List[FieldAnswerOptions] = Field(
+                        ...,
+                        description="Correct options based on input",
+                    )
+
+            else:
+
+                class FieldAnswer(BaseModel):
+                    answer: FieldAnswerOptions = Field(
+                        ...,
+                        description="Correct option based on input",
+                    )
 
         elif answer_type == "text":
             user_prompt += (
-                f"Answer should be precise and as short as you can write. Also answer should reflect that these are my "
-                f"words, not Chat GPT's words. Answer like human candidate and not a language model. If based on the "
-                f"given context there is no answer then don't answer the question at all.\n"
+                f"Answer should be precise and as short as you can write. If question is very short like one word or "
+                f"two then answer should also be of similar length. If questions seems to be expecting bit elaborative "
+                f"answer then answer can be little verbose but not too much. Also answer should reflect that these are "
+                f"my words, not Chat GPT's words. Answer like human candidate and not a language model. If based on "
+                f"the given context there is no answer then don't answer the question at all.\n"
             )
 
             class FieldAnswer(BaseModel):
@@ -247,11 +306,12 @@ class ApplicationField:
             response_format=FieldAnswer,
         )
         if field_answer_found:
-            return (
-                field_answer.answer
-                if answer_type == "text"
-                else field_answer.answer.value
-            )
+            if answer_type == "text":
+                return field_answer.answer
+            elif multiple_correct:
+                return [answer.value for answer in field_answer.answers]
+            else:
+                return field_answer.answer.value
         else:
             logger.error(
                 f"Couldn't extract field answer for {job_title}. URL - {job_url}"
