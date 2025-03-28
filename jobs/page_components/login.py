@@ -3,13 +3,9 @@ from datetime import datetime
 from enum import Enum
 from pydantic import BaseModel, Field
 
-from jobs.page_components import (
-    PageComponent,
-    Button,
-    TextInput,
-    logger,
-    get_page_component_class_name,
-)
+from jobs.page_components import PageComponent, logger, get_page_component_class_name
+from jobs.page_components.button import Button
+from jobs.page_components.text_input import TextInput
 from utilities import minify_html_for_gpt_prompt, constants
 from utilities.google_services.gmail import Gmail
 from utilities.gpt import get_gpt_response

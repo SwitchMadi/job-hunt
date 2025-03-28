@@ -4,11 +4,6 @@ from pydantic import BaseModel, Field
 from enum import Enum
 from typing import Optional
 
-from jobs.page_components import SearchField
-from jobs.page_components.button import Button
-from jobs.page_components.drop_down import DropDown
-from jobs.page_components.search_field import SearchField
-from jobs.page_components.text_input import TextInput
 from utilities.selenium import (
     get_selenium_driver,
     start_dom_mutation_observer,
@@ -112,12 +107,16 @@ class ApplicationField:
         )
 
         if self.field_type == "text_box":
+            from jobs.page_components.text_input import TextInput
+
             return TextInput(
                 x_path=self.x_path,
                 category=self.category,
                 parent_application_page=self.parent_application_page,
             )
         elif self.field_type == "dropdown":
+            from jobs.page_components.drop_down import DropDown
+
             return DropDown(
                 x_path=self.x_path,
                 title=self.title,
@@ -125,6 +124,8 @@ class ApplicationField:
                 parent_application_page=self.parent_application_page,
             )
         elif self.field_type == "search_field":
+            from jobs.page_components.search_field import SearchField
+
             return SearchField(
                 x_path=self.x_path,
                 title=self.title,
@@ -135,6 +136,8 @@ class ApplicationField:
     @classmethod
     def revalidate_field_type(cls, field_type, x_path, field_title):
         if field_type == "text_box":
+            from jobs.page_components.search_field import SearchField
+
             is_search_field = SearchField.validate_search_field(x_path, field_title)
             if is_search_field:
                 return "search_field"

@@ -1,7 +1,8 @@
 from pydantic import BaseModel, Field
 from enum import Enum
 
-from jobs.page_components import PageComponent, Button, get_page_component_class_name
+from jobs.page_components import PageComponent, get_page_component_class_name
+from jobs.page_components.button import Button
 from utilities import minify_html_for_gpt_prompt, constants
 from utilities.gpt import get_gpt_response
 from utilities.selenium import get_selenium_driver

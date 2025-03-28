@@ -1,8 +1,12 @@
 from pydantic import BaseModel, Field
 from selenium.webdriver.common.by import By
 
-from jobs import ApplicationField
-from jobs.page_components import PageComponent, Button, get_page_component_class_name
+from jobs.page_components import (
+    PageComponent,
+    ApplicationField,
+    get_page_component_class_name,
+)
+from jobs.page_components.button import Button
 from utilities import minify_html_for_gpt_prompt, constants
 from utilities.gpt import get_gpt_response
 from utilities.selenium import (
