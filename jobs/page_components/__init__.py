@@ -244,6 +244,8 @@ class ApplicationField:
                 .get("country_code")
             )
 
+        return None
+
     @classmethod
     def extract_field_answer(
         cls,
@@ -255,6 +257,7 @@ class ApplicationField:
         question=None,
         multiple_correct=False,
         closest_answer=None,
+        answer_format=None,
         options=[],
         parsed_resume=None,
     ):
@@ -317,12 +320,29 @@ class ApplicationField:
                 f"answer the question at all.\n"
             )
 
-            class FieldAnswer(BaseModel):
-                answer: Optional[str] = Field(
-                    ...,
-                    description="Correct answer based on user data. Answer should be precise and as short as you can "
-                    "write. Also answer should reflect that these are my words, not Chat GPT's words.",
+            if answer_format:
+                user_prompt += (
+                    f"Answer should strictly be in following format with no extra text except for what is "
+                    f"mentioned in the format. Format - {answer_format}\n"
                 )
+
+                class FieldAnswer(BaseModel):
+                    answer: Optional[str] = Field(
+                        ...,
+                        description=f"Correct answer based on user data. Answer should be precise and as short as you "
+                        f"can write. Answer should strictly be in following format with no extra text "
+                        f"except for what is mentioned in the format. Format - {answer_format}",
+                    )
+
+            else:
+
+                class FieldAnswer(BaseModel):
+                    answer: Optional[str] = Field(
+                        ...,
+                        description="Correct answer based on user data. Answer should be precise and as short as you "
+                        "can write. Also answer should reflect that these are my words, not Chat GPT's "
+                        "words.",
+                    )
 
         else:
             raise Exception(f"Unknown parameter - {answer_type}")

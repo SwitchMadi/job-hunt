@@ -8,6 +8,7 @@ from selenium.webdriver.common.by import By
 from selenium.common.exceptions import (
     InvalidSelectorException,
     StaleElementReferenceException,
+    ElementClickInterceptedException,
 )
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
@@ -576,3 +577,69 @@ def get_observed_network_calls():
     global driver
 
     return driver.execute_script("return window.capturedRequests || [];")
+
+
+def clear_text_field(x_path):
+    """
+    Clears the input field using keyboard shortcuts to ensure any custom handlers are triggered.
+    """
+
+    global driver
+
+    input_field = driver.find_element(By.XPATH, x_path)
+
+    # Scroll the element into view
+    driver.execute_script(
+        "arguments[0].scrollIntoView({block: 'center', inline: 'center'});", input_field
+    )
+
+    try:
+        input_field.click()  # Ensure the field is focused
+    except ElementClickInterceptedException:
+        pass
+
+    # Select all text (Ctrl+A) and delete
+    input_field.send_keys(Keys.CONTROL + "a")
+    input_field.send_keys(Keys.DELETE)
+    time.sleep(0.5)
+
+    # Directly set the value to empty and dispatch an input event
+    driver.execute_script("arguments[0].value = '';", input_field)
+    time.sleep(0.5)
+
+    return
+
+
+def simulate_typing(xpath, text):
+    """
+    Simulates human-like typing into an input field by sending individual key events.
+
+    Parameters:
+        xpath (str): XPath for the input field element.
+        text (str): Text to type character by character.
+    """
+
+    global driver
+
+    actions = ActionChains(driver)
+
+    # Locate the input field using the provided XPath
+    input_field = driver.find_element(By.XPATH, xpath)
+
+    driver.execute_script(
+        "arguments[0].scrollIntoView({block: 'center'});", input_field
+    )
+
+    clear_text_field(xpath)
+
+    # Simulate pressing and releasing the key for the character
+    for char in text:
+        actions.key_down(char).key_up(char).perform()
+        time.sleep(0.3)
+
+    current_value = input_field.get_attribute("value")
+    if current_value != text:
+        clear_text_field(xpath)
+        return False
+
+    return True
