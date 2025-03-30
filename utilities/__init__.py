@@ -123,16 +123,40 @@ def minify_html_for_gpt_prompt(html_content):
         "span",
         "li",
         "ul",
+        "svg",
     ]
+
+    # Remove all children from each SVG tag so that only the tag remains with its attributes
+    for svg in soup.find_all("svg"):
+        svg.clear()
 
     for tag in soup.find_all(True):
         # Remove unnecessary attributes from the tags
         for attr in list(tag.attrs):
-            if attr not in ["id", "class", "href", "type", "name", "value", "display"]:
+            if attr not in [
+                "id",
+                "class",
+                "href",
+                "type",
+                "name",
+                "value",
+                "display",
+                "placeholder",
+                "alt",
+                "title",
+                "role",
+                "aria-label",
+                "aria-labelledby",
+                "aria-expanded",
+                "data-automation-id",
+                "data-id",
+            ]:
                 del tag[attr]
 
         # Check if the tag has no attributes
-        if (not tag.attrs) or (tag.name not in relevant_tags):
+        if tag.name.lower() != "svg" and (
+            (not tag.attrs) or (tag.name not in relevant_tags)
+        ):
             # Check if the tag is empty or contains only whitespace
             if not tag.contents or all(
                 isinstance(content, str) and content.strip() == ""
