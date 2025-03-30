@@ -2,7 +2,8 @@ import time
 from selenium.webdriver.common.by import By
 
 from jobs import ApplicationField
-from jobs.page_components import PageComponent, DropDown, get_page_component_class_name
+from jobs.page_components import PageComponent, get_page_component_class_name
+from jobs.page_components.drop_down import DropDown
 from utilities.selenium import (
     get_selenium_driver,
     start_network_observer,
@@ -21,9 +22,10 @@ driver.set_page_load_timeout(15)
 
 
 class SearchField(PageComponent):
-    def __init__(self, x_path, title, category, parent_application_page):
+    def __init__(self, x_path, title, question, category, parent_application_page):
         self.x_path = x_path
         self.title = title
+        self.question = question
         self.category = category
         self.parent_application_page = parent_application_page
 
@@ -118,7 +120,8 @@ class SearchField(PageComponent):
             options = DropDown.extract_dropdown_options(
                 job_title=self.parent_application_page.parent_job.title,
                 job_url=self.parent_application_page.url,
-                question=self.title,
+                field_title=self.title,
+                question=self.question,
                 options_container_x_path=self.options_container_x_path,
             )
             if options:
@@ -133,7 +136,8 @@ class SearchField(PageComponent):
                         job_title=self.parent_application_page.parent_job.title,
                         job_url=self.parent_application_page.url,
                         company_name=self.parent_application_page.parent_job.company,
-                        question=self.title,
+                        field_title=self.title,
+                        question=self.question,
                         answer_type="enum",
                         options=[option["text"] for option in options],
                         closest_answer=self.answer,
@@ -171,7 +175,8 @@ class SearchField(PageComponent):
                 job_title=self.parent_application_page.parent_job.title,
                 job_url=self.parent_application_page.url,
                 company_name=self.parent_application_page.parent_job.company,
-                question=self.title,
+                field_title=self.title,
+                question=self.question,
                 answer_type="text",
                 parsed_resume=self.parent_application_page.parent_job.user.parsed_resume,
             )
@@ -184,6 +189,7 @@ class SearchField(PageComponent):
             "class": self.__class__.__name__,
             "x_path": self.x_path,
             "title": self.title,
+            "question": self.question,
             "category": self.category,
             "options_container_x_path": self.options_container_x_path,
             "next": self.next.to_dict() if self.next else None,
@@ -194,6 +200,7 @@ class SearchField(PageComponent):
         instance = cls(
             x_path=input_dict["x_path"],
             title=input_dict["title"],
+            question=input_dict["question"],
             category=input_dict["category"],
             parent_application_page=parent_application_page,
         )

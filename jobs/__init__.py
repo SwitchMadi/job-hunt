@@ -1,5 +1,6 @@
 import time
 from pydantic import BaseModel, Field
+from typing import Optional
 from enum import Enum
 import json
 
@@ -429,7 +430,13 @@ class ApplicationPage:
         class ApplicationFieldInfo(BaseModel):
             field_title: str = Field(
                 ...,
-                description="Application field title / question mentioned on the webpage",
+                description="Application field's exact title / question mentioned on the webpage, without any "
+                "modification.",
+            )
+            field_question: Optional[str] = Field(
+                ...,
+                description="If field title on its own is not self explanatory then modify it so that it makes sense as"
+                " a question.",
             )
             field_category: FieldCategory = Field(
                 ...,
@@ -514,6 +521,7 @@ class ApplicationPage:
         application_field = ApplicationField(
             parent_application_page=self,
             title=job_field.field_title,
+            question=job_field.field_question,
             category=job_field.field_category.value,
         )
         application_field_component = application_field.get_field_component()

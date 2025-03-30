@@ -23,9 +23,10 @@ driver.set_page_load_timeout(15)
 
 
 class DropDown(PageComponent):
-    def __init__(self, x_path, title, category, parent_application_page):
+    def __init__(self, x_path, title, question, category, parent_application_page):
         self.x_path = x_path
         self.title = title
+        self.question = question
         self.category = category
         self.parent_application_page = parent_application_page
         self.dropdown_button = Button(
@@ -75,7 +76,8 @@ class DropDown(PageComponent):
                     job_title=self.parent_application_page.parent_job.title,
                     job_url=self.parent_application_page.url,
                     company_name=self.parent_application_page.parent_job.company,
-                    question=self.title,
+                    field_title=self.title,
+                    question=self.question,
                     answer_type="enum",
                     options=[option["text"] for option in options],
                     parsed_resume=self.parent_application_page.parent_job.user.parsed_resume,
@@ -101,7 +103,8 @@ class DropDown(PageComponent):
         options = DropDown.extract_dropdown_options(
             job_title=self.parent_application_page.parent_job.title,
             job_url=self.parent_application_page.url,
-            question=self.title,
+            field_title=self.title,
+            question=self.question,
             options_container_x_path=self.options_container_x_path,
         )
 
@@ -114,16 +117,30 @@ class DropDown(PageComponent):
 
     @classmethod
     def extract_dropdown_options(
-        cls, job_title, job_url, question, options_container_x_path, retry=False
+        cls,
+        job_title,
+        job_url,
+        field_title,
+        options_container_x_path,
+        question=None,
+        retry=False,
     ):
         global driver
 
         options_container = driver.find_element(By.XPATH, options_container_x_path)
 
+        if question:
+            question_prompt = (
+                f"There is a dropdown/menu options on this page asking following question under the "
+                f"title {field_title}\nQuestion - {question}"
+            )
+        else:
+            question_prompt = f"There is a dropdown/menu options on this page with title as following -\n{field_title}"
+
         user_prompt = (
             f"Following HTML page is job application webpage for {job_title}."
             f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
-            f"There is a dropdown/menu options on this page with title as following -\n{question}\n"
+            f"{question_prompt}\n"
             f"I am using javascript mutation observer to observer DOM changes. When I clicked the dropdown/menu options"
             f", the observer observed that following element was added to the DOM -\n"
             f"{options_container.get_attribute('outerHTML')}\n"
@@ -151,6 +168,7 @@ class DropDown(PageComponent):
                 return DropDown.extract_dropdown_options(
                     job_title=job_title,
                     job_url=job_url,
+                    field_title=field_title,
                     question=question,
                     options_container_x_path=options_container_x_path,
                     retry=True,
@@ -165,6 +183,7 @@ class DropDown(PageComponent):
             "class": self.__class__.__name__,
             "x_path": self.x_path,
             "title": self.title,
+            "question": self.question,
             "category": self.category,
             "options": self.options,
             "options_container_x_path": self.options_container_x_path,
@@ -176,6 +195,7 @@ class DropDown(PageComponent):
         instance = cls(
             x_path=input_dict["x_path"],
             title=input_dict["title"],
+            question=input_dict["question"],
             category=input_dict["category"],
             parent_application_page=parent_application_page,
         )

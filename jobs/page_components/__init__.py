@@ -46,13 +46,16 @@ class PageComponent(ABC):
 
 
 class ApplicationField:
-    def __init__(self, parent_application_page, title, category):
+    def __init__(self, parent_application_page, title, question, category):
         self.parent_application_page = parent_application_page
         self.title = title
+        self.question = question
         self.category = category
 
-        self.field_type = None
         self.x_path = None
+        self.field_type = None
+        self.html_type = None
+        self.format = None
         self.options = []
 
     def _identify(self, retry=False):
@@ -63,16 +66,20 @@ class ApplicationField:
             f"The webpage has following application field for applying to the job -\n"
             f"Field title - {self.title}\n"
             f"Field category - {self.category.value}\n"
-            f"Analyse the whole HTML very carefully for extracting XPath of the application field."
+            f"Analyse the whole HTML very carefully for extracting XPath and other info of the application field."
         )
 
-        class FieldType(Enum):
+        class FieldHtmlType(Enum):
             textBox = "text_box"
             checkBox = "check_box"
             radioButton = "radio_button"
             dropdown = "dropdown"
+            button = "button"
+
+        class FieldType(Enum):
             addButton = "add_button"
             upload = "upload"
+            date = "date"
 
         class Option(BaseModel):
             text: str = Field(
@@ -83,15 +90,24 @@ class ApplicationField:
         class ApplicationFieldInfo(BaseModel):
             x_path: str = Field(
                 ...,
-                description="XPath of the application field",
+                description="XPath of the application field. XPath of the first field if there are many.",
             )
             field_type: FieldType = Field(
                 ...,
-                description="Application field type like textbox, checkbox, dropdown etc.",
+                description="Application sub-field type like date, addButton, upload etc.",
+            )
+            html_type: FieldHtmlType = Field(
+                ...,
+                description="Application field html type like textbox, checkbox, dropdown etc.",
             )
             options: Optional[List[Option]] = Field(
                 ...,
                 description="Options to select from if the field_type is either checkbox or radio button",
+            )
+            format: Optional[str] = Field(
+                ...,
+                description="Format of field answer if the field requires its answer to be in some specific format. "
+                "e.g. date format etc.",
             )
 
         application_field_found, application_field = get_gpt_response(
@@ -100,8 +116,11 @@ class ApplicationField:
             response_format=ApplicationFieldInfo,
         )
         if application_field_found:
-            self.field_type = application_field.field_type.value
             self.x_path = application_field.x_path
+            self.field_type = application_field.field_type.value
+            self.html_type = application_field.html_type.value
+            self.format = application_field.format
+
             if application_field.options:
                 self.options = [
                     {"text": option.text, "x_path": option.x_path}
@@ -118,14 +137,14 @@ class ApplicationField:
     def get_field_component(self):
         self._identify()
 
-        self.field_type = self.revalidate_field_type(
-            field_type=self.field_type,
+        self.html_type = ApplicationField.revalidate_component_type(
             x_path=self.x_path,
+            html_type=self.html_type,
             field_title=self.title,
             options=self.options,
         )
 
-        if self.field_type == "text_box":
+        if self.html_type == "text_box":
             from jobs.page_components.text_input import TextInput
 
             return TextInput(
@@ -133,48 +152,52 @@ class ApplicationField:
                 category=self.category,
                 parent_application_page=self.parent_application_page,
             )
-        elif self.field_type == "dropdown":
+        elif self.html_type == "dropdown":
             from jobs.page_components.drop_down import DropDown
 
             return DropDown(
                 x_path=self.x_path,
                 title=self.title,
+                question=self.question,
                 category=self.category,
                 parent_application_page=self.parent_application_page,
             )
-        elif self.field_type == "search_field":
+        elif self.html_type == "search_field":
             from jobs.page_components.search_field import SearchField
 
             return SearchField(
                 x_path=self.x_path,
                 title=self.title,
+                question=self.question,
                 category=self.category,
                 parent_application_page=self.parent_application_page,
             )
-        elif self.field_type == "radio_button":
+        elif self.html_type == "radio_button":
             from jobs.page_components.radio_button import RadioButton
 
             return RadioButton(
                 x_path=self.x_path,
                 title=self.title,
+                question=self.question,
                 category=self.category,
                 options=self.options,
                 parent_application_page=self.parent_application_page,
             )
-        elif self.field_type == "check_box":
+        elif self.html_type == "check_box":
             from jobs.page_components.check_box import CheckBox
 
             return CheckBox(
                 x_path=self.x_path,
                 title=self.title,
+                question=self.question,
                 category=self.category,
                 options=self.options,
                 parent_application_page=self.parent_application_page,
             )
 
     @classmethod
-    def revalidate_field_type(cls, field_type, x_path, field_title, options=[]):
-        if field_type == "text_box":
+    def revalidate_component_type(cls, x_path, html_type, field_title, options=[]):
+        if html_type == "text_box":
             from jobs.page_components.search_field import SearchField
 
             is_search_field = SearchField.validate_search_field(x_path, field_title)
@@ -191,14 +214,14 @@ class ApplicationField:
             else:
                 simulate_empty_area_click(field_title)
                 return "dropdown"
-        elif field_type == "check_box":
+        elif html_type == "check_box":
             from jobs.page_components.check_box import CheckBox
 
             multiple_correct = CheckBox.validate_checkbox(options)
             if not multiple_correct:
                 return "radio_button"
 
-        return field_type
+        return html_type
 
     @classmethod
     def get_field_value(cls, field_category, user):
@@ -225,17 +248,26 @@ class ApplicationField:
         job_title,
         job_url,
         company_name,
-        question,
+        field_title,
         answer_type,
+        question=None,
         multiple_correct=False,
         closest_answer=None,
         options=[],
         parsed_resume=None,
     ):
-        user_prompt = (
-            f"While filling job application for {job_title} at a company called "
-            f"{company_name}, I need you to help me answer following question -\n{question}\n"
-        )
+        if question:
+            user_prompt = (
+                f"While filling job application for {job_title} at a company called "
+                f"{company_name}, I need you to help me answer following question under the field title - {field_title}"
+                f"\nQuestion - {question}\n"
+            )
+        else:
+            question = field_title
+            user_prompt = (
+                f"While filling job application for {job_title} at a company called "
+                f"{company_name}, I need you to help me answer following question (field title) -\n{question}\n"
+            )
 
         if answer_type == "enum":
             options_list = "\n".join(
@@ -275,11 +307,12 @@ class ApplicationField:
 
         elif answer_type == "text":
             user_prompt += (
-                f"Answer should be precise and as short as you can write. If question is very short like one word or "
-                f"two then answer should also be of similar length. If questions seems to be expecting bit elaborative "
-                f"answer then answer can be little verbose but not too much. Also answer should reflect that these are "
-                f"my words, not Chat GPT's words. Answer like human candidate and not a language model. If based on "
-                f"the given context there is no answer then don't answer the question at all.\n"
+                f"Answer should be precise and as short as you can write. Be very careful about following -\n"
+                f"If field title is very short like one word or two then answer should also be of similar length. If "
+                f"field title seems to be expecting bit elaborative answer then answer can be little verbose but not "
+                f"too much. Also answer should reflect that these are my words, not Chat GPT's words. Answer like human"
+                f" candidate and not a language model. If based on the given context there is no answer then don't "
+                f"answer the question at all.\n"
             )
 
             class FieldAnswer(BaseModel):

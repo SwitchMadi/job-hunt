@@ -94,7 +94,7 @@ class TextInput(PageComponent):
                 job_title=self.parent_application_page.parent_job.title,
                 job_url=self.parent_application_page.url,
                 company_name=self.parent_application_page.parent_job.company,
-                question=self.category,
+                field_title=self.category,
                 answer_type="text",
                 parsed_resume=self.parent_application_page.parent_job.user.parsed_resume,
             )

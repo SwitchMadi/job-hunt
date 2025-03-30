@@ -10,9 +10,12 @@ driver.set_page_load_timeout(15)
 
 
 class RadioButton(PageComponent):
-    def __init__(self, x_path, title, category, options, parent_application_page):
+    def __init__(
+        self, x_path, title, question, category, options, parent_application_page
+    ):
         self.x_path = x_path
         self.title = title
+        self.question = question
         self.category = category
         self.options = options
         self.parent_application_page = parent_application_page
@@ -38,7 +41,8 @@ class RadioButton(PageComponent):
                 job_title=self.parent_application_page.parent_job.title,
                 job_url=self.parent_application_page.url,
                 company_name=self.parent_application_page.parent_job.company,
-                question=self.title,
+                field_title=self.title,
+                question=self.question,
                 answer_type="enum",
                 options=[option["text"] for option in self.options],
                 parsed_resume=self.parent_application_page.parent_job.user.parsed_resume,
@@ -56,6 +60,7 @@ class RadioButton(PageComponent):
             "class": self.__class__.__name__,
             "x_path": self.x_path,
             "title": self.title,
+            "question": self.question,
             "category": self.category,
             "options": self.options,
             "next": self.next.to_dict() if self.next else None,
@@ -66,6 +71,7 @@ class RadioButton(PageComponent):
         instance = cls(
             x_path=input_dict["x_path"],
             title=input_dict["title"],
+            question=input_dict["question"],
             category=input_dict["category"],
             options=input_dict["options"],
             parent_application_page=parent_application_page,
