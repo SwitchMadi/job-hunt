@@ -16,10 +16,14 @@ class TextInput(PageComponent):
         x_path,
         category,
         parent_application_page,
+        title=None,
+        question=None,
         input_text=None,
     ):
         global driver
         self.x_path = x_path
+        self.title = title
+        self.question = question
         self.category = category
         self._answer = input_text
         self.parent_application_page = parent_application_page
@@ -94,7 +98,8 @@ class TextInput(PageComponent):
                 job_title=self.parent_application_page.parent_job.title,
                 job_url=self.parent_application_page.url,
                 company_name=self.parent_application_page.parent_job.company,
-                field_title=self.category,
+                field_title=self.title or self.category,
+                question=self.question,
                 answer_type="text",
                 parsed_resume=self.parent_application_page.parent_job.user.parsed_resume,
             )

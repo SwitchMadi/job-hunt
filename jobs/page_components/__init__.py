@@ -149,6 +149,8 @@ class ApplicationField:
 
             return TextInput(
                 x_path=self.x_path,
+                title=self.title,
+                question=self.question,
                 category=self.category,
                 parent_application_page=self.parent_application_page,
             )
