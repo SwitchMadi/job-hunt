@@ -6,7 +6,7 @@ from jobs.page_components import (
     ApplicationField,
     get_page_component_class_name,
 )
-from jobs.page_components.button import Button
+from jobs.page_components.button import Button, logger
 from utilities import minify_html_for_gpt_prompt, constants
 from utilities.gpt import get_gpt_response
 from utilities.selenium import (
@@ -110,6 +110,11 @@ class DropDown(PageComponent):
 
         if parent_option:
             parent_option["children"] = options
+            logger.info(
+                f"Updating dropdown field options in db for job - "
+                f"{self.parent_application_page.parent_job.title}, url - {self.parent_application_page.url}"
+            )
+            self.parent_application_page.save_application_steps()
         else:
             self.options = options
 
