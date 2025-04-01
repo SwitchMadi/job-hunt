@@ -55,7 +55,6 @@ class StartApplication(PageComponent):
                 x_path=button.x_path,
                 button_type="start_application",
                 parent_application_page=self,
-                click_result="Starts job application",
             )
 
             self.field_component.proceed()

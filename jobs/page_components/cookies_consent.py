@@ -55,7 +55,6 @@ class CookiesConsent(PageComponent):
                 x_path=button.x_path,
                 button_type="accept_cookies",
                 parent_application_page=self,
-                click_result="Accepts cookies consent",
             )
 
             self.field_component.proceed()

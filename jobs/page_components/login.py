@@ -757,7 +757,6 @@ class VerifyAccount(PageComponent):
                         x_path=component.verify_button_x_path,
                         button_type="verify_otp",
                         parent_application_page=self,
-                        click_result="Submits OTP for account verification",
                     )
 
                     self.is_component_functional = True

@@ -15,18 +15,11 @@ driver.set_page_load_timeout(15)
 
 
 class Button(PageComponent):
-    def __init__(
-        self,
-        x_path,
-        button_type,
-        parent_application_page,
-        click_result=None,
-    ):
+    def __init__(self, x_path, button_type, parent_application_page):
         global driver
         self.x_path = x_path
         self.button_type = button_type
         self.parent_application_page = parent_application_page
-        self.click_result = click_result
 
         self.next = None
         self.prev = None
@@ -80,7 +73,6 @@ class Button(PageComponent):
             "class": self.__class__.__name__,
             "x_path": self.x_path,
             "button_type": self.button_type,
-            "click_result": self.click_result,
             "next": self.next.to_dict() if self.next else None,
         }
 
@@ -90,7 +82,6 @@ class Button(PageComponent):
             x_path=input_dict["x_path"],
             button_type=input_dict["button_type"],
             parent_application_page=parent_application_page,
-            click_result=input_dict["click_result"],
         )
         if input_dict["next"]:
             next_class = get_page_component_class_name(
