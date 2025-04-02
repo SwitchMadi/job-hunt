@@ -146,7 +146,7 @@ class DropDown(PageComponent):
             f"Following HTML page is job application webpage for {job_title}."
             f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
             f"{question_prompt}\n"
-            f"I am using javascript mutation observer to observer DOM changes. When I clicked the dropdown/menu options"
+            f"I am using javascript mutation observer to observe DOM changes. When I clicked the dropdown/menu options"
             f", the observer observed that following element was added to the DOM -\n"
             f"{options_container.get_attribute('outerHTML')}\n"
             f"Extract all options available in dropdown menu."

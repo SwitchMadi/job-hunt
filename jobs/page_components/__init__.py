@@ -83,6 +83,11 @@ class ApplicationField:
             addButton = "add_button"
             upload = "upload"
             date = "date"
+            expand = "expand"
+            collapse = "collapse"
+            text_field = "text_field"
+            multiple_choice = "multiple_choice"
+            other = "other"
 
         class Option(BaseModel):
             text: str = Field(
