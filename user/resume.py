@@ -21,7 +21,7 @@ class SkillCategory(Enum):
     OTHER = "Other"
 
 
-class EmploymentCategory(Enum):
+class EmploymentType(Enum):
     FULLTIME = "Fulltime"
     CONTRACTUAL = "Contractual"
     INTERNSHIP = "Internship"
@@ -103,7 +103,7 @@ class WorkExperience(BaseModel):
     industry: Optional[str] = Field(
         None, description="Industry sector of the job/company"
     )
-    employment_category: Optional[EmploymentCategory] = Field(
+    employment_type: Optional[EmploymentType] = Field(
         None,
         description="Type of employment (e.g. Fulltime, Contractual, Internship, etc.)",
     )

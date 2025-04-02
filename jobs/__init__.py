@@ -21,6 +21,7 @@ from jobs.page_components.email import Email
 from jobs.page_components.login import Login, VerifyAccount
 from jobs.page_components.start_application import StartApplication
 from jobs.page_components.next_page import NextPage
+from jobs.page_components.work_experience_section import WorkExperienceSection
 
 logger = get_logger(name="job")
 driver = get_selenium_driver()
@@ -108,7 +109,7 @@ class ApplicationPage:
         else:
             return False
 
-    def _save_application_steps(self):
+    def save_application_steps(self):
         application_steps_dict = json.dumps(self.head_step.to_dict()).replace("'", "''")
 
         application_steps_query = f"""
@@ -143,7 +144,7 @@ class ApplicationPage:
                 step.prev = self.tail_step
                 self.tail_step = step
 
-            self._save_application_steps()
+            self.save_application_steps()
 
         return
 
@@ -156,6 +157,16 @@ class ApplicationPage:
         cur_application_step = self.head_step
         while cur_application_step:
             if isinstance(self.head_step, StartApplication):
+                return True
+            cur_application_step = cur_application_step.next
+
+        return False
+
+    @property
+    def work_experience_processed(self):
+        cur_application_step = self.head_step
+        while cur_application_step:
+            if isinstance(self.head_step, WorkExperienceSection):
                 return True
             cur_application_step = cur_application_step.next
 
@@ -433,10 +444,10 @@ class ApplicationPage:
                 description="Application field's exact title / question mentioned on the webpage, without any "
                 "modification.",
             )
-            field_question: Optional[str] = Field(
+            field_question: str = Field(
                 ...,
-                description="If field title on its own is not self explanatory then modify it so that it makes sense as"
-                " a question.",
+                description="Field title on its own may not be self explanatory so modify it, if needed, so that it "
+                "makes sense as a question. Otherwise respond same as field title.",
             )
             field_category: FieldCategory = Field(
                 ...,
@@ -465,6 +476,11 @@ class ApplicationPage:
                 self._identify_email_field(job_field)
             elif job_field.field_category.value == "tnc":
                 self._identify_tnc_field(job_field)
+            elif (
+                job_field.field_category.value == "work_experience"
+                and not self.work_experience_processed
+            ):
+                self._identify_work_experience_section()
             else:
                 self._complete_application_field_identification(job_field)
 
@@ -527,3 +543,8 @@ class ApplicationPage:
         application_field_component = application_field.get_field_component()
         application_field_component.proceed()
         self._update_steps(application_field_component)
+
+    def _identify_work_experience_section(self):
+        work_experience_section = WorkExperienceSection(parent_application_page=self)
+        work_experience_section.proceed()
+        self._update_steps(work_experience_section)

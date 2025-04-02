@@ -25,6 +25,9 @@ def get_page_component_class_name(class_name):
     module_name = pascal_to_snake_casing(class_name)
     if class_name == "VerifyAccount":
         module_name = "login"
+    elif class_name == "WorkExperience":
+        module_name = "work_experience_section"
+
     try:
         return globals()[class_name]
     except KeyError:
@@ -243,6 +246,75 @@ class ApplicationField:
                 .get("phone", {})
                 .get("country_code")
             )
+        elif field_category.startswith("job_title"):
+            experience_no = int(field_category.split("__")[-1])
+            work_info = user.parsed_resume.get("work_experience", [])
+            if experience_no < len(work_info):
+                work_info = work_info[experience_no - 1]
+                return work_info.get("job_title")
+
+        elif field_category.startswith("company_name"):
+            experience_no = int(field_category.split("__")[-1])
+            work_info = user.parsed_resume.get("work_experience", [])
+            if experience_no < len(work_info):
+                work_info = work_info[experience_no - 1]
+                return work_info.get("company_name")
+
+        elif field_category.startswith("location"):
+            experience_no = int(field_category.split("__")[-1])
+            work_info = user.parsed_resume.get("work_experience", [])
+            if experience_no < len(work_info):
+                work_info = work_info[experience_no - 1]
+                return work_info.get("location")
+
+        elif field_category.startswith("start_date"):
+            experience_no = int(field_category.split("__")[-1])
+            work_info = user.parsed_resume.get("work_experience", [])
+            if experience_no < len(work_info):
+                work_info = work_info[experience_no - 1]
+                return work_info.get("start_date")
+
+        elif field_category.startswith("end_date"):
+            experience_no = int(field_category.split("__")[-1])
+            work_info = user.parsed_resume.get("work_experience", [])
+            if experience_no < len(work_info):
+                work_info = work_info[experience_no - 1]
+                return work_info.get("end_date")
+
+        elif field_category.startswith("responsibilities"):
+            experience_no = int(field_category.split("__")[-1])
+            work_info = user.parsed_resume.get("work_experience", [])
+            if experience_no < len(work_info):
+                work_info = work_info[experience_no - 1]
+                return work_info.get("responsibilities")
+
+        elif field_category.startswith("achievements"):
+            experience_no = int(field_category.split("__")[-1])
+            work_info = user.parsed_resume.get("work_experience", [])
+            if experience_no < len(work_info):
+                work_info = work_info[experience_no - 1]
+                return work_info.get("achievements")
+
+        elif field_category.startswith("experience_related_url"):
+            experience_no = int(field_category.split("__")[-1])
+            work_info = user.parsed_resume.get("work_experience", [])
+            if experience_no < len(work_info):
+                work_info = work_info[experience_no - 1]
+                return work_info.get("experience_related_url")
+
+        elif field_category.startswith("industry"):
+            experience_no = int(field_category.split("__")[-1])
+            work_info = user.parsed_resume.get("work_experience", [])
+            if experience_no < len(work_info):
+                work_info = work_info[experience_no - 1]
+                return work_info.get("industry")
+
+        elif field_category.startswith("employment_type"):
+            experience_no = int(field_category.split("__")[-1])
+            work_info = user.parsed_resume.get("work_experience", [])
+            if experience_no < len(work_info):
+                work_info = work_info[experience_no - 1]
+                return work_info.get("employment_type")
 
         return None
 
