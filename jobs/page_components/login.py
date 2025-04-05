@@ -52,7 +52,7 @@ class Login(PageComponent):
             self._identify_login_section_steps()
 
             self.is_component_functional = True
-            self.parent_application_page.redo_steps()
+            self.parent_application_page.run_steps()
 
             is_login_successful, login_failure_reason = self.is_login_successful
             if is_login_successful:
@@ -104,7 +104,7 @@ class Login(PageComponent):
                 )
                 self.verify_account.proceed()
 
-        self.parent_application_page.redo_steps(stop_step=self)
+        self.parent_application_page.run_steps(stop_step=self)
         return
 
     def _identify_login_section_steps(self):
@@ -118,7 +118,7 @@ class Login(PageComponent):
                 logger.info(
                     f"Retrying login to extract resend verification email button..."
                 )
-                self.parent_application_page.redo_steps()
+                self.parent_application_page.run_steps()
 
                 if self.first_step == "click_to_open_form_input":
                     self.login_form_input_button.proceed()

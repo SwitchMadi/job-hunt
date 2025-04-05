@@ -23,6 +23,7 @@ from jobs.page_components.next_page import NextPage
 from jobs.page_components.work_experience_section import WorkExperienceSection
 from jobs.page_components.education_section import EducationSection
 from jobs.page_components.resume_upload import ResumeUpload
+from jobs.page_components.submit_application import SubmitApplication
 
 logger = get_logger(name="job")
 driver = get_selenium_driver()
@@ -45,6 +46,7 @@ class Job:
         self.hash_id = job["job_hash_id"]
         self.title = job["title"]
         self.company = job["company"]
+        self.is_active = job["is_active"]
 
         self.user = user
         self.application_page = ApplicationPage(url=url, parent_job=self)
@@ -84,6 +86,8 @@ class ApplicationPage:
 
         self.account_verification_otp = None
 
+        self.steps_identified = False
+        self.is_application_feasible = True
         self._get_application_steps()
 
     def _get_application_steps(self):
@@ -105,6 +109,9 @@ class ApplicationPage:
             while next_step:
                 self.tail_step = next_step
                 next_step = next_step.next
+
+            self.steps_identified = application_steps["is_identification_complete"]
+            self.is_application_feasible = application_steps["is_application_feasible"]
 
             return True
         else:
@@ -248,7 +255,7 @@ class ApplicationPage:
 
         return
 
-    def redo_steps(self, stop_step=None):
+    def run_steps(self, stop_step=None):
         logger.info("Re-doing all steps...")
         driver.get(self.url)
         disable_browser_alerts()
@@ -264,23 +271,67 @@ class ApplicationPage:
 
         return
 
+    def apply(self):
+        if not self.is_application_feasible:
+            logger.exception(
+                f"Application is not possible for job {self.parent_job.title}. URL - {self.url}"
+            )
+            return
+
+        if not self.steps_identified:
+            self.steps_identified = self._identify_application_steps()
+
+            application_steps_query = f"""
+                                            select *
+                                            from jobs.application_steps
+                                            where job_id = {self.parent_job.id}
+                                            and is_active;
+                                       """
+            current_application_steps = get_sql_query_output(application_steps_query)
+            if current_application_steps:
+                query = f"""
+                            update jobs.application_steps
+                            set is_identification_complete = true, 
+                                is_application_feasible = {"true" if self.steps_identified else "false"}
+                            where job_id = {self.parent_job.id}
+                            and is_active;
+                         """
+            else:
+                query = f"""
+                            INSERT INTO jobs.application_steps
+                            (job_id, is_identification_complete, is_application_feasible)
+                            VALUES ({self.parent_job.id}, true, {"true" if self.steps_identified else "false"});
+                         """
+
+            execute_sql_query(query)
+
+            if not self.steps_identified:
+                logger.exception(
+                    f"Could not identify application steps for job {self.parent_job.title}. URL - {self.url}"
+                )
+                return
+
+        self.run_steps()
+        return
+
     # Identify job page components
-    def identify_application_steps(self):
+    def _identify_application_steps(self):
         global driver
         driver.get(self.url)
         disable_browser_alerts()
         time.sleep(2)
 
         if self.head_step:
-            self.redo_steps()
+            self.run_steps()
 
-        identification_completed = False
-        while not identification_completed:
+        while True:
             elements = self._identify_current_page_elements()
             if elements:
-                self._act_on_current_page_elements(elements)
+                elements_processed = self._act_on_current_page_elements(elements)
+                if elements_processed is not None:
+                    return elements_processed
             else:
-                identification_completed = True
+                return False
 
     def _identify_current_page_elements(self):
         global driver
@@ -313,7 +364,7 @@ class ApplicationPage:
                 description="There is button to go to next section of application. Don't consider submit application "
                 "button as next button.",
             )
-            submit_button: IsElementPresent = Field(
+            submit_application_button: IsElementPresent = Field(
                 ...,
                 description="There is button to go to submit the application. Button for going to next page is not "
                 "submit button.",
@@ -324,7 +375,7 @@ class ApplicationPage:
             )
             already_applied_alert: IsElementPresent = Field(
                 ...,
-                description="Page suggests that user has already applied to the job",
+                description="Page suggests that user has already applied to the job previously.",
             )
             application_fields: IsElementPresent = Field(
                 ...,
@@ -340,8 +391,8 @@ class ApplicationPage:
             )
             expand_collapse_section: IsElementPresent = Field(
                 ...,
-                description="Job page has sections which are in collapsed form (arrow, + buttons etc. ) and need to be "
-                "expanded to interact with",
+                description="Job page has sections which are in collapsed form (arrow, + buttons etc.) and need to be "
+                "expanded to fill data into job fields",
             )
             cookies_prompt: IsElementPresent = Field(
                 ...,
@@ -368,17 +419,51 @@ class ApplicationPage:
 
         if elements.job_not_available_alert.value:
             logger.warn(f"Job is not available anymore.")
+            self.parent_job.is_active = False
+
+            update_query = f"""
+                update jobs.jobs
+                set is_active = false
+                where id = {self.parent_job.id};
+            """
+            execute_sql_query(update_query)
+
             return False
 
         if elements.captcha.value:
             logger.warn(f"There is captcha on the page so cannot move forward.")
+            self.is_application_feasible = False
+
+            application_steps_query = f"""
+                                            select *
+                                            from jobs.application_steps
+                                            where job_id = {self.parent_job.id}
+                                            and is_active;
+                                       """
+            current_application_steps = get_sql_query_output(application_steps_query)
+            if current_application_steps:
+                query = f"""
+                            update jobs.application_steps
+                            set is_application_feasible = false, is_identification_complete = true
+                            where job_id = {self.parent_job.id}
+                            and is_active;
+                         """
+            else:
+                query = f"""
+                            INSERT INTO jobs.application_steps
+                            (job_id, is_application_feasible, is_identification_complete)
+                            VALUES ({self.parent_job.id}, false, true);
+                         """
+
+            execute_sql_query(query)
+
             return False
 
         if elements.cookies_prompt.value:
             self._identify_cookies_consent()
 
         if elements.mandatory_account_login_signup.value:
-            pass
+            self._extract_login_step_details()
 
         if elements.account_verification.value:
             self._identify_verify_email_field()
@@ -392,7 +477,7 @@ class ApplicationPage:
             if is_start_application_functional:
                 latest_elements = self._identify_current_page_elements()
                 if latest_elements:
-                    self._act_on_current_page_elements(latest_elements)
+                    return self._act_on_current_page_elements(latest_elements)
 
                 return
 
@@ -404,7 +489,7 @@ class ApplicationPage:
             if is_manual_input_functional:
                 latest_elements = self._identify_current_page_elements()
                 if latest_elements:
-                    self._act_on_current_page_elements(latest_elements)
+                    return self._act_on_current_page_elements(latest_elements)
 
                 return
 
@@ -418,6 +503,10 @@ class ApplicationPage:
         # last action after all on page components
         if elements.next_button.value:
             self._identify_next_page_button()
+
+        if elements.submit_application_button.value:
+            self._identify_submit_application_button()
+            return True
 
     # Identify application fields
     def _identify_application_fields(self):
@@ -479,9 +568,7 @@ class ApplicationPage:
 
     def _act_on_job_fields(self, job_fields):
         for job_field in job_fields:
-            if job_field.field_category.value == "email":
-                self._identify_email_field(job_field)
-            elif job_field.field_category.value == "tnc":
+            if job_field.field_category.value == "tnc":
                 self._identify_tnc_field(job_field)
             elif (
                 job_field.field_category.value == "work_experience"
@@ -574,3 +661,8 @@ class ApplicationPage:
         resume_upload_button = ResumeUpload(title=title, parent_application_page=self)
         resume_upload_button.proceed()
         self._update_steps(resume_upload_button)
+
+    def _identify_submit_application_button(self):
+        submit_application_button = SubmitApplication(parent_application_page=self)
+        submit_application_button.proceed()
+        self._update_steps(submit_application_button)
