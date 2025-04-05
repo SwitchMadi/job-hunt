@@ -1,6 +1,5 @@
 import time
 from pydantic import BaseModel, Field
-from typing import Optional
 from enum import Enum
 import json
 
@@ -23,6 +22,7 @@ from jobs.page_components.start_application import StartApplication
 from jobs.page_components.next_page import NextPage
 from jobs.page_components.work_experience_section import WorkExperienceSection
 from jobs.page_components.education_section import EducationSection
+from jobs.page_components.resume_upload import ResumeUpload
 
 logger = get_logger(name="job")
 driver = get_selenium_driver()
@@ -447,6 +447,7 @@ class ApplicationPage:
             work_experience = "work_experience"
             education = "education"
             resume_upload = "resume_upload"
+            cover_letter = "cover_letter"
             other = "other"
 
         class ApplicationFieldInfo(BaseModel):
@@ -497,6 +498,10 @@ class ApplicationPage:
                 and not self.education_section_processed
             ):
                 self._identify_education_section()
+            elif job_field.field_category.value == "cover_letter":
+                pass
+            elif job_field.field_category.value == "resume_upload":
+                self._identify_resume_upload_field(job_field.field_title)
             else:
                 self._complete_application_field_identification(job_field)
 
@@ -569,3 +574,8 @@ class ApplicationPage:
         education_section = EducationSection(parent_application_page=self)
         education_section.proceed()
         self._update_steps(education_section)
+
+    def _identify_resume_upload_field(self, title):
+        resume_upload_button = ResumeUpload(title=title, parent_application_page=self)
+        resume_upload_button.proceed()
+        self._update_steps(resume_upload_button)
