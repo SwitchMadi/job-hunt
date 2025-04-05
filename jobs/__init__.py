@@ -16,7 +16,6 @@ from jobs.page_components import ApplicationField
 from jobs.page_components.application_data_source import ApplicationDataSource
 from jobs.page_components.cookies_consent import CookiesConsent
 from jobs.page_components.terms_and_conditions import TermsAndConditions
-from jobs.page_components.email import Email
 from jobs.page_components.login import Login, VerifyAccount
 from jobs.page_components.start_application import StartApplication
 from jobs.page_components.next_page import NextPage
@@ -613,11 +612,6 @@ class ApplicationPage:
         login_step = Login(parent_application_page=self)
         login_step.proceed()
         self._update_steps(login_step)
-
-    def _identify_email_field(self, job_field):
-        email_field_step = Email(parent_application_page=self, field_info=job_field)
-        email_field_step.proceed()
-        self._update_steps(email_field_step)
 
     def _identify_tnc_field(self, job_field):
         tnc_field_step = TermsAndConditions(
