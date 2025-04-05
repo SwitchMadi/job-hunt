@@ -72,7 +72,7 @@ class ApplicationDataSource(PageComponent):
                 self.field_component = Button(
                     x_path=manual_data_input_option.manual_data_input_x_path,
                     button_type="select_application_data_source",
-                    parent_application_page=self,
+                    parent_application_page=self.parent_application_page,
                 )
 
                 self.field_component.proceed()

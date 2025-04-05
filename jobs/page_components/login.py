@@ -756,7 +756,7 @@ class VerifyAccount(PageComponent):
                     self.verify_button = Button(
                         x_path=component.verify_button_x_path,
                         button_type="verify_otp",
-                        parent_application_page=self,
+                        parent_application_page=self.parent_application_page,
                     )
 
                     self.is_component_functional = True

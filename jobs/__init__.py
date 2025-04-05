@@ -437,13 +437,8 @@ class ApplicationPage:
             email = "email"
             phone_country_code = "phone_country_code"
             phone_number = "phone_number"
-            address = "address"
             password = "password"
             tnc = "tnc"
-            work_permit = "work_permit"
-            previous_association_with_the_company = (
-                "previous_association_with_the_company"
-            )
             work_experience = "work_experience"
             education = "education"
             resume_upload = "resume_upload"
