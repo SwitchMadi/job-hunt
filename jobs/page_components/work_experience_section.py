@@ -304,7 +304,7 @@ class WorkExperienceSection(PageComponent):
                 work_ex_fields = []
                 for field in fields.work_experience_fields:
                     application_field = ApplicationField(
-                        parent_application_page=self,
+                        parent_application_page=self.parent_application_page,
                         title=field.field_title,
                         question=field.field_question,
                         category=field.field_category.value,

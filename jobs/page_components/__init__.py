@@ -27,6 +27,8 @@ def get_page_component_class_name(class_name):
         module_name = "login"
     elif class_name == "WorkExperience":
         module_name = "work_experience_section"
+    elif class_name == "Education":
+        module_name = "education_section"
 
     try:
         return globals()[class_name]

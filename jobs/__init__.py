@@ -22,6 +22,7 @@ from jobs.page_components.login import Login, VerifyAccount
 from jobs.page_components.start_application import StartApplication
 from jobs.page_components.next_page import NextPage
 from jobs.page_components.work_experience_section import WorkExperienceSection
+from jobs.page_components.education_section import EducationSection
 
 logger = get_logger(name="job")
 driver = get_selenium_driver()
@@ -163,10 +164,20 @@ class ApplicationPage:
         return False
 
     @property
-    def work_experience_processed(self):
+    def work_experience_section_processed(self):
         cur_application_step = self.head_step
         while cur_application_step:
             if isinstance(self.head_step, WorkExperienceSection):
+                return True
+            cur_application_step = cur_application_step.next
+
+        return False
+
+    @property
+    def education_section_processed(self):
+        cur_application_step = self.head_step
+        while cur_application_step:
+            if isinstance(self.head_step, EducationSection):
                 return True
             cur_application_step = cur_application_step.next
 
@@ -478,9 +489,14 @@ class ApplicationPage:
                 self._identify_tnc_field(job_field)
             elif (
                 job_field.field_category.value == "work_experience"
-                and not self.work_experience_processed
+                and not self.work_experience_section_processed
             ):
                 self._identify_work_experience_section()
+            elif (
+                job_field.field_category.value == "education"
+                and not self.education_section_processed
+            ):
+                self._identify_education_section()
             else:
                 self._complete_application_field_identification(job_field)
 
@@ -548,3 +564,8 @@ class ApplicationPage:
         work_experience_section = WorkExperienceSection(parent_application_page=self)
         work_experience_section.proceed()
         self._update_steps(work_experience_section)
+
+    def _identify_education_section(self):
+        education_section = EducationSection(parent_application_page=self)
+        education_section.proceed()
+        self._update_steps(education_section)
