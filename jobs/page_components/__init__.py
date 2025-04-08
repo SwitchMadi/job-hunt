@@ -70,7 +70,7 @@ class ApplicationField:
             f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
             f"The webpage has following application field for applying to the job -\n"
             f"Field title - {self.title}\n"
-            f"Field category - {self.category.value}\n"
+            f"Field category - {self.category}\n"
             f"Analyse the whole HTML very carefully for extracting XPath and other info of the application field."
         )
 
