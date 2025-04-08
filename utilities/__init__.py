@@ -9,6 +9,8 @@ from cryptography.fernet import Fernet
 import dotenv
 import re
 
+from utilities.selenium import get_selenium_driver
+
 
 dotenv.load_dotenv()
 
@@ -85,23 +87,165 @@ def unzip_directory(zip_file_path, extract_dir):
     shutil.unpack_archive(zip_file_path, extract_dir)
 
 
+def get_computed_dimensions(tag):
+    """
+    Attempts to fetch computed dimensions (offsetWidth and offsetHeight)
+    of the element in the live DOM via Selenium's driver.
+
+    First, it tries to locate the element by its id; if not available or not unique,
+    it builds a CSS selector using a set of allowed attributes. Returns a tuple
+    (width, height) if a unique element is identified, or None otherwise.
+    """
+
+    driver = get_selenium_driver()
+
+    # First try: use ID if available
+    try:
+        if tag.attrs and tag.has_attr("id"):
+            el = driver.find_element("id", tag["id"])
+            width = driver.execute_script("return arguments[0].offsetWidth;", el)
+            height = driver.execute_script("return arguments[0].offsetHeight;", el)
+            return (width, height)
+    except Exception:
+        pass
+
+    # Allowed attributes from which we build a custom CSS selector.
+    allowed_attrs = [
+        "class",
+        "href",
+        "type",
+        "name",
+        "value",
+        "display",
+        "placeholder",
+        "alt",
+        "title",
+        "role",
+        "aria-label",
+        "aria-labelledby",
+        "aria-expanded",
+        "data-automation-id",
+        "data-id",
+    ]
+
+    # Build CSS selector using the tag name.
+    selector = tag.name
+    # For each allowed attribute, append a CSS condition if present.
+    for attr in allowed_attrs:
+        if tag.attrs and tag.has_attr(attr):
+            value = tag[attr]
+            if isinstance(value, list):
+                # For attributes like "class" that can be a list, add each class.
+                for cls in value:
+                    selector += f".{cls}"
+            else:
+                selector += f"[{attr}='{value}']"
+
+    # Attempt to find the element with our generated selector
+    try:
+        elements = driver.find_elements("css selector", selector)
+        if len(elements) == 1:
+            el = elements[0]
+            width = driver.execute_script("return arguments[0].offsetWidth;", el)
+            height = driver.execute_script("return arguments[0].offsetHeight;", el)
+            return (width, height)
+    except Exception:
+        pass
+
+    return None
+
+
+def has_zero_dimension(tag):
+    """
+    Returns True if the tag appears to have zero width or zero height.
+
+    Checks inline style and direct attributes first to avoid unnecessary driver calls.
+    If these don't resolve the dimension, it then tries to get the computed dimensions
+    from the live DOM using get_computed_dimensions().
+    """
+    # Check inline style if provided.
+    if tag.attrs and tag.has_attr("style"):
+        style = tag["style"]
+        style_props = {}
+        for decl in style.split(";"):
+            decl = decl.strip()
+            if ":" in decl:
+                prop, val = decl.split(":", 1)
+                style_props[prop.strip().lower()] = val.strip().lower()
+        for dimension in ("width", "height"):
+            if dimension in style_props:
+                try:
+                    # Extract digits and the period to form a number.
+                    numeric_val = float(
+                        "".join(
+                            c for c in style_props[dimension] if c.isdigit() or c == "."
+                        )
+                    )
+                    if numeric_val == 0:
+                        return True
+                except Exception:
+                    pass
+
+    # Check for explicit width/height attributes.
+    for attr in ("width", "height"):
+        if tag.attrs and tag.has_attr(attr):
+            try:
+                if float(tag[attr]) == 0:
+                    return True
+            except Exception:
+                pass
+
+    # Fallback: if we can determine computed dimensions from Selenium.
+    dims = get_computed_dimensions(tag)
+    if dims is not None:
+        width, height = dims
+        if width == 0 or height == 0:
+            return True
+
+    return False
+
+
 def minify_html_for_gpt_prompt(html_content):
     # Parse the HTML content
     soup = BeautifulSoup(html_content, "html.parser")
 
     # Find all elements with style attribute
-    for tag in soup.find_all(style=True):
+    for tag in soup.find_all(True):
         try:
-            if tag and tag.has_attr("style"):
-                style = tag["style"].lower()
-                if "display:none" in style.replace(" ", ""):
-                    tag.decompose()  # Remove element and its children
+            if tag and (
+                (
+                    tag.attrs
+                    and tag.has_attr("type")
+                    and tag["type"].strip().lower() == "hidden"
+                )
+                or (
+                    tag.attrs
+                    and tag.has_attr("class")
+                    and any(
+                        cls.strip().lower() == "hidden" for cls in tag.get("class", [])
+                    )
+                )
+                or (
+                    tag.attrs
+                    and tag.has_attr("style")
+                    and (
+                        tag["style"].strip().lower() == "hidden"
+                        or "display:none" in tag["style"].replace(" ", "").lower()
+                    )
+                )
+            ):
+                tag.decompose()  # Remove element and its children
         except TypeError:
             pass
 
     # Remove script and style tags
     for script_or_style in soup(["script", "style"]):
         script_or_style.decompose()
+
+    # Remove any element that appears to have zero width or height.
+    for tag in soup.find_all(True):
+        if has_zero_dimension(tag):
+            tag.decompose()
 
     # Remove comments
     for comment in soup.findAll(text=lambda text: isinstance(text, Comment)):
