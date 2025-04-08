@@ -356,7 +356,10 @@ class ApplicationPage:
             )
             start_application_button: IsElementPresent = Field(
                 ...,
-                description="There is button to start applying to the job. It's not next step button.",
+                description="There is button to start applying to the job. It should have word like start or something"
+                " similar to start. It can be just one word like 'Apply' as well also but definitely not "
+                "'Apply with <some_platform>' kind of text. It's not next step or submit application button"
+                " or some other button.",
             )
             next_button: IsElementPresent = Field(
                 ...,
@@ -638,6 +641,10 @@ class ApplicationPage:
             category=job_field.field_category.value,
         )
         application_field_component = application_field.get_field_component()
+
+        if not application_field_component:
+            return
+
         application_field_component.proceed()
         self._update_steps(application_field_component)
 
