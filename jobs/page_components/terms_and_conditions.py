@@ -43,7 +43,8 @@ class TermsAndConditions(PageComponent):
         class TnCField(BaseModel):
             x_path: str = Field(
                 ...,
-                description="XPath of TnC field",
+                description="XPath of TnC field which can be used in selenium chrome driver to search the field. Don't "
+                "use HTML hierarchy to construct XPath.",
             )
 
         tnc_field_found, tnc_field = get_gpt_response(

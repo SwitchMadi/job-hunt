@@ -41,7 +41,9 @@ class CookiesConsent(PageComponent):
         class ConsentAcceptanceButton(BaseModel):
             x_path: str = Field(
                 ...,
-                description="For the cookies consent, XPath of the button to accept to all cookies.",
+                description="For the cookies consent, XPath of the button to accept to all cookies which can be used in"
+                " selenium chrome driver to search the button. Don't use HTML hierarchy to construct XPath"
+                ".",
             )
 
         button_found, button = get_gpt_response(

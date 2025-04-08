@@ -68,7 +68,8 @@ class ResumeUpload(PageComponent):
             )
             x_path: str = Field(
                 ...,
-                description="XPath of the UI element to upload the resume",
+                description="XPath of the button to upload the resume which can be used in selenium chrome driver to "
+                "search the button. Don't use HTML hierarchy to construct XPath.",
             )
 
         button_found, button = get_gpt_response(

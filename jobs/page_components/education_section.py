@@ -170,7 +170,9 @@ class EducationSection(PageComponent):
             )
             field_x_path: str = Field(
                 ...,
-                description="XPath of the education qualification field. XPath of the first field if there are many.",
+                description="XPath of the education qualification field which can be used in selenium chrome driver to "
+                "search the field. Don't use HTML hierarchy to construct XPath. XPath of the first field if"
+                " there are many.",
             )
 
         class EducationSectionFields(BaseModel):

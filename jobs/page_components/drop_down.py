@@ -154,7 +154,11 @@ class DropDown(PageComponent):
 
         class Option(BaseModel):
             text: str = Field(..., description="Text shown in the dropdown option")
-            x_path: str = Field(..., description="XPath of the option")
+            x_path: str = Field(
+                ...,
+                description="XPath of the option which can be used in selenium chrome driver to "
+                "search the option. Don't use HTML hierarchy to construct XPath.",
+            )
 
         class DropdownOptions(BaseModel):
             options: list[Option]

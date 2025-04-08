@@ -41,7 +41,8 @@ class StartApplication(PageComponent):
         class StartApplicationButton(BaseModel):
             x_path: str = Field(
                 ...,
-                description="XPath of the UI element to start the job application",
+                description="XPath of the button to start the job application which can be used in selenium chrome "
+                "driver to search the button. Don't use HTML hierarchy to construct XPath.",
             )
 
         button_found, button = get_gpt_response(

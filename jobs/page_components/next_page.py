@@ -40,7 +40,8 @@ class NextPage(PageComponent):
         class NextPageButton(BaseModel):
             x_path: str = Field(
                 ...,
-                description="XPath of next page/screen button",
+                description="XPath of next page/screen button which can be used in selenium chrome driver to search the"
+                " button. Don't use HTML hierarchy to construct XPath.",
             )
 
         next_page_button_found, next_page_button = get_gpt_response(

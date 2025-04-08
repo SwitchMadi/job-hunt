@@ -169,8 +169,9 @@ class DateField(PageComponent):
         class Date(BaseModel):
             x_path: str = Field(
                 ...,
-                description="XPath of the 27th date of the month currently visible in the date "
-                "picker",
+                description="XPath of the 27th date of the month currently visible in the date picker which can be used"
+                " in selenium chrome driver to search the 27th date. Don't use HTML hierarchy to construct "
+                "XPath.",
             )
 
         date_found, date = get_gpt_response(

@@ -58,7 +58,8 @@ class ApplicationDataSource(PageComponent):
             manual_data_input_x_path: str = Field(
                 ...,
                 description="If the is option to select manual data input strategy then XPath of the button to opt for "
-                "manually inputting application data",
+                "manually inputting application data which can be used in selenium chrome driver to search the button. "
+                "Don't use HTML hierarchy to construct XPath.",
             )
 
         manual_data_input_option_searched, manual_data_input_option = get_gpt_response(

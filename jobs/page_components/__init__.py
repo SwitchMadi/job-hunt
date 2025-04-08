@@ -95,12 +95,19 @@ class ApplicationField:
             text: str = Field(
                 ..., description="Text of the checkbox / radio button option"
             )
-            x_path: str = Field(..., description="XPath of the checkbox / radio button")
+            x_path: str = Field(
+                ...,
+                description="XPath of the checkbox / radio button which can be used in selenium "
+                "chrome driver to search the checkbox / radio button. Don't use HTML "
+                "hierarchy to construct XPath.",
+            )
 
         class ApplicationFieldInfo(BaseModel):
             x_path: str = Field(
                 ...,
-                description="XPath of the application field. XPath of the first field if there are many.",
+                description="XPath of the application field which can be used in selenium chrome driver to search the "
+                "application field. Don't use HTML hierarchy to construct XPath. XPath of the first field "
+                "if there are many.",
             )
             field_type: FieldType = Field(
                 ...,

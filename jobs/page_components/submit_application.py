@@ -41,7 +41,8 @@ class SubmitApplication(PageComponent):
         class SubmitApplicationButton(BaseModel):
             x_path: str = Field(
                 ...,
-                description="XPath of next submit application button",
+                description="XPath of next submit application button which can be used in selenium chrome driver to "
+                "search the button. Don't use HTML hierarchy to construct XPath.",
             )
 
         button_found, button = get_gpt_response(

@@ -160,11 +160,15 @@ class Login(PageComponent):
             )
             username_x_path: str = Field(
                 ...,
-                description="If at enter_credentials stage then XPath of email / username input field",
+                description="If at enter_credentials stage then XPath of email / username input field which can be used"
+                " in selenium chrome driver to search the input field. Don't use HTML hierarchy to "
+                "construct XPath.",
             )
             password_x_path: str = Field(
                 ...,
-                description="If at enter_credentials stage then XPath of password input field",
+                description="If at enter_credentials stage then XPath of password input field which can be used in "
+                "selenium chrome driver to search the input field. Don't use HTML hierarchy to construct "
+                "XPath.",
             )
             login_security_enabled: LoginSecurityEnabled = Field(
                 ...,
@@ -173,12 +177,15 @@ class Login(PageComponent):
             )
             login_x_path: str = Field(
                 ...,
-                description="If at enter_credentials stage then XPath of login button where display is not None",
+                description="If at enter_credentials stage then XPath of login button where display is not None. The "
+                "Xpath which can be used in selenium chrome driver to search the button. Don't use HTML "
+                "hierarchy to construct XPath.",
             )
             open_form_input_x_path: str = Field(
                 ...,
-                description="If at click_to_open_form_input stage then XPath of "
-                "the button which will open username & password form",
+                description="If at click_to_open_form_input stage then XPath of the button which will open username & "
+                "password form. The Xpath which can be used in selenium chrome driver to search the button."
+                " Don't use HTML hierarchy to construct XPath.",
             )
 
         while self.login_username_input is None:
@@ -251,7 +258,8 @@ class Login(PageComponent):
         class CreateAccountButton(BaseModel):
             create_account_x_path: str = Field(
                 ...,
-                description="XPath of create account button",
+                description="XPath of create account button which can be used in selenium chrome driver to search the "
+                "button. Don't use HTML hierarchy to construct XPath.",
             )
 
         create_account_button_found, create_account_button = get_gpt_response(
@@ -281,15 +289,18 @@ class Login(PageComponent):
             class CreateAccountSteps(BaseModel):
                 username_x_path: str = Field(
                     ...,
-                    description="XPath of email / username input field",
+                    description="XPath of email / username input field which can be used in selenium chrome driver to "
+                    "search the input field. Don't use HTML hierarchy to construct XPath.",
                 )
                 password_x_path: str = Field(
                     ...,
-                    description="XPath of new password input field",
+                    description="XPath of new password input field which can be used in selenium chrome driver to "
+                    "search the input field. Don't use HTML hierarchy to construct XPath.",
                 )
                 confirm_password_x_path: str = Field(
                     ...,
-                    description="XPath of confirm password input field",
+                    description="XPath of confirm password input field which can be used in selenium chrome driver to "
+                    "search the input field. Don't use HTML hierarchy to construct XPath.",
                 )
                 create_account_security_enabled: CreateAccountSecurityEnabled = Field(
                     ...,
@@ -298,13 +309,16 @@ class Login(PageComponent):
                 )
                 create_account_x_path: str = Field(
                     ...,
-                    description="XPath of create account / submit button where display is not None",
+                    description="XPath of create account / submit button where display is not None. The Xpath which can"
+                    " be used in selenium chrome driver to search the button. Don't use HTML hierarchy to "
+                    "construct XPath.",
                 )
                 mandatory_opt_in_checkbox_x_path: str = Field(
                     ...,
                     description="XPath of just 1 mandatory opt-in / consent checkbox that must be clicked in order to"
-                    "create account. Return just '' (empty string) if mandatory opt-in / consent checkbox "
-                    "not present.",
+                    "create account. The Xpath which can be used in selenium chrome driver to search the checkbox. "
+                    "Don't use HTML hierarchy to construct XPath. Return just '' (empty string) if "
+                    "mandatory opt-in / consent checkbox not present.",
                 )
 
             create_account_steps_found, create_account_steps = get_gpt_response(
@@ -423,7 +437,8 @@ class Login(PageComponent):
         class ResendVerificationEmailButton(BaseModel):
             resend_verification_email_x_path: str = Field(
                 ...,
-                description="XPath of button to resend verification email",
+                description="XPath of button to resend verification email which can be used in selenium chrome driver "
+                "to search the button. Don't use HTML hierarchy to construct XPath.",
             )
 
         resend_verification_email_button_found, resend_verification_email_button = (
@@ -723,12 +738,14 @@ class VerifyAccount(PageComponent):
                 ...,
                 description="If it is verification page then what is XPath of text box for OTP submission. If there are"
                 " multiple text boxes for each OTP/code digit then give XPath of the first text box for "
-                "first digit.",
+                "first digit. Also give XPath which can be used in selenium chrome driver to search the text box. Don't"
+                " use HTML hierarchy to construct XPath.",
             )
             verify_button_x_path: str = Field(
                 ...,
                 description="If it is verification page and there is any verify or submit button to submit the OTP/code"
-                " then XPath of the verify or submit button.",
+                " then XPath of the verify or submit button which can be used in selenium chrome driver to search the "
+                "button. Don't use HTML hierarchy to construct XPath.",
             )
 
         component_identified, component = get_gpt_response(
