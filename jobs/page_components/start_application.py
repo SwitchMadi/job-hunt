@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field
+from enum import Enum
 
 from jobs.page_components import PageComponent, get_page_component_class_name
 from jobs.page_components.button import Button
@@ -35,10 +36,25 @@ class StartApplication(PageComponent):
             f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title}."
             f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
             f"As a first step in the job application, I have to start application by clicking some button. Give XPath "
-            f"of the UI element clicking which I can start the job application."
+            f"of the UI element clicking which I can start the job application. Be very careful about following "
+            f"criteria -\n"
+            f"The button should have word like start or something similar to start. It can be just one word like "
+            f"'Apply' as well also but definitely not 'Apply with <some_platform_like_linkedin_etc>' kind of text. It's"
+            f" not next step or submit application button or some other button also. If there is not any start "
+            f"application kind of button you can find then don't return XPath."
         )
 
+        class IsStartApplicationButtonPresent(Enum):
+            true = True
+            false = False
+
         class StartApplicationButton(BaseModel):
+            is_start_application_button_present: IsStartApplicationButtonPresent = (
+                Field(
+                    ...,
+                    description="Does start application button exist based on prompt criteria?",
+                )
+            )
             x_path: str = Field(
                 ...,
                 description="XPath of the button to start the job application which can be used in selenium chrome "
@@ -52,22 +68,25 @@ class StartApplication(PageComponent):
         )
 
         if button_found:
-            self.field_component = Button(
-                x_path=button.x_path,
-                button_type="start_application",
-                parent_application_page=self.parent_application_page,
-            )
-
-            self.field_component.proceed()
-            if self.field_component.is_component_functional:
-                self.is_component_functional = True
-                self.component_identified = True
-            elif not retry:
-                self._identify(retry=True)
-            else:
-                raise Exception(
-                    f"Couldn't extract start application button for {self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+            if button.is_start_application_button_present.value:
+                self.field_component = Button(
+                    x_path=button.x_path,
+                    button_type="start_application",
+                    parent_application_page=self.parent_application_page,
                 )
+
+                self.field_component.proceed()
+                if self.field_component.is_component_functional:
+                    self.is_component_functional = True
+                    self.component_identified = True
+                elif not retry:
+                    self._identify(retry=True)
+                else:
+                    raise Exception(
+                        f"Couldn't extract start application button for {self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+                    )
+            else:
+                return
         else:
             raise Exception(
                 f"Couldn't extract start application button for {self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
