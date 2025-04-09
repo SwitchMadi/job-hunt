@@ -26,7 +26,7 @@ class Upload(PageComponent):
         self.prev = None
         self.is_component_functional = False
 
-    def proceed(self):
+    def proceed(self, retry=False):
         global driver
 
         if not self.file_path:

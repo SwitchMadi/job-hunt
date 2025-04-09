@@ -25,7 +25,7 @@ class CheckBox(PageComponent):
         self.next = None
         self.prev = None
 
-    def proceed(self):
+    def proceed(self, retry=False):
         info = ApplicationField.get_field_value(
             field_category=self.category,
             user=self.parent_application_page.parent_job.user,

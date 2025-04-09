@@ -38,7 +38,7 @@ def get_page_component_class_name(class_name):
 
 class PageComponent(ABC):
     @abstractmethod
-    def proceed(self):
+    def proceed(self, retry=False):
         pass
 
     @abstractmethod

@@ -47,7 +47,7 @@ class DateField(PageComponent):
         self.next = None
         self.prev = None
 
-    def proceed(self):
+    def proceed(self, retry=False):
         global driver
 
         if not self.date_format:

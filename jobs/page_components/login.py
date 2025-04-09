@@ -47,7 +47,7 @@ class Login(PageComponent):
 
         self.verify_account = None
 
-    def proceed(self):
+    def proceed(self, retry=False):
         if not self.login_steps_identified:
             self._identify_login_section_steps()
 
@@ -677,7 +677,7 @@ class VerifyAccount(PageComponent):
         self.prev = None
         self.is_component_functional = False
 
-    def proceed(self):
+    def proceed(self, retry=False):
         if not self.component_identified:
             self._identify()
 

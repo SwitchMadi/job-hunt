@@ -23,7 +23,7 @@ class StartApplication(PageComponent):
         self.prev = None
         self.is_component_functional = False
 
-    def proceed(self):
+    def proceed(self, retry=False):
         if not self.component_identified:
             return self._identify()
 

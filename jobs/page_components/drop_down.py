@@ -43,7 +43,7 @@ class DropDown(PageComponent):
         self.next = None
         self.prev = None
 
-    def proceed(self):
+    def proceed(self, retry=False):
         global driver
 
         option = None

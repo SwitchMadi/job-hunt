@@ -44,7 +44,7 @@ class EducationSection(PageComponent):
         self.next = None
         self.prev = None
 
-    def proceed(self):
+    def proceed(self, retry=False):
         curr_node = self.head
 
         user_education = self.parent_application_page.parent_job.user.parsed_resume.get(
@@ -381,7 +381,7 @@ class Education(PageComponent):
         self.next = None
         self.prev = None
 
-    def proceed(self):
+    def proceed(self, retry=False):
         for field in self.education_fields:
             question_backup = field.question
             field.question = (

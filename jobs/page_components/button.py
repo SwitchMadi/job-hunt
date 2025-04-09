@@ -27,7 +27,7 @@ class Button(PageComponent):
         self.attempt = 1
         self.max_attempt = 3
 
-    def proceed(self):
+    def proceed(self, retry=False):
         global driver
 
         try:
