@@ -294,7 +294,13 @@ class ApplicationPage:
 
         next_step = self.head_step
         while True:
-            next_step.proceed()
+
+            @retry()
+            def _():
+                return next_step.proceed()
+
+            _()
+
             next_step = next_step.next
 
             if next_step is None or next_step is stop_step:
