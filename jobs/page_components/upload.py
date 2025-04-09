@@ -4,6 +4,9 @@ from selenium.common import (
     InvalidElementStateException,
 )
 from selenium.webdriver.common.by import By
+import pyautogui
+import time
+import platform
 
 from jobs.page_components import PageComponent, logger, get_page_component_class_name
 from utilities.selenium import get_selenium_driver
@@ -39,7 +42,20 @@ class Upload(PageComponent):
             driver.execute_script(
                 "arguments[0].scrollIntoView({block: 'center'});", element
             )
-            element.send_keys(self.file_path)
+            element.click()
+            time.sleep(1)
+
+            pyautogui.write(self.file_path, interval=0.05)
+            time.sleep(1)
+
+            current_os = platform.system()
+            enter_count = 2 if current_os == "Darwin" else 1
+            for _ in range(enter_count):
+                pyautogui.press("enter")
+                time.sleep(1)
+
+            time.sleep(15)
+
             self.is_component_functional = True
         except (
             ElementNotInteractableException,
