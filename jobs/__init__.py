@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 from enum import Enum
 import json
 
-from utilities import minify_html_for_gpt_prompt, constants, generate_hash
+from utilities import minify_html_for_gpt_prompt, constants, generate_hash, retry
 from utilities.selenium import (
     get_selenium_driver,
     extract_iframe_urls,
@@ -627,11 +627,13 @@ class ApplicationPage:
                 self._complete_application_field_identification(job_field)
 
     # Identifying individual components
+    @retry()
     def _identify_cookies_consent(self):
         cookies_field = CookiesConsent(parent_application_page=self)
         cookies_field.proceed()
         self._update_steps(cookies_field)
 
+    @retry()
     def _identify_start_application_button(self):
         start_application_field = StartApplication(parent_application_page=self)
         start_application_field.proceed()
@@ -639,6 +641,7 @@ class ApplicationPage:
 
         return start_application_field.is_component_functional
 
+    @retry()
     def _extract_application_data_source_options_details(self):
         application_data_source_field = ApplicationDataSource(
             parent_application_page=self
@@ -648,11 +651,13 @@ class ApplicationPage:
 
         return application_data_source_field.is_component_functional
 
+    @retry()
     def _extract_login_step_details(self):
         login_step = Login(parent_application_page=self)
         login_step.proceed()
         self._update_steps(login_step)
 
+    @retry()
     def _identify_tnc_field(self, job_field):
         tnc_field_step = TermsAndConditions(
             parent_application_page=self, field_info=job_field
@@ -660,16 +665,19 @@ class ApplicationPage:
         tnc_field_step.proceed()
         self._update_steps(tnc_field_step)
 
+    @retry()
     def _identify_next_page_button(self):
         next_page_button = NextPage(parent_application_page=self)
         next_page_button.proceed()
         self._update_steps(next_page_button)
 
+    @retry()
     def _identify_verify_email_field(self):
         verify_account_component = VerifyAccount(parent_application_page=self)
         verify_account_component.proceed()
         self._update_steps(verify_account_component)
 
+    @retry()
     def _complete_application_field_identification(self, job_field):
         application_field = ApplicationField(
             parent_application_page=self,
@@ -685,21 +693,25 @@ class ApplicationPage:
         application_field_component.proceed()
         self._update_steps(application_field_component)
 
+    @retry()
     def _identify_work_experience_section(self):
         work_experience_section = WorkExperienceSection(parent_application_page=self)
         work_experience_section.proceed()
         self._update_steps(work_experience_section)
 
+    @retry()
     def _identify_education_section(self):
         education_section = EducationSection(parent_application_page=self)
         education_section.proceed()
         self._update_steps(education_section)
 
+    @retry()
     def _identify_resume_upload_field(self, title):
         resume_upload_button = ResumeUpload(title=title, parent_application_page=self)
         resume_upload_button.proceed()
         self._update_steps(resume_upload_button)
 
+    @retry()
     def _identify_submit_application_button(self):
         submit_application_button = SubmitApplication(parent_application_page=self)
         submit_application_button.proceed()

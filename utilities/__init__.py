@@ -8,6 +8,8 @@ import string
 from cryptography.fernet import Fernet
 import dotenv
 import re
+import time
+import functools
 
 from utilities.selenium import get_selenium_driver
 
@@ -375,3 +377,26 @@ def pascal_to_snake_casing(name: str) -> str:
     # Insert an underscore before each uppercase letter (except at the beginning)
     s1 = re.sub(r"(?<!^)(?=[A-Z])", "_", name)
     return s1.lower()
+
+
+def retry(times=3, delay=1, exceptions=(Exception,)):
+    from utilities.logging import get_logger
+
+    logger = get_logger("utilities")
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            for attempt in range(1, times + 1):
+                try:
+                    return func(*args, **kwargs)
+                except exceptions as e:
+                    logger.info(f"[{func.__name__}] Attempt {attempt} failed: {e}")
+                    if attempt < times:
+                        time.sleep(delay)
+                    else:
+                        raise
+
+        return wrapper
+
+    return decorator
