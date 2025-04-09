@@ -9,6 +9,7 @@ from selenium.common.exceptions import (
     InvalidSelectorException,
     StaleElementReferenceException,
     ElementClickInterceptedException,
+    ElementNotInteractableException,
 )
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
@@ -595,13 +596,19 @@ def clear_text_field(x_path):
 
     try:
         input_field.click()  # Ensure the field is focused
-    except ElementClickInterceptedException:
-        pass
+        time.sleep(0.5)
+    except (ElementClickInterceptedException, ElementNotInteractableException):
+        # Fallback: use JS to focus
+        driver.execute_script("arguments[0].focus();", input_field)
+        time.sleep(0.5)
 
-    # Select all text (Ctrl+A) and delete
-    input_field.send_keys(Keys.CONTROL + "a")
-    input_field.send_keys(Keys.DELETE)
-    time.sleep(0.5)
+    try:
+        # Select all text (Ctrl+A) and delete
+        input_field.send_keys(Keys.CONTROL + "a")
+        input_field.send_keys(Keys.DELETE)
+        time.sleep(0.5)
+    except ElementNotInteractableException:
+        pass
 
     # Directly set the value to empty and dispatch an input event
     driver.execute_script("arguments[0].value = '';", input_field)
