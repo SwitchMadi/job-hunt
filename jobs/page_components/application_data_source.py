@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 from enum import Enum
 
-from jobs.page_components import PageComponent, get_page_component_class_name
+from jobs.page_components import PageComponent, get_page_component_class_name, logger
 from jobs.page_components.button import Button
 from utilities import minify_html_for_gpt_prompt, constants
 from utilities.gpt import get_gpt_response
@@ -70,6 +70,14 @@ class ApplicationDataSource(PageComponent):
 
         if manual_data_input_option_searched:
             if manual_data_input_option.manual_data_input_option_present.value:
+                if self.parent_application_page.component_x_path_exists(
+                    manual_data_input_option.manual_data_input_x_path
+                ):
+                    logger.warn(
+                        f"Page component with following x_path already exists - {manual_data_input_option.manual_data_input_x_path}"
+                    )
+                    return
+
                 self.field_component = Button(
                     x_path=manual_data_input_option.manual_data_input_x_path,
                     button_type="select_application_data_source",

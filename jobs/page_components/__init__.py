@@ -9,6 +9,7 @@ from utilities.selenium import (
     start_dom_mutation_observer,
     get_observed_element,
     simulate_empty_area_click,
+    element_exists,
 )
 from utilities.logging import get_logger
 from utilities import pascal_to_snake_casing
@@ -133,6 +134,20 @@ class ApplicationField:
             response_format=ApplicationFieldInfo,
         )
         if application_field_found:
+            if not element_exists(application_field.x_path):
+                if not retry:
+                    return self._identify(retry=True)
+                else:
+                    return
+
+            if self.parent_application_page.component_x_path_exists(
+                application_field.x_path
+            ):
+                logger.warn(
+                    f"Page component with following x_path already exists - {application_field.x_path}"
+                )
+                return
+
             self.x_path = application_field.x_path
             self.field_type = application_field.field_type.value
             self.html_type = application_field.html_type.value
@@ -154,64 +169,69 @@ class ApplicationField:
     def get_field_component(self):
         self._identify()
 
-        self.html_type = ApplicationField.revalidate_component_type(
-            x_path=self.x_path,
-            html_type=self.html_type,
-            field_title=self.title,
-            options=self.options,
-        )
-
-        if self.html_type == "text_box":
-            from jobs.page_components.text_input import TextInput
-
-            return TextInput(
+        if self.x_path:
+            self.html_type = ApplicationField.revalidate_component_type(
                 x_path=self.x_path,
-                title=self.title,
-                question=self.question,
-                category=self.category,
-                parent_application_page=self.parent_application_page,
-            )
-        elif self.html_type == "dropdown":
-            from jobs.page_components.drop_down import DropDown
-
-            return DropDown(
-                x_path=self.x_path,
-                title=self.title,
-                question=self.question,
-                category=self.category,
-                parent_application_page=self.parent_application_page,
-            )
-        elif self.html_type == "search_field":
-            from jobs.page_components.search_field import SearchField
-
-            return SearchField(
-                x_path=self.x_path,
-                title=self.title,
-                question=self.question,
-                category=self.category,
-                parent_application_page=self.parent_application_page,
-            )
-        elif self.html_type == "radio_button":
-            from jobs.page_components.radio_button import RadioButton
-
-            return RadioButton(
-                x_path=self.x_path,
-                title=self.title,
-                question=self.question,
-                category=self.category,
+                html_type=self.html_type,
+                field_title=self.title,
                 options=self.options,
-                parent_application_page=self.parent_application_page,
             )
-        elif self.html_type == "check_box":
-            from jobs.page_components.check_box import CheckBox
 
-            return CheckBox(
-                x_path=self.x_path,
-                title=self.title,
-                question=self.question,
-                category=self.category,
-                options=self.options,
-                parent_application_page=self.parent_application_page,
+            if self.html_type == "text_box":
+                from jobs.page_components.text_input import TextInput
+
+                return TextInput(
+                    x_path=self.x_path,
+                    title=self.title,
+                    question=self.question,
+                    category=self.category,
+                    parent_application_page=self.parent_application_page,
+                )
+            elif self.html_type == "dropdown":
+                from jobs.page_components.drop_down import DropDown
+
+                return DropDown(
+                    x_path=self.x_path,
+                    title=self.title,
+                    question=self.question,
+                    category=self.category,
+                    parent_application_page=self.parent_application_page,
+                )
+            elif self.html_type == "search_field":
+                from jobs.page_components.search_field import SearchField
+
+                return SearchField(
+                    x_path=self.x_path,
+                    title=self.title,
+                    question=self.question,
+                    category=self.category,
+                    parent_application_page=self.parent_application_page,
+                )
+            elif self.html_type == "radio_button":
+                from jobs.page_components.radio_button import RadioButton
+
+                return RadioButton(
+                    x_path=self.x_path,
+                    title=self.title,
+                    question=self.question,
+                    category=self.category,
+                    options=self.options,
+                    parent_application_page=self.parent_application_page,
+                )
+            elif self.html_type == "check_box":
+                from jobs.page_components.check_box import CheckBox
+
+                return CheckBox(
+                    x_path=self.x_path,
+                    title=self.title,
+                    question=self.question,
+                    category=self.category,
+                    options=self.options,
+                    parent_application_page=self.parent_application_page,
+                )
+        else:
+            logger.warn(
+                f"Working Xpath couldn't be extracted.\nInstance - {vars(self)}"
             )
 
     @classmethod
@@ -248,6 +268,8 @@ class ApplicationField:
             return user.first_name
         elif field_category == "last_name":
             return user.last_name
+        elif field_category == "full_name":
+            return user.name
         elif field_category == "email":
             return user.email
         elif field_category == "password":

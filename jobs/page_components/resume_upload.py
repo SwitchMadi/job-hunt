@@ -2,12 +2,13 @@ from pydantic import BaseModel, Field
 import dotenv
 import yaml
 import os
+from enum import Enum
 
 from jobs.page_components import PageComponent, get_page_component_class_name
 from jobs.page_components.upload import Upload
 from utilities import minify_html_for_gpt_prompt, constants
 from utilities.gpt import get_gpt_response
-from utilities.selenium import get_selenium_driver
+from utilities.selenium import get_selenium_driver, element_exists
 from utilities.aws.s3 import S3Bucket
 
 
@@ -39,8 +40,6 @@ class ResumeUpload(PageComponent):
         self.field_component.file_path = self.resume_file_path
         self.field_component.proceed()
 
-        os.remove(self.resume_file_path)
-
         return
 
     def _identify(self, retry=False):
@@ -60,8 +59,12 @@ class ResumeUpload(PageComponent):
             f"out of many application data input options only then give me XPath of the resume upload button."
         )
 
+        class IsNotADataInputOption(Enum):
+            true = True
+            false = False
+
         class UploadResumeButton(BaseModel):
-            is_data_input_option: str = Field(
+            is_not_a_data_input_option: IsNotADataInputOption = Field(
                 ...,
                 description="Is the field just a standalone upload resume button, with no indication that it's one "
                 "option among many ways to input application data?",
@@ -79,27 +82,33 @@ class ResumeUpload(PageComponent):
         )
 
         if button_found:
-            self.field_component = Upload(
-                x_path=button.x_path,
-                upload_type="resume_upload",
-                parent_application_page=self.parent_application_page,
-            )
+            if button.is_not_a_data_input_option.value:
+                if not element_exists(button.x_path) and not retry:
+                    return self._identify(retry=True)
 
-            self.field_component.file_path = self.resume_file_path
-            self.field_component.proceed()
-
-            if self.field_component.is_component_functional:
-                self.is_component_functional = True
-                self.component_identified = True
-
-                os.remove(self.resume_file_path)
-            elif not retry:
-                self._identify(retry=True)
-            else:
-                raise Exception(
-                    f"Couldn't extract upload resume button for {self.parent_application_page.parent_job.title}. "
-                    f"URL - {self.parent_application_page.url}"
+                self.field_component = Upload(
+                    x_path=button.x_path,
+                    upload_type="resume_upload",
+                    parent_application_page=self.parent_application_page,
                 )
+
+                self.field_component.file_path = self.resume_file_path
+                self.field_component.proceed()
+
+                if self.field_component.is_component_functional:
+                    self.is_component_functional = True
+                    self.component_identified = True
+
+                    os.remove(self.resume_file_path)
+                elif not retry:
+                    self._identify(retry=True)
+                else:
+                    raise Exception(
+                        f"Couldn't extract upload resume button for {self.parent_application_page.parent_job.title}. "
+                        f"URL - {self.parent_application_page.url}"
+                    )
+            else:
+                return
         else:
             raise Exception(
                 f"Couldn't extract upload resume button for {self.parent_application_page.parent_job.title}. "

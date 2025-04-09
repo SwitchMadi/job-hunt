@@ -170,7 +170,8 @@ class DropDown(PageComponent):
         )
         if options_found:
             return [
-                {"text": option.text, "x_path": option.x_path} for option in options
+                {"text": option.text, "x_path": option.x_path}
+                for option in options.options
             ]
         else:
             if not retry:

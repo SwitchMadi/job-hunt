@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 
-from jobs.page_components import PageComponent, get_page_component_class_name
+from jobs.page_components import PageComponent, get_page_component_class_name, logger
 from jobs.page_components.button import Button
 from utilities import minify_html_for_gpt_prompt, constants
 from utilities.gpt import get_gpt_response
@@ -36,7 +36,7 @@ class TermsAndConditions(PageComponent):
             f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
             f"The webpage has TnC field for applying to the job. Following is info about the TnC field -\n"
             f"Field title - {self.field_info.field_title}\n"
-            f"Field type - {self.field_info.field_type.value}\n"
+            f"Field category - {self.field_info.field_category}\n"
             f"Analyse the whole HTML very carefully for extracting XPath of the TnC field."
         )
 
@@ -53,6 +53,12 @@ class TermsAndConditions(PageComponent):
             response_format=TnCField,
         )
         if tnc_field_found:
+            if self.parent_application_page.component_x_path_exists(tnc_field.x_path):
+                logger.warn(
+                    f"Page component with following x_path already exists - {tnc_field.x_path}"
+                )
+                return
+
             self.field_component = Button(
                 x_path=tnc_field.x_path,
                 button_type="tnc_consent",

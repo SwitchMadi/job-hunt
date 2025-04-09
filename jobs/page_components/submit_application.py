@@ -1,7 +1,9 @@
 from pydantic import BaseModel, Field
+import os
 
 from jobs.page_components import PageComponent, get_page_component_class_name
 from jobs.page_components.button import Button
+from jobs.page_components.resume_upload import ResumeUpload
 from utilities import minify_html_for_gpt_prompt, constants
 from utilities.gpt import get_gpt_response
 from utilities.selenium import get_selenium_driver
@@ -61,6 +63,8 @@ class SubmitApplication(PageComponent):
             if self.field_component.is_component_functional:
                 self.is_component_functional = True
                 self.component_identified = True
+
+                self._delete_downloaded_resume()
             elif not retry:
                 self._identify(retry=True)
             else:
@@ -73,6 +77,17 @@ class SubmitApplication(PageComponent):
                 f"Couldn't extract submit application button for {self.parent_application_page.parent_job.title}. "
                 f"URL - {self.parent_application_page.url}"
             )
+
+    def _delete_downloaded_resume(self):
+        cur_application_step = self.parent_application_page.head_step
+        while cur_application_step:
+            if isinstance(cur_application_step, ResumeUpload):
+                os.remove(cur_application_step.resume_file_path)
+                return
+
+            cur_application_step = cur_application_step.next
+
+        return
 
     def to_dict(self):
         return {

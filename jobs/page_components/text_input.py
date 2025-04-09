@@ -3,7 +3,7 @@ from selenium.webdriver.common.by import By
 
 from jobs import ApplicationField
 from jobs.page_components import PageComponent, logger, get_page_component_class_name
-from utilities.selenium import get_selenium_driver
+from utilities.selenium import get_selenium_driver, clear_text_field
 
 
 driver = get_selenium_driver()
@@ -19,16 +19,19 @@ class TextInput(PageComponent):
         title=None,
         question=None,
         input_text=None,
+        hit_enter=False,
     ):
         global driver
+
         self.x_path = x_path
         self.title = title
         self.question = question
         self.category = category
         self._answer = input_text
+        self.hit_enter = hit_enter
         self.parent_application_page = parent_application_page
 
-        self.is_component_functional = True
+        self.is_component_functional = False
 
         self.next = None
         self.prev = None
@@ -37,6 +40,9 @@ class TextInput(PageComponent):
         global driver
 
         try:
+            if not self.answer:
+                return
+
             element = driver.find_element(By.XPATH, self.x_path)
             if self.category == "otp_textbox":
                 element.click()
@@ -44,14 +50,18 @@ class TextInput(PageComponent):
                     active_element = driver.switch_to.active_element
                     active_element.send_keys(f"{otp_digit}")
             else:
+                clear_text_field(self.x_path)
                 element.send_keys(self.answer)
+
+            if self.hit_enter:
                 element.send_keys(Keys.RETURN)
+
+            self.is_component_functional = True
         except Exception as e:
             logger.exception(
                 f"Unexpected error occurred in class TextInput's proceed method.\n{e}\n"
                 f"TextInput instance - {vars(self)}"
             )
-            self.is_component_functional = False
 
         return
 
@@ -60,6 +70,9 @@ class TextInput(PageComponent):
             "class": self.__class__.__name__,
             "x_path": self.x_path,
             "category": self.category,
+            "title": self.title,
+            "question": self.question,
+            "hit_enter": self.hit_enter,
             "next": self.next.to_dict() if self.next else None,
         }
 
@@ -68,8 +81,12 @@ class TextInput(PageComponent):
         instance = cls(
             x_path=input_dict["x_path"],
             category=input_dict["category"],
+            title=input_dict["title"],
+            question=input_dict["question"],
+            hit_enter=input_dict["hit_enter"],
             parent_application_page=parent_application_page,
         )
+        instance.is_component_functional = True
 
         if input_dict["next"]:
             next_class = get_page_component_class_name(

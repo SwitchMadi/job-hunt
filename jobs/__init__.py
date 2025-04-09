@@ -23,6 +23,13 @@ from jobs.page_components.work_experience_section import WorkExperienceSection
 from jobs.page_components.education_section import EducationSection
 from jobs.page_components.resume_upload import ResumeUpload
 from jobs.page_components.submit_application import SubmitApplication
+from jobs.page_components.button import Button
+from jobs.page_components.check_box import CheckBox
+from jobs.page_components.date_field import DateField
+from jobs.page_components.drop_down import DropDown
+from jobs.page_components.radio_button import RadioButton
+from jobs.page_components.search_field import SearchField
+
 
 logger = get_logger(name="job")
 driver = get_selenium_driver()
@@ -160,31 +167,56 @@ class ApplicationPage:
         return isinstance(self.original_application_page, ApplicationPage)
 
     @property
-    def start_application_button_processed(self):
+    def start_application_button_identified(self):
         cur_application_step = self.head_step
         while cur_application_step:
-            if isinstance(self.head_step, StartApplication):
+            if isinstance(cur_application_step, StartApplication):
                 return True
             cur_application_step = cur_application_step.next
 
         return False
 
     @property
-    def work_experience_section_processed(self):
+    def work_experience_section_identified(self):
         cur_application_step = self.head_step
         while cur_application_step:
-            if isinstance(self.head_step, WorkExperienceSection):
+            if isinstance(cur_application_step, WorkExperienceSection):
                 return True
             cur_application_step = cur_application_step.next
 
         return False
 
     @property
-    def education_section_processed(self):
+    def education_section_identified(self):
         cur_application_step = self.head_step
         while cur_application_step:
-            if isinstance(self.head_step, EducationSection):
+            if isinstance(cur_application_step, EducationSection):
                 return True
+            cur_application_step = cur_application_step.next
+
+        return False
+
+    @property
+    def resume_upload_identified(self):
+        cur_application_step = self.head_step
+        while cur_application_step:
+            if isinstance(cur_application_step, ResumeUpload):
+                return True
+            cur_application_step = cur_application_step.next
+
+        return False
+
+    def component_x_path_exists(self, x_path):
+        cur_application_step = self.head_step
+        while cur_application_step:
+            component_x_paths = [
+                getattr(cur_application_step, attr)
+                for attr in dir(cur_application_step)
+                if "x_path" in attr
+            ]
+            if x_path in component_x_paths:
+                return True
+
             cur_application_step = cur_application_step.next
 
         return False
@@ -309,8 +341,9 @@ class ApplicationPage:
                     f"Could not identify application steps for job {self.parent_job.title}. URL - {self.url}"
                 )
                 return
+        else:
+            self.run_steps()
 
-        self.run_steps()
         return
 
     # Identify job page components
@@ -472,7 +505,7 @@ class ApplicationPage:
 
         if (
             elements.start_application_button.value
-            and not self.start_application_button_processed
+            and not self.start_application_button_identified
         ):
             is_start_application_functional = self._identify_start_application_button()
 
@@ -524,6 +557,7 @@ class ApplicationPage:
         class FieldCategory(Enum):
             first_name = "first_name"
             last_name = "last_name"
+            full_name = "full_name"
             salutation_prefix = "salutation_prefix"
             email = "email"
             phone_country_code = "phone_country_code"
@@ -572,19 +606,22 @@ class ApplicationPage:
         for job_field in job_fields:
             if job_field.field_category.value == "tnc":
                 self._identify_tnc_field(job_field)
-            elif (
-                job_field.field_category.value == "work_experience"
-                and not self.work_experience_section_processed
-            ):
+            elif job_field.field_category.value == "work_experience":
+                if self.work_experience_section_identified:
+                    continue
+
                 self._identify_work_experience_section()
-            elif (
-                job_field.field_category.value == "education"
-                and not self.education_section_processed
-            ):
+            elif job_field.field_category.value == "education":
+                if self.education_section_identified:
+                    continue
+
                 self._identify_education_section()
             elif job_field.field_category.value == "cover_letter":
                 pass
             elif job_field.field_category.value == "resume_upload":
+                if self.resume_upload_identified:
+                    continue
+
                 self._identify_resume_upload_field(job_field.field_title)
             else:
                 self._complete_application_field_identification(job_field)

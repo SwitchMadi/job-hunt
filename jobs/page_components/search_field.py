@@ -14,6 +14,7 @@ from utilities.selenium import (
     get_observed_element,
     get_element_xpath,
     element_exists,
+    clear_text_field,
 )
 
 
@@ -38,19 +39,28 @@ class SearchField(PageComponent):
         self.prev = None
 
     @classmethod
-    def validate_search_field(cls, x_path, field_title):
+    def validate_search_field(cls, x_path, field_title, retry=False):
         global driver
 
         start_network_observer()
 
-        element = driver.find_element(By.XPATH, x_path)
-        driver.execute_script(
-            "arguments[0].scrollIntoView({block: 'center'});", element
-        )
+        try:
+            element = driver.find_element(By.XPATH, x_path)
+            driver.execute_script(
+                "arguments[0].scrollIntoView({block: 'center'});", element
+            )
+            clear_text_field(x_path)
 
-        special_key = "special_key"
-        element.send_keys(special_key)
-        time.sleep(2)  # Allow API calls to trigger
+            special_key = "special_key"
+            element.send_keys(special_key)
+            time.sleep(2)  # Allow API calls to trigger
+        except Exception as e:
+            if not retry:
+                return SearchField.validate_search_field(
+                    x_path, field_title, retry=True
+                )
+            else:
+                raise e
 
         captured_requests = get_observed_network_calls()
         stop_network_observer()
@@ -94,72 +104,86 @@ class SearchField(PageComponent):
                 if is_search_field:
                     break
 
+        clear_text_field(x_path)
         simulate_empty_area_click(field_title)
+
         return is_search_field
 
-    def proceed(self):
-        input_count = min(2, len(self.answer.split(" ")))
-        while input_count >= 0:
-            if input_count > 0:
-                input_key = " ".join(self.answer.split(" ")[:input_count])
-            else:
-                input_key = "a"
+    def proceed(self, retry=False):
+        try:
+            input_count = min(2, len(self.answer.split(" ")))
+            while input_count >= 0:
+                if input_count > 0:
+                    input_key = " ".join(self.answer.split(" ")[:input_count])
+                else:
+                    input_key = "a"
 
-            element = driver.find_element(By.XPATH, self.x_path)
+                element = driver.find_element(By.XPATH, self.x_path)
+                clear_text_field(self.x_path)
 
-            if not self.options_container_x_path:
-                start_dom_mutation_observer()
-                element.send_keys(input_key)
-                time.sleep(2)
-                options_container = get_observed_element()
-                self.options_container_x_path = get_element_xpath(options_container)
-            else:
-                element.send_keys(input_key)
-                time.sleep(2)
+                if not self.options_container_x_path:
+                    start_dom_mutation_observer()
+                    element.send_keys(input_key)
+                    time.sleep(2)
+                    options_container = get_observed_element()
+                    self.options_container_x_path = get_element_xpath(options_container)
+                else:
+                    element.send_keys(input_key)
+                    time.sleep(2)
 
-            options = DropDown.extract_dropdown_options(
-                job_title=self.parent_application_page.parent_job.title,
-                job_url=self.parent_application_page.url,
-                field_title=self.title,
-                question=self.question,
-                options_container_x_path=self.options_container_x_path,
-            )
-            if options:
-                closest_option = (
-                    self.answer
-                    if [option for option in options if option["text"] == self.answer]
-                    else None
+                options = DropDown.extract_dropdown_options(
+                    job_title=self.parent_application_page.parent_job.title,
+                    job_url=self.parent_application_page.url,
+                    field_title=self.title,
+                    question=self.question,
+                    options_container_x_path=self.options_container_x_path,
                 )
-
-                if closest_option is None:
-                    closest_option = ApplicationField.extract_field_answer(
-                        job_title=self.parent_application_page.parent_job.title,
-                        job_url=self.parent_application_page.url,
-                        company_name=self.parent_application_page.parent_job.company,
-                        field_title=self.title,
-                        question=self.question,
-                        answer_type="enum",
-                        options=[option["text"] for option in options],
-                        closest_answer=self.answer,
+                if options:
+                    closest_option = (
+                        self.answer
+                        if [
+                            option
+                            for option in options
+                            if option["text"] == self.answer
+                        ]
+                        else None
                     )
 
-                option = [
-                    option for option in options if option["text"] == closest_option
-                ][0]
-                option_element = driver.find_element(By.XPATH, option["x_path"])
-                option_element.click()
+                    if closest_option is None:
+                        closest_option = ApplicationField.extract_field_answer(
+                            job_title=self.parent_application_page.parent_job.title,
+                            job_url=self.parent_application_page.url,
+                            company_name=self.parent_application_page.parent_job.company,
+                            field_title=self.title,
+                            question=self.question,
+                            answer_type="enum",
+                            options=[option["text"] for option in options],
+                            closest_answer=self.answer,
+                        )
+
+                    option = [
+                        option for option in options if option["text"] == closest_option
+                    ][0]
+                    option_element = driver.find_element(By.XPATH, option["x_path"])
+                    option_element.click()
+                    break
+                else:
+                    input_count -= 1
+
+            if element_exists(self.options_container_x_path):
+                raise Exception(
+                    f"Couldn't proceed on following search field {self.category} for "
+                    f"{self.parent_application_page.parent_job.title}. "
+                    f"URL - {self.parent_application_page.url}"
+                )
+
+            self.is_component_functional = True
+            return
+        except Exception as e:
+            if not retry:
+                self.proceed(retry=True)
             else:
-                input_count -= 1
-
-        if element_exists(self.options_container_x_path):
-            raise Exception(
-                f"Couldn't proceed on following search field {self.category} for "
-                f"{self.parent_application_page.parent_job.title}. "
-                f"URL - {self.parent_application_page.url}"
-            )
-
-        self.is_component_functional = True
-        return
+                raise e
 
     @property
     def answer(self):
