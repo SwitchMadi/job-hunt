@@ -424,7 +424,8 @@ class ApplicationField:
                 f"If field title is very short like one word or two then answer should also be of similar length. If "
                 f"field title seems to be expecting bit elaborative answer then answer can be little verbose but not "
                 f"too much. Also answer should reflect that these are my words, not Chat GPT's words. Answer like human"
-                f" candidate and not a language model. If based on the given context there is no answer then don't "
+                f" candidate and not a language model. I am going to feed your answer exactly same into the job "
+                f"application so answer accordingly. If based on the given context there is no answer then don't "
                 f"answer the question at all.\n"
             )
 
