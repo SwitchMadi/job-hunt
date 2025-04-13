@@ -2,7 +2,6 @@ import uuid
 import yaml
 from datetime import datetime, timedelta, timezone
 import pytz
-import numpy as np
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 import os
@@ -11,7 +10,6 @@ import json
 
 from utilities.sql import get_sql_query_output, execute_sql_query, get_sql_connection
 from utilities.google_services.drive import DriveResource
-from utilities.google_services.sheet import Sheet
 from utilities.logging import get_logger
 from utilities import generate_password, encrypt_string, decrypt_password, constants
 from utilities.gpt.file_assistant import query_file
@@ -144,6 +142,10 @@ class User:
         today = datetime.now(pytz.timezone("Asia/Kolkata")).date()
         cur_month = f"{today.year}{str(today.month).zfill(2)}"
         sheet_name = f"SwitchMadi Jobs | Month {cur_month}"
+
+        from utilities.google_services.sheet import (
+            Sheet,
+        )  # TODO: Moved here to avoid increasing lambda build size. Optimise using lambda layers.
 
         jobs_sheet = None
         for resource in self.drive_folder.get_folder_resources():
@@ -304,6 +306,8 @@ class User:
         return df_unshared_jobs
 
     def share_jobs(self):
+        import numpy as np  # TODO: Moved here to avoid increasing lambda build size. Optimise using lambda layers.
+
         logger.info(f"Sharing jobs for {self.email}...")
 
         today = datetime.now(pytz.timezone("Asia/Kolkata")).date()

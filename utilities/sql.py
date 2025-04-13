@@ -1,6 +1,5 @@
 import os
 import dotenv
-import pandas as pd
 import psycopg2
 from psycopg2.extras import DictCursor
 from sqlalchemy import create_engine
@@ -41,6 +40,8 @@ def get_sql_query_output(query, con=None, output_as_dataframe=False):
         close_con = True
 
     if output_as_dataframe:
+        import pandas as pd  # TODO: Moved here to avoid increasing lambda build size. Optimise using lambda layers.
+
         df = pd.read_sql(query, con)
         if close_con:
             con.close()

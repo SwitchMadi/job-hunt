@@ -1,5 +1,4 @@
 import gspread
-import pandas as pd
 from gspread.exceptions import WorksheetNotFound
 from googleapiclient.discovery import build
 
@@ -76,6 +75,8 @@ class Sheet:
             return False
 
     def read_tab(self, tab_name):
+        import pandas as pd  # TODO: Moved here to avoid increasing lambda build size. Optimise using lambda layers.
+
         tab = self.get_tab(tab_name)
         data = tab.get_all_records()
         return pd.DataFrame(data)
