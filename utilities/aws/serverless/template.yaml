@@ -43,3 +43,23 @@ Resources:
           Properties:
             Schedule: 'cron(30 14 * * ? *)'  # 8 PM IST every day
             Name: ShareJobsTrigger
+
+  Authorization:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      FunctionName: Authorization
+      Handler: __init__.lambda_handler
+      Runtime: python3.10
+      CodeUri: /Users/bhaskar/Desktop/other/job-hunt/scripts/lambdas/authorization
+      Timeout: 900
+
+  SaveUserTokens:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      FunctionName: SaveUserTokens
+      Handler: __init__.lambda_handler
+      Runtime: python3.10
+      CodeUri: /Users/bhaskar/Desktop/other/job-hunt/scripts/lambdas/save_user_tokens
+      Timeout: 900
+      Layers:
+        - !Ref JobHuntCommonLayer

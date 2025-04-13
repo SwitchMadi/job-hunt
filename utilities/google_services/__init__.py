@@ -5,6 +5,7 @@ from googleapiclient.discovery import build
 import os
 import dotenv
 from datetime import datetime
+import requests
 
 from utilities.logging import get_logger
 
@@ -76,3 +77,15 @@ def get_google_credentials(scopes: list, user=None):
                 )
 
         return credentials
+
+
+def get_user_info(access_token):
+    headers = {"Authorization": f"Bearer {access_token}"}
+    url = "https://www.googleapis.com/oauth2/v2/userinfo"
+
+    res = requests.get(url, headers=headers)
+
+    if res.status_code == 200:
+        return res.json()
+    else:
+        raise Exception(f"Failed to fetch email: {res.status_code} - {res.text}")
