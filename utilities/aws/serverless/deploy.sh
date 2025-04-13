@@ -16,7 +16,9 @@ cp /Users/bhaskar/Desktop/temporary/job-hunt-data/client_secret_604979190363-ei7
 cp /Users/bhaskar/Desktop/temporary/job-hunt-data/job-hunt-420615-0ce7f4f42a30.json ~/Desktop/other/job-hunt/scripts/lambdas/trigger_job_scrape/
 cp /Users/bhaskar/Desktop/temporary/job-hunt-data/client_secret_604979190363-ei70huqc4iirglc66t3vhc94fl96f07l.apps.googleusercontent.com.json ~/Desktop/other/job-hunt/scripts/lambdas/trigger_job_scrape/
 
-/Users/bhaskar/Desktop/temporary/job-hunt-venv/bin/python /Users/bhaskar/Desktop/other/job-hunt/scripts/lambdas/generate_lambda_requirement_files.py
+cd /Users/bhaskar/Desktop/other/job-hunt/scripts/lambdas
+/Users/bhaskar/Desktop/temporary/job-hunt-venv/bin/python generate_lambda_requirement_files.py
+cd /Users/bhaskar/Desktop/other/job-hunt/utilities/aws/serverless
 
 sam build
 sam deploy
