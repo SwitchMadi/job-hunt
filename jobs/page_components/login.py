@@ -6,11 +6,14 @@ from pydantic import BaseModel, Field
 from jobs.page_components import PageComponent, logger, get_page_component_class_name
 from jobs.page_components.button import Button
 from jobs.page_components.text_input import TextInput
-from utilities import minify_html_for_gpt_prompt, constants
+from utilities import constants
 from utilities.google_services.gmail import Gmail
 from utilities.gpt import get_gpt_response
-from utilities.selenium import get_selenium_driver, element_exists
-
+from utilities.selenium import (
+    get_selenium_driver,
+    element_exists,
+    minify_html_for_gpt_prompt,
+)
 
 driver = get_selenium_driver()
 driver.set_page_load_timeout(15)
@@ -441,12 +444,13 @@ class Login(PageComponent):
                 "to search the button. Don't use HTML hierarchy to construct XPath.",
             )
 
-        resend_verification_email_button_found, resend_verification_email_button = (
-            get_gpt_response(
-                constants.gpt["system_prompts"]["application_step_identification"],
-                user_prompt,
-                response_format=ResendVerificationEmailButton,
-            )
+        (
+            resend_verification_email_button_found,
+            resend_verification_email_button,
+        ) = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=ResendVerificationEmailButton,
         )
         if resend_verification_email_button_found:
             self.resend_verification_email_button = Button(
@@ -481,12 +485,13 @@ class Login(PageComponent):
                 ..., description="Whether create account step was successful or not"
             )
 
-        create_account_success_determined, is_create_account_successful = (
-            get_gpt_response(
-                constants.gpt["system_prompts"]["application_step_identification"],
-                user_prompt,
-                response_format=IsCreateAccountSuccessful,
-            )
+        (
+            create_account_success_determined,
+            is_create_account_successful,
+        ) = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=IsCreateAccountSuccessful,
         )
         if create_account_success_determined:
             return is_create_account_successful.create_account_successful.value

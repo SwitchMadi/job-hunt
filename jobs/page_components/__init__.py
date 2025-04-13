@@ -10,10 +10,11 @@ from utilities.selenium import (
     get_observed_element,
     simulate_empty_area_click,
     element_exists,
+    minify_html_for_gpt_prompt,
 )
 from utilities.logging import get_logger
 from utilities import pascal_to_snake_casing
-from utilities import minify_html_for_gpt_prompt, constants
+from utilities import constants
 from utilities.gpt import get_gpt_response
 
 

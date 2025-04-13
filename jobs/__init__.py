@@ -3,11 +3,12 @@ from pydantic import BaseModel, Field
 from enum import Enum
 import json
 
-from utilities import minify_html_for_gpt_prompt, constants, generate_hash, retry
+from utilities import constants, generate_hash, retry
 from utilities.selenium import (
     get_selenium_driver,
     extract_iframe_urls,
     disable_browser_alerts,
+    minify_html_for_gpt_prompt,
 )
 from utilities.gpt import get_gpt_response
 from utilities.logging import get_logger

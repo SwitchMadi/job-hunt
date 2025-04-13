@@ -11,8 +11,9 @@ from utilities.selenium import (
     simulate_empty_area_click,
     start_dom_mutation_observer,
     get_observed_element,
+    minify_html_for_gpt_prompt,
 )
-from utilities import minify_html_for_gpt_prompt, constants
+from utilities import constants
 from utilities.gpt import get_gpt_response
 
 

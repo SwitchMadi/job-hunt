@@ -6,9 +6,13 @@ from enum import Enum
 
 from jobs.page_components import PageComponent, get_page_component_class_name
 from jobs.page_components.upload import Upload
-from utilities import minify_html_for_gpt_prompt, constants
+from utilities import constants
 from utilities.gpt import get_gpt_response
-from utilities.selenium import get_selenium_driver, element_exists
+from utilities.selenium import (
+    get_selenium_driver,
+    element_exists,
+    minify_html_for_gpt_prompt,
+)
 from utilities.aws.s3 import S3Bucket
 
 

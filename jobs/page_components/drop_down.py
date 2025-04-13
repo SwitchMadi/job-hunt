@@ -7,7 +7,7 @@ from jobs.page_components import (
     get_page_component_class_name,
 )
 from jobs.page_components.button import Button, logger
-from utilities import minify_html_for_gpt_prompt, constants
+from utilities import constants
 from utilities.gpt import get_gpt_response
 from utilities.selenium import (
     get_selenium_driver,
@@ -15,6 +15,7 @@ from utilities.selenium import (
     start_dom_mutation_observer,
     get_observed_element,
     get_element_xpath,
+    minify_html_for_gpt_prompt,
 )
 
 

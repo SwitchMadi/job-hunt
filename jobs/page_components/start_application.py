@@ -3,10 +3,9 @@ from enum import Enum
 
 from jobs.page_components import PageComponent, get_page_component_class_name
 from jobs.page_components.button import Button
-from utilities import minify_html_for_gpt_prompt, constants
+from utilities import constants
 from utilities.gpt import get_gpt_response
-from utilities.selenium import get_selenium_driver
-
+from utilities.selenium import get_selenium_driver, minify_html_for_gpt_prompt
 
 driver = get_selenium_driver()
 driver.set_page_load_timeout(15)
@@ -49,11 +48,9 @@ class StartApplication(PageComponent):
             false = False
 
         class StartApplicationButton(BaseModel):
-            is_start_application_button_present: IsStartApplicationButtonPresent = (
-                Field(
-                    ...,
-                    description="Does start application button exist based on prompt criteria?",
-                )
+            is_start_application_button_present: IsStartApplicationButtonPresent = Field(
+                ...,
+                description="Does start application button exist based on prompt criteria?",
             )
             x_path: str = Field(
                 ...,
