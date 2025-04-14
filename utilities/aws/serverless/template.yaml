@@ -1,5 +1,15 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: 'AWS::Serverless-2016-10-31'
+
+Globals:
+  Api:
+    Auth:
+      Authorizers:
+        LambdaTokenAuthorizer:
+          FunctionArn: !GetAtt Authorization.Arn
+          Identity:
+            Header: Authorization
+
 Resources:
   JobHuntCommonLayer:
     Type: 'AWS::Serverless::LayerVersion'
@@ -53,8 +63,18 @@ Resources:
       CodeUri: /Users/bhaskar/Desktop/other/job-hunt/scripts/lambdas/authorization
       Timeout: 900
 
+  JobHuntApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: JobHuntApi
+      StageName: prod
+      Domain:
+        DomainName: api.switchmadi.com
+        CertificateArn: arn:aws:acm:us-east-1:992382457904:certificate/8ecc1e74-c6fe-493e-8044-9474f906cac9
+        EndpointConfiguration: EDGE
+
   SaveUserTokens:
-    Type: 'AWS::Serverless::Function'
+    Type: AWS::Serverless::Function
     Properties:
       FunctionName: SaveUserTokens
       Handler: __init__.lambda_handler
@@ -63,3 +83,12 @@ Resources:
       Timeout: 900
       Layers:
         - !Ref JobHuntCommonLayer
+      Events:
+        SaveTokensApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobHuntApi
+            Path: /init-channel
+            Method: POST
+            Auth:
+              Authorizer: LambdaTokenAuthorizer
