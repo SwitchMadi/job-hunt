@@ -11,7 +11,7 @@ import json
 from utilities.sql import get_sql_query_output, execute_sql_query, get_sql_connection
 from utilities.google_services.drive import DriveResource
 from utilities.logging import get_logger
-from utilities import generate_password, encrypt_string, decrypt_password, constants
+from utilities import generate_password, encrypt_string, decrypt_string, constants
 from utilities.gpt.file_assistant import query_file
 from utilities.gpt import get_gpt_response
 from utilities.aws.s3 import S3Bucket
@@ -41,7 +41,7 @@ class User:
         self.name = user["name"]
         self.resume = user["resume"]
         self.parsed_resume = user["parsed_resume"] or {}
-        self.password = decrypt_password(user["password"])
+        self.password = decrypt_string(user["password"])
 
         self._drive_folder = None
         self._jobs_sheet = None
