@@ -2,9 +2,13 @@ import jwt
 import os
 import dotenv
 
+from utilities.logging import get_logger
+
 
 dotenv.load_dotenv()
 SECRET = os.getenv("JWT_SECRET_KEY")
+
+logger = get_logger(name="lambda_authorizer")
 
 
 def lambda_handler(event, context):
@@ -30,6 +34,7 @@ def lambda_handler(event, context):
             "context": {"email": decoded["email"]},
         }
     except Exception as e:
+        logger.exception(f"Exception during lambda authorization - {e}")
         return {
             "principalId": "unknown",
             "policyDocument": {
