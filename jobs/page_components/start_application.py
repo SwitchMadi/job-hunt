@@ -48,9 +48,11 @@ class StartApplication(PageComponent):
             false = False
 
         class StartApplicationButton(BaseModel):
-            is_start_application_button_present: IsStartApplicationButtonPresent = Field(
-                ...,
-                description="Does start application button exist based on prompt criteria?",
+            is_start_application_button_present: IsStartApplicationButtonPresent = (
+                Field(
+                    ...,
+                    description="Does start application button exist based on prompt criteria?",
+                )
             )
             x_path: str = Field(
                 ...,
