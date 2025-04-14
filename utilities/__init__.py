@@ -1,14 +1,18 @@
-import hashlib
 import datetime
 import shutil
-import os
 import random
 import string
-from cryptography.fernet import Fernet
 import dotenv
 import re
 import time
 import functools
+import os
+import base64
+import hashlib
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives import padding
+from cryptography.hazmat.backends import default_backend
 
 
 dotenv.load_dotenv()
@@ -116,18 +120,94 @@ def generate_password():
     return "".join(password)
 
 
-def encrypt_string(input_string):
-    cipher_suite = Fernet(os.getenv("ENCRYPTION_KEY"))
-    encoded_password = input_string.encode("utf-8")
-    encrypted_password = cipher_suite.encrypt(encoded_password)
-    return encrypted_password.decode("utf-8")
+def encrypt_string(data: str, mode: str = "fernet") -> str:
+    if mode == "fernet":
+        return _encrypt_fernet(data)
+    elif mode == "aes":
+        return _encrypt_aes(data)
+    else:
+        raise ValueError("Unsupported mode. Use 'fernet' or 'aes'")
 
 
-def decrypt_password(input_string):
-    cipher_suite = Fernet(os.getenv("ENCRYPTION_KEY"))
-    decoded_password = input_string.encode("utf-8")
-    decrypted_password = cipher_suite.decrypt(decoded_password)
-    return decrypted_password.decode("utf-8")
+def decrypt_string(data: str, mode: str = "fernet") -> str:
+    if mode == "fernet":
+        return _decrypt_fernet(data)
+    elif mode == "aes":
+        return _decrypt_aes(data)
+    else:
+        raise ValueError("Unsupported mode. Use 'fernet' or 'aes'")
+
+
+# === Fernet encryption (default) ===
+
+
+def _encrypt_fernet(data: str) -> str:
+    cipher_suite = Fernet(_get_fernet_key())
+    encrypted = cipher_suite.encrypt(data.encode("utf-8"))
+    return encrypted.decode("utf-8")
+
+
+def _decrypt_fernet(data: str) -> str:
+    cipher_suite = Fernet(_get_fernet_key())
+    decrypted = cipher_suite.decrypt(data.encode("utf-8"))
+    return decrypted.decode("utf-8")
+
+
+def _get_fernet_key():
+    secret = os.getenv("ENCRYPTION_KEY")
+    if not secret:
+        raise ValueError("ENCRYPTION_KEY environment variable not set")
+
+    try:
+        # Try using as-is (base64 encoded)
+        base64.urlsafe_b64decode(secret.encode())
+        return secret.encode()
+    except Exception:
+        # Derive Fernet-compatible key from passphrase
+        key = hashlib.sha256(secret.encode()).digest()
+        return base64.urlsafe_b64encode(key)
+
+
+# === AES (CryptoJS-compatible) ===
+
+
+def _encrypt_aes(data: str) -> str:
+    secret = os.getenv("ENCRYPTION_KEY")
+    if not secret:
+        raise ValueError("ENCRYPTION_KEY environment variable not set")
+
+    key = hashlib.sha256(secret.encode()).digest()
+    iv = os.urandom(16)
+
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+    encryptor = cipher.encryptor()
+
+    padder = padding.PKCS7(128).padder()
+    padded_data = padder.update(data.encode()) + padder.finalize()
+
+    ciphertext = encryptor.update(padded_data) + encryptor.finalize()
+    return base64.b64encode(iv + ciphertext).decode()
+
+
+def _decrypt_aes(data: str) -> str:
+    secret = os.getenv("ENCRYPTION_KEY")
+    if not secret:
+        raise ValueError("ENCRYPTION_KEY environment variable not set")
+
+    key = hashlib.sha256(secret.encode()).digest()
+    encrypted_data = base64.b64decode(data)
+
+    iv = encrypted_data[:16]
+    ciphertext = encrypted_data[16:]
+
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+    decryptor = cipher.decryptor()
+
+    padded_plaintext = decryptor.update(ciphertext) + decryptor.finalize()
+
+    unpadder = padding.PKCS7(128).unpadder()
+    plaintext = unpadder.update(padded_plaintext) + unpadder.finalize()
+    return plaintext.decode()
 
 
 def str_to_bool(value: str) -> bool:

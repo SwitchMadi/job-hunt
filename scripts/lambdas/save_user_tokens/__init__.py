@@ -6,6 +6,7 @@ import dotenv
 
 from utilities.logging import get_logger
 from utilities.google_services import get_user_info
+from utilities import decrypt_string
 from user import User
 
 
@@ -15,8 +16,21 @@ logger = get_logger(name="save_user_tokens")
 
 def lambda_handler(event, context):
     body = json.loads(event.get("body", "{}"))
-
     logger.info(f"Body received - {body}")
+    encrypted_payload = body.get("data")
+
+    if not encrypted_payload:
+        return {
+            "statusCode": 400,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps({"error": "Missing encrypted payload"}),
+        }
+
+    # AES decryption (default)
+    decrypted_data = decrypt_string(encrypted_payload, mode="aes")
+
+    # Parse JSON string to dict
+    payload = json.loads(decrypted_data)
 
     email = event["requestContext"]["authorizer"].get("email")
     if not email:
@@ -25,15 +39,15 @@ def lambda_handler(event, context):
         )
         raise
 
-    access_token = body.get("access_token")
+    access_token = payload.get("access_token")
     user_info = get_user_info(access_token)
 
     user = User(email=email, name=user_info["name"])
 
-    refresh_token = body.get("refresh_token")
-    expiry = body.get("expiry")  # ISO 8601 string (optional)
+    refresh_token = payload.get("refresh_token")
+    expiry = payload.get("expiry")  # ISO 8601 string (optional)
     expiry = datetime.fromisoformat(expiry.replace("Z", "+00:00")).timestamp()
-    scopes = body.get("scopes")
+    scopes = payload.get("scopes")
 
     credentials = Credentials(
         token=access_token,
