@@ -62,6 +62,8 @@ Resources:
       Runtime: python3.10
       CodeUri: /Users/bhaskar/Desktop/other/job-hunt/scripts/lambdas/authorization
       Timeout: 900
+      Layers:
+        - !Ref JobHuntCommonLayer
 
   JobHuntApi:
     Type: AWS::Serverless::Api
