@@ -7,6 +7,7 @@ import dotenv
 from utilities.logging import get_logger
 from utilities.google_services import get_user_info
 from utilities import decrypt_string
+from utilities.aws import send_lambda_response
 from user import User
 
 
@@ -14,9 +15,9 @@ dotenv.load_dotenv()
 logger = get_logger(name="save_user_tokens")
 
 
+@send_lambda_response(logger)
 def lambda_handler(event, context):
     body = json.loads(event.get("body", "{}"))
-    logger.info(f"Body received - {body}")
     encrypted_payload = body.get("data")
 
     if not encrypted_payload:
@@ -45,9 +46,9 @@ def lambda_handler(event, context):
     user = User(email=email, name=user_info["name"])
 
     refresh_token = payload.get("refresh_token")
-    expiry = payload.get("expiry")  # ISO 8601 string (optional)
-    expiry = datetime.fromisoformat(expiry.replace("Z", "+00:00")).timestamp()
-    scopes = payload.get("scopes")
+    expiry = payload.get("expiry")
+    expiry = datetime.fromtimestamp(expiry / 1000)
+    scopes = payload.get("scopes").split()
 
     credentials = Credentials(
         token=access_token,
