@@ -198,6 +198,10 @@ class User:
             lambda x: x.dropna().to_dict(), axis=1
         ).to_dict()
 
+        return User.preferred_jobs_query_filters(field_preferences)
+
+    @classmethod
+    def preferred_jobs_query_filters(cls, field_preferences):
         filters = {}
         for job_field, preferences in field_preferences.items():
             if job_field == "job_posted_days_ago":
@@ -212,31 +216,38 @@ class User:
                     f"(({job_field} >= {preferences[True][0]}) or {job_field} is null)"
                 )
             elif job_field in (["experience_requirement_min_years"]):
-                filters[job_field] = (
-                    f"((experience_requirement_max_years >= {preferences[True][0]}) "
-                    f"or experience_requirement_max_years is null)"
-                )
+                if preferences[True]:
+                    filters[job_field] = (
+                        f"((experience_requirement_max_years >= {preferences[True][0]}) "
+                        f"or experience_requirement_max_years is null)"
+                    )
             elif job_field in (["experience_requirement_max_years"]):
-                filters[job_field] = (
-                    f"((experience_requirement_min_years <= {preferences[True][0]}) "
-                    f"or experience_requirement_min_years is null)"
-                )
+                if preferences[True]:
+                    filters[job_field] = (
+                        f"((experience_requirement_min_years <= {preferences[True][0]}) "
+                        f"or experience_requirement_min_years is null)"
+                    )
             elif job_field in (["company", "job_domain"]):
                 queries = {}
                 for is_preferred, values in preferences.items():
-                    if is_preferred:
-                        queries[is_preferred] = (
-                            f"""{job_field} in ('{"', '".join(values)}')"""
-                        )
-                    else:
-                        queries[is_preferred] = (
-                            f"""{job_field} not in ('{"', '".join(values)}')"""
-                        )
+                    if values:
+                        if is_preferred:
+                            queries[is_preferred] = (
+                                f"""{job_field} in ('{"', '".join(values)}')"""
+                            )
+                        else:
+                            queries[is_preferred] = (
+                                f"""{job_field} not in ('{"', '".join(values)}')"""
+                            )
 
                 filters[job_field] = ""
                 for _, query in queries.items():
                     filters[job_field] += f"{query} and "
-                filters[job_field] = f"({filters[job_field].strip(' and ')})"
+
+                if filters[job_field]:
+                    filters[job_field] = f"({filters[job_field].strip(' and ')})"
+                else:
+                    del filters[job_field]
             elif job_field in (
                 [
                     "title",
@@ -262,9 +273,16 @@ class User:
 
                 filters[job_field] = ""
                 for is_preferred, query_list in queries.items():
-                    condition = "or" if is_preferred else "and"
-                    filters[job_field] += f"({f' {condition} '.join(query_list)}) and "
-                filters[job_field] = f"({filters[job_field].strip(' and ')})"
+                    if query_list:
+                        condition = "or" if is_preferred else "and"
+                        filters[
+                            job_field
+                        ] += f"({f' {condition} '.join(query_list)}) and "
+
+                if filters[job_field]:
+                    filters[job_field] = f"({filters[job_field].strip(' and ')})"
+                else:
+                    del filters[job_field]
 
         filters = [query for _, query in filters.items()]
         filters = " and\n".join(filters)

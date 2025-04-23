@@ -21,24 +21,44 @@ def get_aws_client(service_name):
 def send_lambda_response(logger):
     def decorator(func):
         @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            try:
-                result = func(*args, **kwargs)
+        def wrapper(event, context, *args, **kwargs):
+            allowed_origin = os.getenv("ALLOWED_ORIGIN", "*")
 
-                # If result is a valid API Gateway response, return as is
+            cors_headers = {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": allowed_origin,
+                "Access-Control-Allow-Headers": "Content-Type,Authorization",
+                "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+            }
+
+            # ✅ Handle OPTIONS preflight automatically
+            if event.get("httpMethod", "").upper() == "OPTIONS":
+                return {
+                    "statusCode": 200,
+                    "headers": cors_headers,
+                    "body": json.dumps({"message": "CORS preflight OK"}),
+                }
+
+            try:
+                result = func(event, context, *args, **kwargs)
+
+                # If result is already a valid API Gateway response
                 if isinstance(result, dict) and "statusCode" in result:
+                    result.setdefault("headers", {})
+                    result["headers"].update(cors_headers)
                     return result
 
                 return {
                     "statusCode": 200,
-                    "headers": {"Content-Type": "application/json"},
+                    "headers": cors_headers,
                     "body": json.dumps(result),
                 }
+
             except Exception as e:
                 logger.exception(f"Unhandled exception in Lambda - {e}")
                 return {
                     "statusCode": 500,
-                    "headers": {"Content-Type": "application/json"},
+                    "headers": cors_headers,
                     "body": json.dumps({"error": "Internal server error"}),
                 }
 

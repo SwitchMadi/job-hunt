@@ -1,0 +1,106 @@
+from utilities.logging import get_logger
+from utilities.aws import send_lambda_response
+from utilities.sql import get_sql_query_output
+from user import User
+
+logger = get_logger(name="preferred_jobs_count")
+
+
+@send_lambda_response(logger)
+def lambda_handler(event, context):
+    # Use multiValueQueryStringParameters as the authoritative source
+    multi_params = event.get("multiValueQueryStringParameters", {}) or {}
+    query_params = event.get("queryStringParameters", {}) or {}
+
+    # Merge logic: arrays from multi_params, others from query_params if not present in multi
+    merged_params = {
+        k: v if len(v) > 1 or k.endswith("[]") else v[0]
+        for k, v in multi_params.items()
+    }
+    merged_params.update(
+        {k: v for k, v in query_params.items() if k not in merged_params}
+    )
+
+    # Convert to nested dict
+    nested_params = parse_nested_query(merged_params)
+
+    # Defensive parsing of experience
+    experience = nested_params.get("experience", {})
+    try:
+        min_exp = (
+            int(experience.get("min", 0)) if experience.get("min") is not None else 0
+        )
+        max_exp = (
+            int(experience.get("max", 0)) if experience.get("max") is not None else 0
+        )
+    except ValueError:
+        raise ValueError(f"Invalid experience range provided: {experience}")
+
+    # Ensure list values
+    def ensure_list(val):
+        return val if isinstance(val, list) else [val] if val else []
+
+    field_preferences = {
+        "job_domain": {True: ensure_list(nested_params.get("domains"))},
+        "experience_requirement_min_years": {True: [min_exp]},
+        "experience_requirement_max_years": {True: [max_exp]},
+        "location_requirement": {
+            True: ensure_list(nested_params.get("locationRequirement"))
+        },
+        "location": {True: ensure_list(nested_params.get("locations"))},
+        "technical_skills": {True: ensure_list(nested_params.get("skills"))},
+    }
+
+    query = f"""
+        SELECT count(*) AS count
+        FROM jobs.jobs
+        WHERE is_active
+          AND job_posted_at BETWEEN 
+                EXTRACT(EPOCH FROM (CURRENT_DATE - INTERVAL '365 days')) 
+                AND EXTRACT(EPOCH FROM (CURRENT_DATE - INTERVAL '1 day'))
+          AND {User.preferred_jobs_query_filters(field_preferences)};
+    """
+
+    jobs_count = get_sql_query_output(query=query)[0]
+    jobs_count["count"] = int(jobs_count["count"])
+
+    logger.info(
+        f"Average daily count of {jobs_count['count']} found for following preferences - \n{field_preferences}"
+    )
+
+    return jobs_count
+
+
+def parse_nested_query(params):
+    result = {}
+
+    for full_key, value in params.items():
+        keys = []
+        buffer = ""
+        in_brackets = False
+
+        for char in full_key:
+            if char == "[":
+                if buffer:
+                    keys.append(buffer)
+                    buffer = ""
+                in_brackets = True
+            elif char == "]":
+                if buffer:
+                    keys.append(buffer)
+                    buffer = ""
+                in_brackets = False
+            elif in_brackets or char != "[":
+                buffer += char
+        if buffer:
+            keys.append(buffer)
+
+        # Build nested structure
+        current = result
+        for k in keys[:-1]:
+            if k not in current:
+                current[k] = {}
+            current = current[k]
+        current[keys[-1]] = value
+
+    return result

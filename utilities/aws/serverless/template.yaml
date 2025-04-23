@@ -94,3 +94,29 @@ Resources:
             Method: POST
             Auth:
               Authorizer: LambdaTokenAuthorizer
+
+  PreferredJobsCount:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: PreferredJobsCount
+      Handler: __init__.lambda_handler
+      Runtime: python3.10
+      CodeUri: /Users/bhaskar/Desktop/other/job-hunt/scripts/lambdas/preferred_jobs_count
+      Timeout: 900
+      Layers:
+        - !Ref JobHuntCommonLayer
+      Events:
+        PreferredJobsApiGet:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobHuntApi
+            Path: /jobs/preferences/count
+            Method: GET
+            Auth:
+              Authorizer: LambdaTokenAuthorizer
+        PreferredJobsApiOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobHuntApi
+            Path: /jobs/preferences/count
+            Method: OPTIONS
