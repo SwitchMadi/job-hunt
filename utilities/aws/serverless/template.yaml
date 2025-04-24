@@ -146,3 +146,23 @@ Resources:
             RestApiId: !Ref JobHuntApi
             Path: /jobs/preferences
             Method: OPTIONS
+
+  GetJobPreferences:
+   Type: AWS::Serverless::Function
+   Properties:
+     FunctionName: GetJobPreferences
+     Handler: __init__.lambda_handler
+     Runtime: python3.10
+     CodeUri: /Users/bhaskar/Desktop/other/job-hunt/scripts/lambdas/get_job_preferences
+     Timeout: 900
+     Layers:
+       - !Ref JobHuntCommonLayer
+     Events:
+       GetJobPreferencesApiGet:
+         Type: Api
+         Properties:
+           RestApiId: !Ref JobHuntApi
+           Path: /jobs/preferences
+           Method: GET
+           Auth:
+             Authorizer: LambdaTokenAuthorizer
