@@ -4,6 +4,7 @@ import psycopg2
 from psycopg2.extras import DictCursor
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
+from psycopg2.extras import execute_values
 
 from utilities.logging import get_logger
 
@@ -67,10 +68,16 @@ def execute_sql_query(query, con=None):
     try:
         cur = con.cursor()
 
-        if type(query) == tuple:
-            query = cur.mogrify(query[0], query[1])
+        if isinstance(query, tuple):
+            if "%s" in query[0] and "VALUES %s" in query[0]:
+                # Bulk insert pattern
+                execute_values(cur, query[0], query[1])
+            else:
+                query = cur.mogrify(query[0], query[1])
+                cur.execute(query)
+        else:
+            cur.execute(query)
 
-        cur.execute(query)
         con.commit()
 
         if close_con:

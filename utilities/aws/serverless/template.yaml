@@ -120,3 +120,29 @@ Resources:
             RestApiId: !Ref JobHuntApi
             Path: /jobs/preferences/count
             Method: OPTIONS
+
+  SaveJobPreferences:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: SaveJobPreferences
+      Handler: __init__.lambda_handler
+      Runtime: python3.10
+      CodeUri: /Users/bhaskar/Desktop/other/job-hunt/scripts/lambdas/save_job_preferences
+      Timeout: 900
+      Layers:
+        - !Ref JobHuntCommonLayer
+      Events:
+        SaveJobPreferencesPost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobHuntApi
+            Path: /jobs/preferences
+            Method: POST
+            Auth:
+              Authorizer: LambdaTokenAuthorizer
+        SaveJobPreferencesOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobHuntApi
+            Path: /jobs/preferences
+            Method: OPTIONS

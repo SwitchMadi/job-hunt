@@ -40,6 +40,7 @@ def lambda_handler(event, context):
     def ensure_list(val):
         return val if isinstance(val, list) else [val] if val else []
 
+    # TODO: enhance filters based on synonyms
     field_preferences = {
         "job_domain": {True: ensure_list(nested_params.get("domains"))},
         "experience_requirement_min_years": {True: [min_exp]},

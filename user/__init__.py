@@ -99,14 +99,6 @@ class User:
         """
         return execute_sql_query(user_update_query)
 
-    def add_job_preference(self, job_field, value):
-        job_preference_query = f"""
-            insert into users.job_filter_preferences
-            (user_id, job_field, value)
-            values ({self.id}, '{job_field}', '{value}')
-        """
-        return execute_sql_query(job_preference_query)
-
     @property
     def drive_folder(self):
         if self._drive_folder:
