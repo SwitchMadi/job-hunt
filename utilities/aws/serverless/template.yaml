@@ -166,3 +166,29 @@ Resources:
            Method: GET
            Auth:
              Authorizer: LambdaTokenAuthorizer
+
+  UploadResume:
+   Type: AWS::Serverless::Function
+   Properties:
+     FunctionName: UploadResume
+     Handler: __init__.lambda_handler
+     Runtime: python3.10
+     CodeUri: /Users/bhaskar/Desktop/other/job-hunt/scripts/lambdas/upload_resume
+     Timeout: 900
+     Layers:
+       - !Ref JobHuntCommonLayer
+     Events:
+       UploadResumePost:
+         Type: Api
+         Properties:
+           RestApiId: !Ref JobHuntApi
+           Path: /resume
+           Method: POST
+           Auth:
+             Authorizer: LambdaTokenAuthorizer
+       UploadResumeOptions:
+         Type: Api
+         Properties:
+           RestApiId: !Ref JobHuntApi
+           Path: /resume
+           Method: OPTIONS
