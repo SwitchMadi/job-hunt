@@ -192,3 +192,28 @@ Resources:
            RestApiId: !Ref JobHuntApi
            Path: /resume
            Method: OPTIONS
+  ParseResume:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ParseResume
+      Handler: __init__.lambda_handler
+      Runtime: python3.10
+      CodeUri: /Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/parse_resume
+      Timeout: 900
+      Layers:
+        - !Ref JobHuntCommonLayer
+      Events:
+        ParseResumePost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobHuntApi
+            Path: /resume/parse
+            Method: POST
+            Auth:
+              Authorizer: LambdaTokenAuthorizer
+        ParseResumeOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobHuntApi
+            Path: /resume/parse
+            Method: OPTIONS
