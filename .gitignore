@@ -169,3 +169,5 @@ other
 /temp/
 /utilities/aws/serverless/samconfig.toml
 /.idea/
+.DS_Store
+config_temp.yml
