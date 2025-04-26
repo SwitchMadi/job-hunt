@@ -146,9 +146,7 @@ def construct_unknown_tag(loader, tag_suffix, node):
 CFNYamlLoader.add_multi_constructor("!", construct_unknown_tag)
 
 
-template_path = (
-    "/Users/bhaskar/Desktop/other/job-hunt/utilities/aws/serverless/template.yaml"
-)
+template_path = "/Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/utilities/aws/serverless/template.yaml"
 with open(template_path, "r") as f:
     data = yaml.load(f, Loader=CFNYamlLoader)
 
@@ -164,7 +162,7 @@ for name, resource in resources.items():
 
         generate_lambda_requirements(
             entry_file=os.path.join(lambda_folder, handler_file),
-            project_root="/Users/bhaskar/Desktop/other/job-hunt",
-            reference_file="/Users/bhaskar/Desktop/other/job-hunt/requirements.txt",
+            project_root="/Users/bhaskar/Desktop/switchmadi/codebase/job-hunt",
+            reference_file="/Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/requirements.txt",
             output_folder=lambda_folder,
         )

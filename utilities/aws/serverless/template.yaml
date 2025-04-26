@@ -25,7 +25,7 @@ Resources:
       FunctionName: TriggerJobScrape
       Handler: __init__.lambda_handler
       Runtime: python3.10
-      CodeUri: /Users/bhaskar/Desktop/other/job-hunt/scripts/lambdas/trigger_job_scrape
+      CodeUri: /Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_job_scrape
       Timeout: 900
       Layers:
         - !Ref JobHuntCommonLayer
@@ -42,7 +42,7 @@ Resources:
       FunctionName: ShareJobs
       Handler: __init__.lambda_handler
       Runtime: python3.10
-      CodeUri: /Users/bhaskar/Desktop/other/job-hunt/scripts/lambdas/share_jobs
+      CodeUri: /Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/share_jobs
       MemorySize: 1024
       Timeout: 900
       Layers:
@@ -60,7 +60,7 @@ Resources:
       FunctionName: Authorization
       Handler: __init__.lambda_handler
       Runtime: python3.10
-      CodeUri: /Users/bhaskar/Desktop/other/job-hunt/scripts/lambdas/authorization
+      CodeUri: /Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/authorization
       Timeout: 900
       Layers:
         - !Ref JobHuntCommonLayer
@@ -81,7 +81,7 @@ Resources:
       FunctionName: SaveUserTokens
       Handler: __init__.lambda_handler
       Runtime: python3.10
-      CodeUri: /Users/bhaskar/Desktop/other/job-hunt/scripts/lambdas/save_user_tokens
+      CodeUri: /Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/save_user_tokens
       Timeout: 900
       Layers:
         - !Ref JobHuntCommonLayer
@@ -101,7 +101,7 @@ Resources:
       FunctionName: PreferredJobsCount
       Handler: __init__.lambda_handler
       Runtime: python3.10
-      CodeUri: /Users/bhaskar/Desktop/other/job-hunt/scripts/lambdas/preferred_jobs_count
+      CodeUri: /Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/preferred_jobs_count
       Timeout: 900
       Layers:
         - !Ref JobHuntCommonLayer
@@ -127,7 +127,7 @@ Resources:
       FunctionName: SaveJobPreferences
       Handler: __init__.lambda_handler
       Runtime: python3.10
-      CodeUri: /Users/bhaskar/Desktop/other/job-hunt/scripts/lambdas/save_job_preferences
+      CodeUri: /Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/save_job_preferences
       Timeout: 900
       Layers:
         - !Ref JobHuntCommonLayer
@@ -153,7 +153,7 @@ Resources:
      FunctionName: GetJobPreferences
      Handler: __init__.lambda_handler
      Runtime: python3.10
-     CodeUri: /Users/bhaskar/Desktop/other/job-hunt/scripts/lambdas/get_job_preferences
+     CodeUri: /Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/get_job_preferences
      Timeout: 900
      Layers:
        - !Ref JobHuntCommonLayer
@@ -173,7 +173,7 @@ Resources:
      FunctionName: UploadResume
      Handler: __init__.lambda_handler
      Runtime: python3.10
-     CodeUri: /Users/bhaskar/Desktop/other/job-hunt/scripts/lambdas/upload_resume
+     CodeUri: /Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/upload_resume
      Timeout: 900
      Layers:
        - !Ref JobHuntCommonLayer
