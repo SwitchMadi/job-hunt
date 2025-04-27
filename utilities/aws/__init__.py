@@ -8,13 +8,18 @@ import functools
 dotenv.load_dotenv()
 
 
-def get_aws_client(service_name):
-    client = boto3.client(
-        service_name,
-        aws_access_key_id=os.getenv("JH_AWS_ACCESS_KEY_ID"),
-        aws_secret_access_key=os.getenv("JH_AWS_SECRET_ACCESS_KEY"),
-        region_name="ap-south-1",
-    )
+def get_aws_client(service_name, endpoint_url=None):
+    config = {
+        "service_name": service_name,
+        "aws_access_key_id": os.getenv("JH_AWS_ACCESS_KEY_ID"),
+        "aws_secret_access_key": os.getenv("JH_AWS_SECRET_ACCESS_KEY"),
+        "region_name": "ap-south-1",
+    }
+
+    if endpoint_url:
+        config["endpoint_url"] = endpoint_url
+
+    client = boto3.client(**config)
     return client
 
 
@@ -46,6 +51,12 @@ def send_lambda_response(logger):
                 if isinstance(result, dict) and "statusCode" in result:
                     result.setdefault("headers", {})
                     result["headers"].update(cors_headers)
+
+                    # Add body if missing
+                    if "body" not in result:
+                        message = result.get("message", "")
+                        result["body"] = json.dumps({"message": message})
+
                     return result
 
                 return {
