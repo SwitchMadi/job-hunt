@@ -65,6 +65,149 @@ Resources:
       Layers:
         - !Ref JobHuntCommonLayer
 
+  # DynamoDB Table for WebSocket Connections
+  ConnectionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: websocket-connections
+      AttributeDefinitions:
+        - AttributeName: connectionId
+          AttributeType: S
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: N
+      KeySchema:
+        - AttributeName: connectionId
+          KeyType: HASH
+        - AttributeName: userId
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      GlobalSecondaryIndexes:
+        - IndexName: UserIdTimeStampIndex
+          KeySchema:
+            - AttributeName: userId
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  # WebSocket API
+  ResumeParserWebSocket:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: ResumeParserWebSocket
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: $request.body.action
+      
+  WebSocketAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref ResumeParserWebSocket
+      AuthorizerType: REQUEST
+      Name: LambdaTokenAuthorizer
+      AuthorizerUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${Authorization.Arn}/invocations
+      IdentitySource: ['route.request.header.Sec-WebSocket-Protocol']
+      # Permission for API Gateway to invoke authorizer
+  WebSocketAuthorizerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref Authorization
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ResumeParserWebSocket}/authorizers/*
+
+  # WebSocket Routes
+  WebSocketConnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ResumeParserWebSocket
+      RouteKey: $connect
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref WebSocketAuthorizer
+      Target: !Sub integrations/${WebSocketConnectIntegration}
+
+  WebSocketConnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ResumeParserWebSocket
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WebSocketConnect.Arn}/invocations
+      IntegrationMethod: POST
+
+  WebSocketDisconnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ResumeParserWebSocket
+      RouteKey: $disconnect
+      AuthorizationType: NONE
+      Target: !Sub integrations/${WebSocketDisconnectIntegration}
+
+  WebSocketDisconnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ResumeParserWebSocket
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WebSocketDisconnect.Arn}/invocations
+      IntegrationMethod: POST
+
+  # WebSocket Lambda Functions
+  WebSocketConnect:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: WebSocketConnect
+      Handler: __init__.lambda_handler
+      Runtime: python3.10
+      CodeUri: /Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/websocket_connect
+      Environment:
+        Variables:
+          CONNECTIONS_TABLE: !Ref ConnectionsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ConnectionsTable
+        - Statement:
+            Effect: Allow
+            Action:
+              - 'execute-api:ManageConnections'
+            Resource:
+              - !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ResumeParserWebSocket}/${ResumeParserWebSocketStage}/POST/@connections/*
+              - !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ResumeParserWebSocket}/${ResumeParserWebSocketStage}/GET/@connections/*
+              - !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ResumeParserWebSocket}/${ResumeParserWebSocketStage}/DELETE/@connections/*
+      Layers:
+        - !Ref JobHuntCommonLayer
+
+  WebSocketDisconnect:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: WebSocketDisconnect
+      Handler: __init__.lambda_handler
+      Runtime: python3.10
+      CodeUri: /Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/websocket_disconnect
+      Environment:
+        Variables:
+          CONNECTIONS_TABLE: !Ref ConnectionsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ConnectionsTable
+        - Statement:
+            Effect: Allow
+            Action:
+              - 'execute-api:ManageConnections'
+            Resource:
+              - !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ResumeParserWebSocket}/${ResumeParserWebSocketStage}/POST/@connections/*
+              - !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ResumeParserWebSocket}/${ResumeParserWebSocketStage}/GET/@connections/*
+              - !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ResumeParserWebSocket}/${ResumeParserWebSocketStage}/DELETE/@connections/*
+      Layers:
+        - !Ref JobHuntCommonLayer
+
+  ResumeParserWebSocketStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref ResumeParserWebSocket
+      StageName: prod
+      AutoDeploy: true
+
   JobHuntApi:
     Type: AWS::Serverless::Api
     Properties:
@@ -192,16 +335,38 @@ Resources:
            RestApiId: !Ref JobHuntApi
            Path: /resume
            Method: OPTIONS
-  ParseResume:
+
+  WebSocketDomainName:
+    Type: AWS::ApiGatewayV2::DomainName
+    Properties:
+      DomainName: ws.api.switchmadi.com
+      DomainNameConfigurations:
+        - CertificateArn: arn:aws:acm:ap-south-1:992382457904:certificate/874ba37b-96d8-464c-8c06-0fd92934c02f
+          EndpointType: REGIONAL
+
+  WebSocketApiMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    Properties:
+      DomainName: !Ref WebSocketDomainName
+      ApiId: !Ref ResumeParserWebSocket
+      Stage: !Ref ResumeParserWebSocketStage
+
+  ParseResumeTrigger:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: ParseResume
+      FunctionName: ParseResumeTrigger
       Handler: __init__.lambda_handler
       Runtime: python3.10
-      CodeUri: /Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/parse_resume
+      CodeUri: /Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/parse_resume_trigger
       Timeout: 900
       Layers:
         - !Ref JobHuntCommonLayer
+      Policies:
+        - Statement:
+            Effect: Allow
+            Action:
+              - lambda:InvokeFunction
+            Resource: !GetAtt ParseResume.Arn
       Events:
         ParseResumePost:
           Type: Api
@@ -217,3 +382,41 @@ Resources:
             RestApiId: !Ref JobHuntApi
             Path: /resume/parse
             Method: OPTIONS
+
+  ParseResume:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ParseResume
+      Handler: __init__.lambda_handler
+      Runtime: python3.10
+      CodeUri: /Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/parse_resume
+      Timeout: 900
+      Layers:
+        - !Ref JobHuntCommonLayer
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ConnectionsTable
+        - Statement:
+            Effect: Allow
+            Action:
+              - 'execute-api:ManageConnections'
+            Resource:
+              - !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ResumeParserWebSocket}/${ResumeParserWebSocketStage}/POST/@connections/*
+              - !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ResumeParserWebSocket}/${ResumeParserWebSocketStage}/GET/@connections/*
+
+  # Lambda permissions for WebSocket routes
+  WebSocketConnectPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref WebSocketConnect
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ResumeParserWebSocket}/*/$connect
+
+  WebSocketDisconnectPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref WebSocketDisconnect
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ResumeParserWebSocket}/*/$disconnect

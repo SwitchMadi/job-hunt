@@ -7,6 +7,7 @@ from google.auth.transport.requests import Request
 import os
 import dotenv
 import json
+import tempfile
 
 from utilities.sql import get_sql_query_output, execute_sql_query, get_sql_connection
 from utilities.google_services.drive import DriveResource
@@ -469,38 +470,46 @@ class User:
         logger.info(f"Downloading resume for user_id - {self.id}...")
         s3 = S3Bucket(bucket_name=config["s3_bucket"])
 
-        file_name = self.resume.split("/")[-1]
-        file_local_path = f"{config['other_files_folder']}/{file_name}"
+        file_extension = os.path.splitext(self.resume)[1]
+        file_local_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                suffix=file_extension, delete=False
+            ) as temp_file:
+                file_local_path = temp_file.name
+                s3.fetch_data(file_s3_path=self.resume, file_local_path=file_local_path)
 
-        s3.fetch_data(file_s3_path=self.resume, file_local_path=file_local_path)
+            logger.info(f"Parsing resume for user_id - {self.id}...")
+            resume_summary = query_file(
+                query="Extract resume content in structured manner. Do not leave any information and do not add any of "
+                "your comments.",
+                file=file_local_path,
+            )
 
-        logger.info(f"Parsing resume for user_id - {self.id}...")
-        resume_summary = query_file(
-            query="Extract resume content in structured manner. Do not leave any information and do not add any of "
-            "your comments.",
-            file=file_local_path,
-        )
+            user_prompt = (
+                f"Following is resume summary for a candidate named {self.name}. Extract information from the resume into"
+                f"structured output as mentioned in response_format.\n"
+                f"Resume summary -\n"
+                f"{resume_summary}"
+            )
+            resume_info_extracted, resume_info = get_gpt_response(
+                constants.gpt["system_prompts"]["resume_parser"],
+                user_prompt,
+                response_format=Resume,
+            )
 
-        user_prompt = (
-            f"Following is resume summary for a candidate named {self.name}. Extract information from the resume into"
-            f"structured output as mentioned in response_format.\n"
-            f"Resume summary -\n"
-            f"{resume_summary}"
-        )
-        resume_info_extracted, resume_info = get_gpt_response(
-            constants.gpt["system_prompts"]["resume_parser"],
-            user_prompt,
-            response_format=Resume,
-        )
-
-        if resume_info_extracted:
-            resume_info = resume_info.model_dump(mode="json")
-            self.update_to_db(parsed_resume=json.dumps(resume_info))
-            self.parsed_resume = resume_info
-            return True
-        else:
-            logger.error(f"Couldn't extract resume fields for user_id - {self.id}")
-            return False
+            if resume_info_extracted:
+                resume_info = resume_info.model_dump(mode="json")
+                self.update_to_db(parsed_resume=json.dumps(resume_info))
+                self.parsed_resume = resume_info
+                return True
+            else:
+                logger.error(f"Couldn't extract resume fields for user_id - {self.id}")
+                return False
+        finally:
+            # Clean up temporary file
+            if file_local_path and os.path.exists(file_local_path):
+                os.remove(file_local_path)
 
     @property
     def first_name(self):

@@ -14,6 +14,9 @@ cp ~/Desktop/switchmadi/codebase/job-hunt/config.yml ~/Desktop/switchmadi/codeba
 cp ~/Desktop/switchmadi/codebase/job-hunt/config.yml ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/get_job_preferences/
 cp ~/Desktop/switchmadi/codebase/job-hunt/config.yml ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/upload_resume/
 cp ~/Desktop/switchmadi/codebase/job-hunt/config.yml ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/parse_resume/
+cp ~/Desktop/switchmadi/codebase/job-hunt/config.yml ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/parse_resume_trigger/
+cp ~/Desktop/switchmadi/codebase/job-hunt/config.yml ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/websocket_connect/
+cp ~/Desktop/switchmadi/codebase/job-hunt/config.yml ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/websocket_disconnect/
 
 cp /Users/bhaskar/Desktop/temporary/job-hunt-data/job-hunt-420615-0ce7f4f42a30.json ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/share_jobs/
 cp /Users/bhaskar/Desktop/temporary/job-hunt-data/client_secret_604979190363-ei70huqc4iirglc66t3vhc94fl96f07l.apps.googleusercontent.com.json ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/share_jobs/
@@ -37,6 +40,9 @@ rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/save_job_preferences/c
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/get_job_preferences/config.yml
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/upload_resume/config.yml
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/parse_resume/config.yml
+rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/parse_resume_trigger/config.yml
+rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/websocket_connect/config.yml
+rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/websocket_disconnect/config.yml
 
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_job_scrape/requirements.txt
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/share_jobs/requirements.txt
@@ -47,6 +53,9 @@ rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/save_job_preferences/r
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/get_job_preferences/requirements.txt
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/upload_resume/requirements.txt
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/parse_resume/requirements.txt
+rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/parse_resume_trigger/requirements.txt
+rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/websocket_connect/requirements.txt
+rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/websocket_disconnect/requirements.txt
 
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_job_scrape/job-hunt-420615-0ce7f4f42a30.json
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/share_jobs/job-hunt-420615-0ce7f4f42a30.json

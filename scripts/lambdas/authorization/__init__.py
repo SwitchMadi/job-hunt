@@ -12,7 +12,16 @@ logger = get_logger(name="lambda_authorizer")
 
 
 def lambda_handler(event, context):
-    token = event["authorizationToken"].replace("Bearer ", "")
+    # Handle WebSocket protocol auth
+    if "headers" in event and "Sec-WebSocket-Protocol" in event["headers"]:
+        token = event["headers"]["Sec-WebSocket-Protocol"]
+    # Handle REST API auth
+    elif "authorizationToken" in event:
+        token = event["authorizationToken"].replace("Bearer ", "")
+    else:
+        logger.error("No authorization token found")
+        raise Exception("Unauthorized")
+
     method_arn = event["methodArn"]
 
     try:
