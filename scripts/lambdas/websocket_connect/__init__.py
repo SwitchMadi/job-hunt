@@ -1,7 +1,6 @@
-import json
 from utilities.logging import get_logger
 from utilities.aws.dynamo import DynamoTable
-from utilities.aws import send_lambda_response, get_aws_client
+from utilities.aws import send_lambda_response
 
 logger = get_logger(name="websocket_connect")
 
