@@ -47,10 +47,26 @@ class Phone(BaseModel):
     number: str = Field(..., description="Phone number without the country code")
 
 
+class Platform(Enum):
+    LinkedIn = "LinkedIn"
+    GitHub = "GitHub"
+    Portfolio = "Portfolio Website"
+    Blog = "Personal Blog"
+    Medium = "Medium"
+    Dribbble = "Dribbble"
+    Behance = "Behance"
+    Kaggle = "Kaggle"
+    StackOverflow = "Stack Overflow"
+    Twitter = "Twitter"
+    YouTube = "YouTube"
+    GoogleScholar = "Google Scholar"
+    CodePen = "CodePen"
+    ProductHunt = "Product Hunt"
+    Other = "Other"
+
+
 class SocialLink(BaseModel):
-    platform: str = Field(
-        ..., description="Name of the social media platform (e.g. LinkedIn, GitHub)"
-    )
+    platform: Platform = Field(..., description="Social media platform or website type")
     url: str = Field(..., description="URL of the profile or personal website")
 
 
@@ -58,7 +74,6 @@ class Salutation(Enum):
     MR = "Mr."
     MRS = "Mrs."
     MS = "Ms."
-    MISS = "Miss"
     DR = "Dr."
     PROF = "Prof."
 
@@ -75,9 +90,6 @@ class PersonalDetails(BaseModel):
     )
     email: Optional[str] = Field(None, description="Email address")
     address: Optional[str] = Field(None, description="Residential address or location")
-    summary: Optional[str] = Field(
-        None, description="Professional summary or objective"
-    )
     social_links: Optional[List[SocialLink]] = Field(
         None, description="List of social media profiles or personal website links"
     )
@@ -109,10 +121,32 @@ class WorkExperience(BaseModel):
     )
 
 
+class Degree(Enum):
+    BE = "Bachelor of Engineering"
+    BTech = "Bachelor of Technology"
+    ME = "Master of Engineering"
+    MTech = "Master of Technology"
+    BSc = "Bachelor of Science"
+    BCA = "Bachelor of Computer Applications"
+    BA = "Bachelor of Arts"
+    BCom = "Bachelor of Commerce"
+    BBA = "Bachelor of Business Administration"
+    MBA = "Master of Business Administration"
+    MSc = "Master of Science"
+    MA = "Master of Arts"
+    MCom = "Master of Commerce"
+    BFA = "Bachelor of Fine Arts"
+    BDes = "Bachelor of Design"
+    MFA = "Master of Fine Arts"
+    PhD = "Doctor of Philosophy"
+    Diploma = "Diploma"
+    Certificate = "Certificate"
+    Associate = "Associate Degree"
+    Other = "Other"
+
+
 class Education(BaseModel):
-    degree: str = Field(
-        ..., description="Degree or certification earned (e.g. Bachelor of Technology)"
-    )
+    degree: Degree = Field(..., description="Degree or certification earned")
     field_of_study: Optional[str] = Field(None, description="Major or field of study")
     institution: str = Field(..., description="Name of the educational institution")
     location: Optional[str] = Field(None, description="Location of the institution")
@@ -175,8 +209,8 @@ class Resume(BaseModel):
     personal_details: PersonalDetails = Field(
         ..., description="Personal details of the candidate"
     )
-    summary: Optional[str] = Field(
-        None, description="Professional summary or objective"
+    summary: str = Field(
+        ..., description="Professional summary or objective in 1-2 sentences"
     )
     work_experience: List[WorkExperience] = Field(
         ..., description="List of work experience entries"
