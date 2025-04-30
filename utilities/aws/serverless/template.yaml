@@ -383,6 +383,32 @@ Resources:
             Path: /resume/parse
             Method: OPTIONS
 
+  SaveModifiedResume:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: SaveModifiedResume
+      Handler: __init__.lambda_handler
+      Runtime: python3.10
+      CodeUri: /Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/save_modified_resume
+      Timeout: 900
+      Layers:
+        - !Ref JobHuntCommonLayer
+      Events:
+        SaveModifiedResumePost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobHuntApi
+            Path: /resume/parser/modified
+            Method: POST
+            Auth:
+              Authorizer: LambdaTokenAuthorizer
+        SaveModifiedResumeOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobHuntApi
+            Path: /resume/parser/modified
+            Method: OPTIONS
+
   ParseResume:
     Type: AWS::Serverless::Function
     Properties:

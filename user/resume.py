@@ -11,14 +11,22 @@ class Proficiency(Enum):
 
 
 class SkillCategory(Enum):
-    BACKEND = "Backend"
-    FRONTEND = "Frontend"
-    DEVOPS = "DevOps"
+    PROGRAMMING_LANGUAGE = "Programming Language"
+    FRAMEWORK = "Framework"
     DATABASE = "Database"
-    LANGUAGE = "Programming Language"
-    TOOL = "Tool"
-    SOFT_SKILL = "Soft Skill"
-    OTHER = "Other"
+    CLOUD = "Cloud"
+    INFRASTRUCTURE = "Infrastructure"
+    DEVOPS = "DevOps"
+    FRONTEND = "Frontend"
+    BACKEND = "Backend"
+    DATA_ENGINEERING = "Data Engineering"
+    DATA_ANALYTICS = "Data Analytics"
+    SECURITY = "Security"
+    MACHINE_LEARNING = "Machine Learning"
+    TESTING = "Testing"
+    PRODUCT_MANAGEMENT = "Product Management"
+    PROJECT_MANAGEMENT = "Project Management"
+    DESIGN = "Design"
 
 
 class EmploymentType(Enum):
@@ -110,7 +118,8 @@ class WorkExperience(BaseModel):
         None, description="List of achievements mentioned"
     )
     job_url: Optional[str] = Field(
-        None, description="URL for the job posting or company"
+        None,
+        description="URL if there is any mentioned in the resume for the work experience",
     )
     industry: Optional[str] = Field(
         None, description="Industry sector of the job/company"
@@ -199,9 +208,9 @@ class Certification(BaseModel):
 
 
 class Language(BaseModel):
-    language: str = Field(..., description="Language name")
+    language: str = Field(..., description="Spoken language name")
     proficiency: Optional[Proficiency] = Field(
-        None, description="Proficiency level in the language"
+        None, description="Proficiency level in the spoken language"
     )
 
 
@@ -210,7 +219,7 @@ class Resume(BaseModel):
         ..., description="Personal details of the candidate"
     )
     summary: str = Field(
-        ..., description="Professional summary or objective in 1-2 sentences"
+        ..., description="Professional summary or objective in at least 100 words"
     )
     work_experience: List[WorkExperience] = Field(
         ..., description="List of work experience entries"
@@ -228,8 +237,5 @@ class Resume(BaseModel):
         None, description="List of certifications or courses completed"
     )
     languages: Optional[List[Language]] = Field(
-        None, description="Languages known along with proficiency"
-    )
-    additional_information: Optional[str] = Field(
-        None, description="Any additional relevant information"
+        None, description="Spoken languages known along with proficiency"
     )
