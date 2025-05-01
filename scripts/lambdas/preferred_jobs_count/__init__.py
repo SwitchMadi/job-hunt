@@ -59,7 +59,8 @@ def lambda_handler(event, context):
           AND job_posted_at BETWEEN 
                 EXTRACT(EPOCH FROM (CURRENT_DATE - INTERVAL '365 days')) 
                 AND EXTRACT(EPOCH FROM (CURRENT_DATE - INTERVAL '1 day'))
-          AND {User.preferred_jobs_query_filters(field_preferences)};
+          AND {User.preferred_jobs_query_filters(field_preferences)}
+          AND is_non_automatable = false;
     """
 
     jobs_count = get_sql_query_output(query=query)[0]

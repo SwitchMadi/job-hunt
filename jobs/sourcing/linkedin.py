@@ -8,6 +8,7 @@ import time
 from urllib.parse import urlparse, parse_qs
 import yaml
 
+from utilities.constants import non_automatable_job_boards
 from utilities import time_ago_to_epoch
 from utilities.selenium import get_selenium_driver
 from utilities.logging import get_logger
@@ -176,6 +177,10 @@ def extract_linkedin_jobs(jobs_url, scraped_linkedin_job_ids):
                             "job_posted_at": job_posted_at,
                             "job_description": job_description,
                             "linkedin_easy_apply": linkedin_easy_apply,
+                            "is_non_automatable": any(
+                                domain in original_job_url
+                                for domain in non_automatable_job_boards
+                            ),
                         }
                     )
                     jobs_scraped += 1

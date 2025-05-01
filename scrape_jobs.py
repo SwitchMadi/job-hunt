@@ -95,7 +95,20 @@ try:
                 )
             return results
 
-        df_jobs["job_info"] = extract_job_info_concurrently(extract_job_info, df_jobs)
+        # Only process job info for automatable jobs
+        df_automatable_jobs = df_jobs[~df_jobs["is_non_automatable"]].copy()
+        if not df_automatable_jobs.empty:
+            df_automatable_jobs["job_info"] = extract_job_info_concurrently(
+                extract_job_info, df_automatable_jobs
+            )
+            # Update the original dataframe with processed info
+            df_jobs.loc[~df_jobs["is_non_automatable"], "job_info"] = (
+                df_automatable_jobs["job_info"]
+            )
+        # Set empty job info for non-automatable jobs
+        df_jobs.loc[df_jobs["is_non_automatable"], "job_info"] = [{}] * sum(
+            df_jobs["is_non_automatable"]
+        )
 
         df_dict = pd.json_normalize(df_jobs["job_info"])
         df_jobs = pd.concat([df_jobs, df_dict], axis=1).drop("job_info", axis=1)
@@ -139,19 +152,20 @@ try:
                 "job_posted_at": Integer(),
                 "is_reposted_job": Boolean(),
                 "linkedin_easy_apply": Boolean(),
+                "is_non_automatable": Boolean(),
             },
         )
         main_table_query = """INSERT INTO jobs.jobs
-        (job_hash_id, job_url, is_reposted_job, repost_url, job_posted_at, 
-        "source", job_description, company, title, "location", location_requirement, employment_type, technical_skills, 
-        other_skills, employees_count, job_domain, experience_level, experience_requirement_min_years, 
+        (job_hash_id, job_url, is_reposted_job, repost_url, job_posted_at,
+        "source", job_description, company, title, "location", location_requirement, employment_type, technical_skills,
+        other_skills, employees_count, job_domain, experience_level, experience_requirement_min_years,
         experience_requirement_max_years, linkedin_easy_apply, visa_sponsorship, spoken_language_requirement, salary,
-        description_language)
-        SELECT job_hash_id, job_url, is_reposted_job, repost_url, job_posted_at, "source", 
-        job_description, company, title, "location", location_requirement, employment_type, technical_skills, 
-        other_skills, employees_count, job_domain, experience_level, experience_requirement_min_years, 
-        experience_requirement_max_years, linkedin_easy_apply, visa_sponsorship, spoken_language_requirement, salary, 
-        description_language
+        description_language, is_non_automatable)
+        SELECT job_hash_id, job_url, is_reposted_job, repost_url, job_posted_at, "source",
+        job_description, company, title, "location", location_requirement, employment_type, technical_skills,
+        other_skills, employees_count, job_domain, experience_level, experience_requirement_min_years,
+        experience_requirement_max_years, linkedin_easy_apply, visa_sponsorship, spoken_language_requirement, salary,
+        description_language, is_non_automatable
         FROM jobs.jobs_staging
         WHERE job_hash_id NOT IN (
                                     SELECT DISTINCT job_hash_id
