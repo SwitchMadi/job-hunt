@@ -311,10 +311,44 @@ class ApplicationPage:
         return
 
     def apply(self):
+        # Check if job was already successfully applied
+        check_existing_query = f"""
+            SELECT id, application_status
+            FROM users.job_applications
+            WHERE user_id = {self.parent_job.user.id}
+            AND job_id = {self.parent_job.id}
+            AND application_status = 'submitted';
+        """
+        existing_application = get_sql_query_output(check_existing_query)
+        if existing_application:
+            logger.warn(
+                f"Already successfully applied for job {self.parent_job.id} - {self.parent_job.title} by user "
+                f"{self.parent_job.user.id}"
+            )
+            return True
+
+        # Create job application entry
+        insert_application_query = f"""
+            INSERT INTO users.job_applications
+            (user_id, job_id, application_status)
+            VALUES ({self.parent_job.user.id}, {self.parent_job.id}, 'initiated')
+            RETURNING id;
+        """
+        result = execute_sql_query(insert_application_query, return_result=True)
+        if not result:
+            logger.error(
+                f"Failed to create application entry for user {self.parent_job.user.id} "
+                f"for job {self.parent_job.id} - {self.parent_job.title}"
+            )
+            return None
+
+        application_id = result["id"]
+
         if not self.is_application_feasible:
-            logger.exception(
+            logger.warn(
                 f"Application is not possible for job {self.parent_job.title}. URL - {self.url}"
             )
+            self._update_application_status(application_id, "failed")
             return
 
         if not self.steps_identified:
@@ -330,7 +364,7 @@ class ApplicationPage:
             if current_application_steps:
                 query = f"""
                             update jobs.application_steps
-                            set is_identification_complete = true, 
+                            set is_identification_complete = true,
                                 is_application_feasible = {"true" if self.steps_identified else "false"}
                             where job_id = {self.parent_job.id}
                             and is_active;
@@ -348,11 +382,78 @@ class ApplicationPage:
                 logger.exception(
                     f"Could not identify application steps for job {self.parent_job.title}. URL - {self.url}"
                 )
+                self._update_application_status(application_id, "failed")
                 return
         else:
             self.run_steps()
 
-        return
+        # Verify submission status and update application
+        application_submitted = self._verify_application_submission()
+        if application_submitted is None:
+            self._update_application_status(application_id, "unknown")
+            return None
+
+        status = "submitted" if application_submitted else "failed"
+        self._update_application_status(application_id, status)
+        return application_submitted
+
+    @staticmethod
+    def _update_application_status(application_id, status):
+        """Update job application status in database"""
+        query = f"""
+            UPDATE users.job_applications
+            SET application_status = '{status}'
+            WHERE id = {application_id};
+        """
+        execute_sql_query(query)
+
+    def _verify_application_submission(self):
+        """Verify if job application was successfully submitted by analyzing the page content"""
+        global driver
+        time.sleep(2)  # Wait for page to load completely
+
+        user_prompt = (
+            f"Following HTML page is shown after submitting job application for {self.parent_job.title} "
+            f"at a company called {self.parent_job.company}.\n"
+            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
+            f"Analyse the whole HTML very carefully to determine if application was submitted successfully."
+        )
+
+        class SubmissionStatus(Enum):
+            true = True
+            false = False
+
+        class ApplicationSubmission(BaseModel):
+            is_submitted: SubmissionStatus = Field(
+                ...,
+                description="Whether the job application was successfully submitted based on page content",
+            )
+
+        submission_found, submission = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=ApplicationSubmission,
+        )
+
+        if submission_found:
+            submitted = submission.is_submitted.value
+            if submitted:
+                logger.info(
+                    f"Successfully submitted application for user {self.parent_job.user.id} "
+                    f"for job {self.parent_job.id} - {self.parent_job.title}"
+                )
+            else:
+                logger.error(
+                    f"Failed to submit application for user {self.parent_job.user.id} for job {self.parent_job.id} - "
+                    f"{self.parent_job.title}"
+                )
+            return submitted
+        else:
+            logger.error(
+                f"Could not verify submission status for user {self.parent_job.user.id} for job {self.parent_job.id} - "
+                f"{self.parent_job.title}"
+            )
+            return None
 
     # Identify job page components
     def _identify_application_steps(self):
@@ -549,17 +650,30 @@ class ApplicationPage:
 
         if elements.submit_application_button.value:
             self._identify_submit_application_button()
+
             return True
 
     # Identify application fields
-    def _identify_application_fields(self):
+    def _identify_application_fields(self, identify_only_errors=False):
         global driver
+
+        if identify_only_errors:
+            prompt_part = (
+                "While filling job application I faced certain errors on this page. Analyse the whole HTML "
+                "very carefully for extracting all the application fields which are having error. Strictly "
+                "ignore the fields where there is no error."
+            )
+        else:
+            prompt_part = (
+                "The webpage has job application related fields. Analyse the whole HTML very carefully for "
+                "extracting all the application fields."
+            )
+
         user_prompt = (
             f"Following HTML page is job application webpage for {self.parent_job.title} at a company called "
             f"{self.parent_job.company}.\n"
             f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
-            f"The webpage has job application related fields. Analyse the whole HTML very carefully for extracting all "
-            f"the application fields."
+            f"{prompt_part}"
         )
 
         class FieldCategory(Enum):
@@ -731,4 +845,12 @@ class ApplicationPage:
     def _identify_submit_application_button(self):
         submit_application_button = SubmitApplication(parent_application_page=self)
         submit_application_button.proceed()
+
+        error_fields = self._identify_application_fields(identify_only_errors=True)
+        if error_fields:
+            logger.warn(
+                f"Errors in job application fields for {self.parent_job.title}. URL - {self.url}"
+            )
+            self._act_on_job_fields(error_fields)
+
         self._update_steps(submit_application_button)

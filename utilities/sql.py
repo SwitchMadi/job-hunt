@@ -59,14 +59,14 @@ def get_sql_query_output(query, con=None, output_as_dataframe=False):
         return output
 
 
-def execute_sql_query(query, con=None):
+def execute_sql_query(query, con=None, return_result=False):
     close_con = False
     if con is None:
         con = get_sql_connection()
         close_con = True
 
     try:
-        cur = con.cursor()
+        cur = con.cursor(cursor_factory=DictCursor if return_result else None)
 
         if isinstance(query, tuple):
             if "%s" in query[0] and "VALUES %s" in query[0]:
@@ -78,12 +78,19 @@ def execute_sql_query(query, con=None):
         else:
             cur.execute(query)
 
+        result = None
+        if return_result:
+            result = cur.fetchone()
+
         con.commit()
 
         if close_con:
             con.close()
 
+        if return_result:
+            return result
         return True
+
     except Exception as e:
         if close_con:
             con.close()
