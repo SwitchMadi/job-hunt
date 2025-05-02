@@ -16,6 +16,7 @@ from utilities.selenium import (
     get_observed_element,
     get_element_xpath,
     minify_html_for_gpt_prompt,
+    simulate_empty_area_click,
 )
 
 
@@ -96,6 +97,7 @@ class DropDown(PageComponent):
         global driver
 
         if not self.options_container_x_path:
+            simulate_empty_area_click()
             start_dom_mutation_observer()
             self.dropdown_button.proceed()
             options_container = get_observed_element()
@@ -188,6 +190,44 @@ class DropDown(PageComponent):
             raise Exception(
                 f"Couldn't extract dropdown fields for {job_title}. URL - {job_url}"
             )
+
+    @classmethod
+    def validate_observed_element_for_dropdown(
+        cls, job_title, element_x_path, field_title, observed_element
+    ):
+        global driver
+
+        class DropdownValidation(BaseModel):
+            is_dropdown: bool = Field(
+                ...,
+                description="Whether the observed element is a dropdown/menu container for the clicked element",
+            )
+
+        user_prompt = (
+            f"Following HTML page is job application webpage for {job_title}. "
+            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
+            f"There is a field with title {field_title} at XPath {element_x_path}.\n"
+            f"When I clicked the field, javascript mutation observer observed that following element was added to the "
+            f"DOM:\n"
+            f"{observed_element.get_attribute('outerHTML')}\n"
+            f"Determine if this observed element is likely to be a dropdown/menu container that appeared because "
+            f"of clicking the element. Consider factors like:\n"
+            f"1. Element's structure and attributes (class names, ARIA roles etc.)\n"
+            f"2. Positioning and visibility attributes\n"
+            f"3. Whether it contains clickable options/menu items\n"
+            f"4. If the field title or similar text appears in the observed element\n"
+        )
+
+        validation_found, validation = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=DropdownValidation,
+        )
+
+        if validation_found:
+            return validation.is_dropdown
+
+        return False
 
     def to_dict(self):
         return {

@@ -175,6 +175,7 @@ class ApplicationField:
                 x_path=self.x_path,
                 html_type=self.html_type,
                 field_title=self.title,
+                job_title=self.parent_application_page.parent_job.title,
                 options=self.options,
             )
 
@@ -236,7 +237,9 @@ class ApplicationField:
             )
 
     @classmethod
-    def revalidate_component_type(cls, x_path, html_type, field_title, options=[]):
+    def revalidate_component_type(
+        cls, x_path, html_type, field_title, job_title, options=[]
+    ):
         if html_type == "text_box":
             from jobs.page_components.search_field import SearchField
 
@@ -249,11 +252,23 @@ class ApplicationField:
             element.click()
             observed_element = get_observed_element()
 
-            if observed_element is None:
-                return "text_box"
-            else:
-                simulate_empty_area_click(field_title)
-                return "dropdown"
+            if observed_element:
+                from jobs.page_components.drop_down import DropDown
+
+                is_observed_element_dropdown = (
+                    DropDown.validate_observed_element_for_dropdown(
+                        job_title=job_title,
+                        element_x_path=x_path,
+                        field_title=field_title,
+                        observed_element=observed_element,
+                    )
+                )
+                if is_observed_element_dropdown:
+                    simulate_empty_area_click(field_title)
+                    return "dropdown"
+
+            return "text_box"
+
         elif html_type == "check_box":
             from jobs.page_components.check_box import CheckBox
 
