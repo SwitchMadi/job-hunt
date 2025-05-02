@@ -30,6 +30,7 @@ from jobs.page_components.date_field import DateField
 from jobs.page_components.drop_down import DropDown
 from jobs.page_components.radio_button import RadioButton
 from jobs.page_components.search_field import SearchField
+from jobs.page_components.popup import Popup
 
 
 logger = get_logger(name="job")
@@ -717,6 +718,14 @@ class ApplicationPage:
         resume_upload_button = ResumeUpload(title=title, parent_application_page=self)
         resume_upload_button.proceed()
         self._update_steps(resume_upload_button)
+
+        self._identify_popup()
+
+    @retry()
+    def _identify_popup(self):
+        popup = Popup(previous_step="resume_upload", parent_application_page=self)
+        popup.proceed()
+        self._update_steps(popup)
 
     @retry()
     def _identify_submit_application_button(self):
