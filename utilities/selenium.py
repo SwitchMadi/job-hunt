@@ -192,8 +192,15 @@ def start_dom_mutation_observer():
     global driver
 
     script = """
-    if (!window.__observedElement) {
+      // tear down any previous observer
+      if (window.__observer) {
+        window.__observer.disconnect();
+        window.__observer = null;
+      }
+      
+      // reset the “found” element
       window.__observedElement = null;
+      
       window.__observer = new MutationObserver(function(mutations) {
         for (var mutation of mutations) {
           for (var node of mutation.addedNodes) {
@@ -207,7 +214,6 @@ def start_dom_mutation_observer():
         }
       });
       window.__observer.observe(document.body, { childList: true, subtree: true });
-    }
     """
     driver.execute_script(script)
 

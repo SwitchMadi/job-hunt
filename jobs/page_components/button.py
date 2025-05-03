@@ -1,4 +1,5 @@
 import time
+import random
 from selenium.common import (
     ElementNotInteractableException,
     ElementClickInterceptedException,
@@ -27,16 +28,87 @@ class Button(PageComponent):
         self.attempt = 1
         self.max_attempt = 3
 
+    def _human_like_delay(self):
+        """Add a random delay to mimic human response time"""
+        time.sleep(random.uniform(0.5, 2))
+
+    def _move_mouse_naturally(self, element, actions):
+        """Move mouse in a more natural way to the element"""
+        # Get element location and size
+        location = element.location
+        size = element.size
+
+        # Calculate a random point within the element
+        offset_x = random.randint(5, size["width"] - 5)
+        offset_y = random.randint(5, size["height"] - 5)
+
+        # Create a curved movement by adding intermediate points
+        start_x = random.randint(0, 100)
+        start_y = random.randint(0, 100)
+
+        # Move to initial position
+        actions.move_by_offset(start_x, start_y)
+
+        # Add some "human-like" curved movement
+        steps = random.randint(3, 6)
+        for _ in range(steps):
+            actions.pause(random.uniform(0.1, 0.3))
+            actions.move_by_offset(
+                (location["x"] + offset_x - start_x) // steps,
+                (location["y"] + offset_y - start_y) // steps,
+            )
+
+        return actions
+
     def proceed(self, retry=False):
         global driver
 
         try:
+            # Add initial random delay
+            self._human_like_delay()
+
             element = driver.find_element(By.XPATH, self.x_path)
+
+            # Scroll element into view with some randomness in scroll position
             driver.execute_script(
                 "arguments[0].scrollIntoView({block: 'center'});", element
             )
-            element.click()
-            time.sleep(2)
+
+            # Add small delay after scrolling
+            time.sleep(random.uniform(0.3, 0.7))
+
+            # Create action chains for more natural movement
+            actions = ActionChains(driver)
+            actions = self._move_mouse_naturally(element, actions)
+
+            # Add a tiny pause before clicking
+            actions.pause(random.uniform(0.1, 0.3))
+
+            if self.button_type == "dropdown":
+                element.click()
+            else:
+                # Use JavaScript to dispatch native events for more reliable clicking
+                driver.execute_script(
+                    """
+                    function simulateClick(element) {
+                        ['mousedown', 'mouseup', 'click'].forEach(eventType => {
+                            const event = new MouseEvent(eventType, {
+                                view: window,
+                                bubbles: true,
+                                cancelable: true,
+                                clientX: element.getBoundingClientRect().left + 5,
+                                clientY: element.getBoundingClientRect().top + 5
+                            });
+                            element.dispatchEvent(event);
+                        });
+                    }
+                    simulateClick(arguments[0]);
+                """,
+                    element,
+                )
+
+            # Random delay after clicking
+            time.sleep(random.uniform(1.5, 2.5))
         except ElementNotInteractableException as e:
             logger.info(
                 f"element not interactable in class Button's proceed method.\n{e}\nButton instance - {vars(self)}"

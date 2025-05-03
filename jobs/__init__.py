@@ -351,51 +351,68 @@ class ApplicationPage:
             self._update_application_status(application_id, "failed")
             return
 
-        if not self.steps_identified:
-            self.steps_identified = self._identify_application_steps()
-
-            application_steps_query = f"""
-                                            select *
-                                            from jobs.application_steps
-                                            where job_id = {self.parent_job.id}
-                                            and is_active;
-                                       """
-            current_application_steps = get_sql_query_output(application_steps_query)
-            if current_application_steps:
-                query = f"""
-                            update jobs.application_steps
-                            set is_identification_complete = true,
-                                is_application_feasible = {"true" if self.steps_identified else "false"}
-                            where job_id = {self.parent_job.id}
-                            and is_active;
-                         """
-            else:
-                query = f"""
-                            INSERT INTO jobs.application_steps
-                            (job_id, is_identification_complete, is_application_feasible)
-                            VALUES ({self.parent_job.id}, true, {"true" if self.steps_identified else "false"});
-                         """
-
-            execute_sql_query(query)
-
+        try:
             if not self.steps_identified:
-                logger.exception(
-                    f"Could not identify application steps for job {self.parent_job.title}. URL - {self.url}"
+                self.steps_identified = self._identify_application_steps()
+
+                application_steps_query = f"""
+                                                select *
+                                                from jobs.application_steps
+                                                where job_id = {self.parent_job.id}
+                                                and is_active;
+                                           """
+                current_application_steps = get_sql_query_output(
+                    application_steps_query
                 )
-                self._update_application_status(application_id, "failed")
-                return
-        else:
-            self.run_steps()
+                if current_application_steps:
+                    query = f"""
+                                update jobs.application_steps
+                                set is_identification_complete = true,
+                                    is_application_feasible = {"true" if self.steps_identified else "false"}
+                                where job_id = {self.parent_job.id}
+                                and is_active;
+                             """
+                else:
+                    query = f"""
+                                INSERT INTO jobs.application_steps
+                                (job_id, is_identification_complete, is_application_feasible)
+                                VALUES ({self.parent_job.id}, true, {"true" if self.steps_identified else "false"});
+                             """
 
-        # Verify submission status and update application
-        application_submitted = self._verify_application_submission()
-        if application_submitted is None:
-            self._update_application_status(application_id, "unknown")
+                execute_sql_query(query)
+
+                if not self.steps_identified:
+                    logger.exception(
+                        f"Could not identify application steps for job {self.parent_job.title}. URL - {self.url}"
+                    )
+                    self._update_application_status(application_id, "failed")
+                    return
+            else:
+                self.run_steps()
+
+            # Verify submission status and update application
+            application_submitted = self._verify_application_submission()
+            if application_submitted is None:
+                self._update_application_status(application_id, "unknown")
+                return None
+
+            status = "submitted" if application_submitted else "failed"
+            self._update_application_status(application_id, status)
+            return application_submitted
+        except Exception as e:
+            logger.exception(
+                f"Error while applying for user {self.parent_job.user.id} for job {self.parent_job.id} - "
+                f"{self.parent_job.title}. Error - {e}"
+            )
+            self._update_application_status(application_id, "failed")
             return None
+        finally:
+            # Close the driver after application
+            global driver
+            if driver:
+                driver.quit()
 
-        status = "submitted" if application_submitted else "failed"
-        self._update_application_status(application_id, status)
-        return application_submitted
+            driver = None
 
     @staticmethod
     def _update_application_status(application_id, status):
@@ -426,7 +443,7 @@ class ApplicationPage:
         class ApplicationSubmission(BaseModel):
             is_submitted: SubmissionStatus = Field(
                 ...,
-                description="Whether the job application was successfully submitted based on page content",
+                description="Page content mentions / suggests that the job application submission was successful",
             )
 
         submission_found, submission = get_gpt_response(
@@ -659,9 +676,10 @@ class ApplicationPage:
 
         if identify_only_errors:
             prompt_part = (
-                "While filling job application I faced certain errors on this page. Analyse the whole HTML "
-                "very carefully for extracting all the application fields which are having error. Strictly "
-                "ignore the fields where there is no error."
+                "While filling job application I clicked submit / next section button. There might or might not be any "
+                "errors on the page / around job fields. Analyse the whole HTML very carefully for extracting all the "
+                "application fields which are definitely having an error. Strictly ignore the fields where there is no "
+                "error for sure."
             )
         else:
             prompt_part = (
@@ -692,21 +710,49 @@ class ApplicationPage:
             cover_letter = "cover_letter"
             other = "other"
 
-        class ApplicationFieldInfo(BaseModel):
-            field_title: str = Field(
-                ...,
-                description="Application field's exact title / question mentioned on the webpage, without any "
-                "modification.",
-            )
-            field_question: str = Field(
-                ...,
-                description="Field title on its own may not be self explanatory so modify it, if needed, so that it "
-                "makes sense as a question. Otherwise respond same as field title.",
-            )
-            field_category: FieldCategory = Field(
-                ...,
-                description="Application field category like email, work_experience, education, city etc.",
-            )
+        if identify_only_errors:
+
+            class ApplicationFieldInfo(BaseModel):
+                field_title: str = Field(
+                    ...,
+                    description="Application field's exact title / question mentioned on the webpage, without any "
+                    "modification.",
+                )
+                field_question: str = Field(
+                    ...,
+                    description="Field title on its own may not be self explanatory so modify it, if needed, so that it "
+                    "makes sense as a question. Otherwise respond same as field title.",
+                )
+                field_category: FieldCategory = Field(
+                    ...,
+                    description="Application field category like email, work_experience, education, city etc.",
+                )
+                is_error_present: bool = Field(
+                    ...,
+                    description="Whether this field has any validation/requirement errors.",
+                )
+                error: str | None = Field(
+                    None,
+                    description="The error message shown for this field if it has validation/requirement errors.",
+                )
+
+        else:
+
+            class ApplicationFieldInfo(BaseModel):
+                field_title: str = Field(
+                    ...,
+                    description="Application field's exact title / question mentioned on the webpage, without any "
+                    "modification.",
+                )
+                field_question: str = Field(
+                    ...,
+                    description="Field title on its own may not be self explanatory so modify it, if needed, so that it "
+                    "makes sense as a question. Otherwise respond same as field title.",
+                )
+                field_category: FieldCategory = Field(
+                    ...,
+                    description="Application field category like email, work_experience, education, city etc.",
+                )
 
         class JobFields(BaseModel):
             job_fields: list[ApplicationFieldInfo]
@@ -801,6 +847,8 @@ class ApplicationPage:
 
     @retry()
     def _complete_application_field_identification(self, job_field):
+        if job_field.field_title == "State":
+            print(1)
         application_field = ApplicationField(
             parent_application_page=self,
             title=job_field.field_title,
@@ -847,6 +895,10 @@ class ApplicationPage:
         submit_application_button.proceed()
 
         error_fields = self._identify_application_fields(identify_only_errors=True)
+        # Filter out fields that don't have errors
+        error_fields = [
+            field for field in error_fields if field.is_error_present and field.error
+        ]
         if error_fields:
             logger.warn(
                 f"Errors in job application fields for {self.parent_job.title}. URL - {self.url}"

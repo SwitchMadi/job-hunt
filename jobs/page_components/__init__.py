@@ -65,7 +65,7 @@ class ApplicationField:
         self.format = None
         self.options = []
 
-    def _identify(self, retry=False):
+    def _identify(self, retry=False, prev_x_path=None):
         global driver
         user_prompt = (
             f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title}."
@@ -75,6 +75,13 @@ class ApplicationField:
             f"Field category - {self.category}\n"
             f"Analyse the whole HTML very carefully for extracting XPath and other info of the application field."
         )
+
+        if retry and prev_x_path:
+            user_prompt += (
+                f"\n\nIn previous try you gave following x_path and the element couldn't be found using that. So, find "
+                f"correct x_path for the same field.\n"
+                f"Previous x_path - {prev_x_path}\n"
+            )
 
         class FieldHtmlType(Enum):
             textBox = "text_box"
@@ -137,7 +144,9 @@ class ApplicationField:
         if application_field_found:
             if not element_exists(application_field.x_path):
                 if not retry:
-                    return self._identify(retry=True)
+                    return self._identify(
+                        retry=True, prev_x_path=application_field.x_path
+                    )
                 else:
                     return
 

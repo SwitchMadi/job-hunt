@@ -64,6 +64,7 @@ class SubmitApplication(PageComponent):
                 self.component_identified = True
 
                 self._delete_downloaded_resume()
+
             elif not retry:
                 self._identify(retry=True)
             else:
@@ -81,7 +82,11 @@ class SubmitApplication(PageComponent):
         cur_application_step = self.parent_application_page.head_step
         while cur_application_step:
             if isinstance(cur_application_step, ResumeUpload):
-                os.remove(cur_application_step.resume_file_path)
+                try:
+                    os.remove(cur_application_step.resume_file_path)
+                except FileNotFoundError:
+                    pass
+
                 return
 
             cur_application_step = cur_application_step.next

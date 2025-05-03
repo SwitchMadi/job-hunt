@@ -46,7 +46,7 @@ class ResumeUpload(PageComponent):
 
         return
 
-    def _identify(self, retry=False):
+    def _identify(self, retry=False, prev_x_path=None):
         global driver
 
         user_prompt = (
@@ -62,6 +62,13 @@ class ResumeUpload(PageComponent):
             f"manually. If field is just standalone upload resume button and there is no sign of it being one option "
             f"out of many application data input options only then give me XPath of the resume upload button."
         )
+
+        if retry and prev_x_path:
+            user_prompt += (
+                f"\n\nIn previous try you gave following x_path and the button couldn't be found using that. So, find "
+                f"correct x_path for the button.\n"
+                f"Previous x_path - {prev_x_path}\n"
+            )
 
         class IsNotADataInputOption(Enum):
             true = True
@@ -88,7 +95,7 @@ class ResumeUpload(PageComponent):
         if button_found:
             if button.is_not_a_data_input_option.value:
                 if not element_exists(button.x_path) and not retry:
-                    return self._identify(retry=True)
+                    return self._identify(retry=True, prev_x_path=button.x_path)
 
                 self.field_component = Upload(
                     x_path=button.x_path,
@@ -129,12 +136,18 @@ class ResumeUpload(PageComponent):
         file_name = self.parent_application_page.parent_job.user.resume.split("/")[-1]
         file_local_path = f"{config['other_files_folder']}/{file_name}"
 
-        s3.fetch_data(
+        success = s3.fetch_data(
             file_s3_path=self.parent_application_page.parent_job.user.resume,
             file_local_path=file_local_path,
         )
 
-        self._resume_file_path = file_local_path
+        if success and os.path.exists(file_local_path):
+            self._resume_file_path = file_local_path
+        else:
+            raise Exception(
+                f"Couldn't fetch resume file from S3 for {self.parent_application_page.parent_job.title}. "
+                f"URL - {self.parent_application_page.url}"
+            )
 
         return self._resume_file_path
 

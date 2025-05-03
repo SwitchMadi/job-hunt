@@ -37,8 +37,8 @@ class DropDown(PageComponent):
             parent_application_page=self.parent_application_page,
         )
 
-        self.options = []
         self.options_container_x_path = None
+        self.options_xpath_pattern = None
 
         self.is_component_functional = False
 
@@ -50,27 +50,18 @@ class DropDown(PageComponent):
 
         option = None
         while (option is None) or element_exists(self.options_container_x_path):
-            if option is None:
-                if not self.options:
-                    self._extract_dropdown_options()
-                else:
-                    self.dropdown_button.proceed()
-
-                options = self.options
-            else:
-                if not option.get("children"):
-                    self._extract_dropdown_options(parent_option=option)
-
-                options = option["children"]
+            self.dropdown_button.proceed()
+            options = self._extract_dropdown_options()
+            if not options:
+                simulate_empty_area_click()
+                continue
 
             answer = ApplicationField.get_field_value(
                 field_category=self.category,
                 user=self.parent_application_page.parent_job.user,
             )
             answer = (
-                answer
-                if [option for option in options if option["text"] == answer]
-                else None
+                answer if [opt for opt in options if opt["text"] == answer] else None
             )
 
             if answer is None:
@@ -81,19 +72,29 @@ class DropDown(PageComponent):
                     field_title=self.title,
                     question=self.question,
                     answer_type="enum",
-                    options=[option["text"] for option in options],
+                    options=[opt["text"] for opt in options],
                     parsed_resume=self.parent_application_page.parent_job.user.parsed_resume,
                 )
 
-            option = [option for option in options if option["text"] == answer][0]
-            option_element = driver.find_element(By.XPATH, option["x_path"])
-            option_element.click()
+            option = [opt for opt in options if opt["text"] == answer][0]
+
+            # Get the clickable parent xpath for this option
+            clickable_xpath = self._find_clickable_parent_xpath(
+                option["x_path"], option["text"]
+            )
+
+            # Create a Button instance for the clickable element
+            option_button = Button(
+                x_path=clickable_xpath,
+                button_type="dropdown_option",
+                parent_application_page=self.parent_application_page,
+            )
+            option_button.proceed()
 
         self.is_component_functional = True
-
         return
 
-    def _extract_dropdown_options(self, parent_option=None):
+    def _extract_dropdown_options(self):
         global driver
 
         if not self.options_container_x_path:
@@ -101,30 +102,28 @@ class DropDown(PageComponent):
             start_dom_mutation_observer()
             self.dropdown_button.proceed()
             options_container = get_observed_element()
+            if not options_container:
+                logger.error(
+                    f"Couldn't find dropdown options container for job - "
+                    f"{self.parent_application_page.parent_job.title}, url - {self.parent_application_page.url}"
+                )
+                return []
+
             self.options_container_x_path = get_element_xpath(options_container)
 
-        options = DropDown.extract_dropdown_options(
-            job_title=self.parent_application_page.parent_job.title,
-            job_url=self.parent_application_page.url,
-            field_title=self.title,
-            question=self.question,
-            options_container_x_path=self.options_container_x_path,
-        )
-
-        if parent_option:
-            parent_option["children"] = options
-            logger.info(
-                f"Updating dropdown field options in db for job - "
-                f"{self.parent_application_page.parent_job.title}, url - {self.parent_application_page.url}"
+        if not self.options_xpath_pattern:
+            self.options_xpath_pattern = DropDown.extract_options_xpath_pattern(
+                job_title=self.parent_application_page.parent_job.title,
+                job_url=self.parent_application_page.url,
+                field_title=self.title,
+                question=self.question,
+                options_container_x_path=self.options_container_x_path,
             )
-            self.parent_application_page.save_application_steps()
-        else:
-            self.options = options
 
-        return
+        return DropDown.build_options_list(self.options_xpath_pattern)
 
     @classmethod
-    def extract_dropdown_options(
+    def extract_options_xpath_pattern(
         cls,
         job_title,
         job_url,
@@ -133,6 +132,7 @@ class DropDown(PageComponent):
         question=None,
         retry=False,
     ):
+        """Extract XPath pattern to find all dropdown options"""
         global driver
 
         options_container = driver.find_element(By.XPATH, options_container_x_path)
@@ -152,33 +152,33 @@ class DropDown(PageComponent):
             f"I am using javascript mutation observer to observe DOM changes. When I clicked the dropdown/menu options"
             f", the observer observed that following element was added to the DOM -\n"
             f"{options_container.get_attribute('outerHTML')}\n"
-            f"Extract all options available in dropdown menu."
+            f"Return a single XPath pattern that will match ALL option elements in this dropdown. "
+            f"The XPath pattern should:\n"
+            f"1. Be usable with selenium webdriver find_elements(By.XPATH, pattern)\n"
+            f"2. Not rely on HTML hierarchy\n"
+            f"3. Use attributes like id, class, role, or data-* attributes instead\n"
+            f"4. Return ONLY the actual clickable elements that handle option selection\n"
+            f"5. For custom dropdowns, find the outermost clickable element that contains the option text\n"
+            f"6. Look for elements with click handlers"
         )
 
-        class Option(BaseModel):
-            text: str = Field(..., description="Text shown in the dropdown option")
-            x_path: str = Field(
+        class OptionsXPath(BaseModel):
+            xpath_pattern: str = Field(
                 ...,
-                description="XPath of the option which can be used in selenium chrome driver to "
-                "search the option. Don't use HTML hierarchy to construct XPath.",
+                description="XPath pattern that matches all option elements in the dropdown",
             )
 
-        class DropdownOptions(BaseModel):
-            options: list[Option]
-
-        options_found, options = get_gpt_response(
+        pattern_found, pattern_result = get_gpt_response(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
-            response_format=DropdownOptions,
+            response_format=OptionsXPath,
         )
-        if options_found:
-            return [
-                {"text": option.text, "x_path": option.x_path}
-                for option in options.options
-            ]
+
+        if pattern_found:
+            return pattern_result.xpath_pattern
         else:
             if not retry:
-                return DropDown.extract_dropdown_options(
+                return DropDown.extract_options_xpath_pattern(
                     job_title=job_title,
                     job_url=job_url,
                     field_title=field_title,
@@ -188,8 +188,18 @@ class DropDown(PageComponent):
                 )
 
             raise Exception(
-                f"Couldn't extract dropdown fields for {job_title}. URL - {job_url}"
+                f"Couldn't extract dropdown options XPath for {job_title}. URL - {job_url}"
             )
+
+    @classmethod
+    def build_options_list(cls, xpath_pattern):
+        """Build list of options using the XPath pattern"""
+        global driver
+        options = []
+        option_elements = driver.find_elements(By.XPATH, xpath_pattern)
+        for element in option_elements:
+            options.append({"text": element.text, "x_path": get_element_xpath(element)})
+        return options
 
     @classmethod
     def validate_observed_element_for_dropdown(
@@ -229,6 +239,31 @@ class DropDown(PageComponent):
 
         return False
 
+    def _find_clickable_parent_xpath(self, element_xpath, original_text):
+        """Find the outermost clickable parent element that maintains the same text content."""
+        global driver
+
+        element = driver.find_element(By.XPATH, element_xpath)
+        target_element = element
+        parent = element
+
+        while parent:
+            try:
+                # Check if parent element is clickable
+                if parent.is_enabled() and parent.is_displayed():
+                    # Verify text hasn't changed
+                    if parent.text == original_text:
+                        target_element = parent
+                    else:
+                        break
+
+                # Try next parent
+                parent = parent.find_element(By.XPATH, "./..")
+            except:
+                break
+
+        return get_element_xpath(target_element)
+
     def to_dict(self):
         return {
             "class": self.__class__.__name__,
@@ -236,7 +271,7 @@ class DropDown(PageComponent):
             "title": self.title,
             "question": self.question,
             "category": self.category,
-            "options": self.options,
+            "options_xpath_pattern": self.options_xpath_pattern,
             "options_container_x_path": self.options_container_x_path,
             "next": self.next.to_dict() if self.next else None,
         }
@@ -251,8 +286,8 @@ class DropDown(PageComponent):
             parent_application_page=parent_application_page,
         )
 
-        instance.options = input_dict["options"]
         instance.options_container_x_path = input_dict["options_container_x_path"]
+        instance.options_xpath_pattern = input_dict["options_xpath_pattern"]
         instance.is_component_functional = True
 
         if input_dict["next"]:
