@@ -894,15 +894,18 @@ class ApplicationPage:
         submit_application_button = SubmitApplication(parent_application_page=self)
         submit_application_button.proceed()
 
-        error_fields = self._identify_application_fields(identify_only_errors=True)
-        # Filter out fields that don't have errors
-        error_fields = [
-            field for field in error_fields if field.is_error_present and field.error
-        ]
-        if error_fields:
-            logger.warn(
-                f"Errors in job application fields for {self.parent_job.title}. URL - {self.url}"
-            )
-            self._act_on_job_fields(error_fields)
+        if submit_application_button.is_component_functional:
+            error_fields = self._identify_application_fields(identify_only_errors=True)
+            # Filter out fields that don't have errors
+            error_fields = [
+                field
+                for field in error_fields
+                if field.is_error_present and field.error
+            ]
+            if error_fields:
+                logger.warn(
+                    f"Errors in job application fields for {self.parent_job.title}. URL - {self.url}"
+                )
+                self._act_on_job_fields(error_fields)
 
-        self._update_steps(submit_application_button)
+            self._update_steps(submit_application_button)

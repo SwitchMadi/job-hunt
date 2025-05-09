@@ -40,6 +40,10 @@ class SubmitApplication(PageComponent):
         )
 
         class SubmitApplicationButton(BaseModel):
+            is_submit_button_present: bool = Field(
+                ...,
+                description="Whether submit application button is present on the page",
+            )
             x_path: str = Field(
                 ...,
                 description="XPath of next submit application button which can be used in selenium chrome driver to "
@@ -52,26 +56,29 @@ class SubmitApplication(PageComponent):
             response_format=SubmitApplicationButton,
         )
         if button_found:
-            self.field_component = Button(
-                x_path=button.x_path,
-                button_type="submit_application",
-                parent_application_page=self.parent_application_page,
-            )
-
-            self.field_component.proceed()
-            if self.field_component.is_component_functional:
-                self.is_component_functional = True
-                self.component_identified = True
-
-                self._delete_downloaded_resume()
-
-            elif not retry:
-                self._identify(retry=True)
-            else:
-                raise Exception(
-                    f"Couldn't extract submit application button for {self.parent_application_page.parent_job.title}. "
-                    f"URL - {self.parent_application_page.url}"
+            if button.is_submit_button_present:
+                self.field_component = Button(
+                    x_path=button.x_path,
+                    button_type="submit_application",
+                    parent_application_page=self.parent_application_page,
                 )
+
+                self.field_component.proceed()
+                if self.field_component.is_component_functional:
+                    self.is_component_functional = True
+                    self.component_identified = True
+
+                    self._delete_downloaded_resume()
+
+                elif not retry:
+                    self._identify(retry=True)
+                else:
+                    raise Exception(
+                        f"Couldn't extract submit application button for {self.parent_application_page.parent_job.title}. "
+                        f"URL - {self.parent_application_page.url}"
+                    )
+            else:
+                return
         else:
             raise Exception(
                 f"Couldn't extract submit application button for {self.parent_application_page.parent_job.title}. "
