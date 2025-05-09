@@ -627,7 +627,14 @@ class ApplicationPage:
             self._extract_login_step_details()
 
         if elements.account_verification.value:
-            self._identify_verify_email_field()
+            is_verify_email_field_functional = self._identify_verify_email_field()
+
+            if is_verify_email_field_functional:
+                latest_elements = self._identify_current_page_elements()
+                if latest_elements:
+                    return self._act_on_current_page_elements(latest_elements)
+
+                return
 
         if (
             elements.start_application_button.value
@@ -663,7 +670,14 @@ class ApplicationPage:
 
         # last action after all on page components
         if elements.next_button.value:
-            self._identify_next_page_button()
+            is_next_page_button_functional = self._identify_next_page_button()
+
+            if is_next_page_button_functional:
+                latest_elements = self._identify_current_page_elements()
+                if latest_elements:
+                    return self._act_on_current_page_elements(latest_elements)
+
+                return
 
         if elements.submit_application_button.value:
             self._identify_submit_application_button()
@@ -839,16 +853,18 @@ class ApplicationPage:
         next_page_button.proceed()
         self._update_steps(next_page_button)
 
+        return next_page_button.is_component_functional
+
     @retry()
     def _identify_verify_email_field(self):
         verify_account_component = VerifyAccount(parent_application_page=self)
         verify_account_component.proceed()
         self._update_steps(verify_account_component)
 
+        return verify_account_component.is_component_functional
+
     @retry()
     def _complete_application_field_identification(self, job_field):
-        if job_field.field_title == "State":
-            print(1)
         application_field = ApplicationField(
             parent_application_page=self,
             title=job_field.field_title,
