@@ -60,7 +60,15 @@ class ResumeUpload(PageComponent):
             f"selection step or immediately surrounded by application data source options like LinkedIn, Indeed, "
             f"manual data input etc. then do not give XPath details of resume upload button as I want to insert data "
             f"manually. If field is just standalone upload resume button and there is no sign of it being one option "
-            f"out of many application data input options only then give me XPath of the resume upload button."
+            f"out of many application data input options only then give me XPath of the resume upload button. Keep in "
+            f"mind following -\n"
+            f"1. Be pragmatic — if a simple XPath like `//input[@type='file']` or a visible button works, prefer it. "
+            f"Do not overcomplicate.\n"
+            f"2. If text is not directly inside an element (e.g. wrapped in spans), prefer using `contains(., '...')` "
+            f"or `normalize-space(.)` over `text()` for better accuracy.\n"
+            f"3. Ensure the XPath will remain stable across small HTML or CSS changes by avoiding overly specific "
+            f"classes or sibling positions when possible.\n"
+            f"4. Be accurate but don’t overthink obvious cases."
         )
 
         if retry and prev_x_path:
@@ -94,8 +102,15 @@ class ResumeUpload(PageComponent):
 
         if button_found:
             if button.is_not_a_data_input_option.value:
-                if not element_exists(button.x_path) and not retry:
-                    return self._identify(retry=True, prev_x_path=button.x_path)
+                if not element_exists(button.x_path):
+                    if not retry:
+                        return self._identify(retry=True, prev_x_path=button.x_path)
+
+                    raise Exception(
+                        f"Couldn't extract resume upload button XPath for "
+                        f"{self.parent_application_page.parent_job.title}. "
+                        f"URL - {self.parent_application_page.parent_job.url}"
+                    )
 
                 self.field_component = Upload(
                     x_path=button.x_path,
