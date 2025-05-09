@@ -240,6 +240,11 @@ def get_observed_element(timeout=10, poll_frequency=0.5):
                 driver.execute_script(
                     "if(window.__observer){ window.__observer.disconnect(); window.__observer = null; }"
                 )
+
+                time.sleep(1)
+                if is_stale(element):
+                    return None
+
                 return element
         except StaleElementReferenceException:
             pass
@@ -892,3 +897,12 @@ def minify_html_for_gpt_prompt(html_content):
 
     # Return the prettified, filtered HTML
     return soup.prettify()
+
+
+def is_stale(element):
+    try:
+        # Try accessing any attribute or method that triggers a reference check
+        element.tag_name
+        return False
+    except StaleElementReferenceException:
+        return True
