@@ -18,7 +18,6 @@ class TextInput(PageComponent):
         parent_application_page,
         title=None,
         question=None,
-        input_text=None,
         hit_enter=False,
     ):
         global driver
@@ -27,10 +26,10 @@ class TextInput(PageComponent):
         self.title = title
         self.question = question
         self.category = category
-        self._answer = input_text
         self.hit_enter = hit_enter
         self.parent_application_page = parent_application_page
 
+        self._answer = None
         self.is_component_functional = False
 
         self.next = None
@@ -123,3 +122,7 @@ class TextInput(PageComponent):
 
         self._answer = answer
         return self._answer
+
+    @answer.setter
+    def answer(self, value):
+        self._answer = value

@@ -30,7 +30,6 @@ class DateField(PageComponent):
         date_format,
         category,
         parent_application_page,
-        input_text=None,
         persist_question=True,
     ):
         global driver
@@ -40,9 +39,9 @@ class DateField(PageComponent):
         self.date_format = date_format
         self.category = category
         self.parent_application_page = parent_application_page
-        self._answer = input_text
         self.persist_question = persist_question
 
+        self._answer = None
         self.is_component_functional = False
 
         self.next = None
@@ -254,3 +253,7 @@ class DateField(PageComponent):
 
         self._answer = answer
         return self._answer
+
+    @answer.setter
+    def answer(self, value):
+        self._answer = value
