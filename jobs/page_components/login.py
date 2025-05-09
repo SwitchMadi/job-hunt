@@ -699,7 +699,7 @@ class VerifyAccount(PageComponent):
         if self.verification_method == "link":
             driver.get(verification_info)
         else:
-            self.otp_text_box.input_text = verification_info
+            self.otp_text_box.answer = verification_info
             self.otp_text_box.proceed()
 
             if self.verify_button:
