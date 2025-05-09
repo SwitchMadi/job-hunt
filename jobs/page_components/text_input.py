@@ -52,6 +52,18 @@ class TextInput(PageComponent):
                 clear_text_field(self.x_path)
                 element.send_keys(self.answer)
 
+                # Force check and set value if needed
+                actual_value = element.get_attribute("value")
+                if actual_value.strip().lower() != str(self.answer).strip().lower():
+                    # Force set using JavaScript if value doesn't match
+                    driver.execute_script(
+                        "arguments[0].value = arguments[1]; "
+                        "arguments[0].dispatchEvent(new Event('input', { bubbles: true })); "
+                        "arguments[0].dispatchEvent(new Event('change', { bubbles: true }));",
+                        element,
+                        str(self.answer),
+                    )
+
             if self.hit_enter:
                 element.send_keys(Keys.RETURN)
 
