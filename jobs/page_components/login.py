@@ -2,6 +2,7 @@ import time
 from datetime import datetime
 from enum import Enum
 from pydantic import BaseModel, Field
+from typing import Optional
 
 from jobs.page_components import PageComponent, logger, get_page_component_class_name
 from jobs.page_components.button import Button
@@ -34,6 +35,7 @@ class Login(PageComponent):
         self.login_form_input_button = None
         self.login_username_input = None
         self.login_password_input = None
+        self.login_step_consent_checkbox = None
         self.login_security_enabled = False
         self.login_button = None
 
@@ -69,11 +71,18 @@ class Login(PageComponent):
 
         logger.info("Trying to login...")
         self.login_username_input.proceed()
-        self.login_password_input.proceed()
+
+        if self.login_password_input:
+            self.login_password_input.proceed()
+
+        if self.login_step_consent_checkbox:
+            self.login_step_consent_checkbox.proceed()
+
         self.login_button.proceed()
 
         is_login_successful, login_failure_reason = self.is_login_successful
         if not is_login_successful:
+            state = None
             if login_failure_reason in ["non_existent_account", "wrong_credentials"]:
                 logger.info(
                     f"Login failed as account doesn't exist. Creating new account..."
@@ -86,21 +95,24 @@ class Login(PageComponent):
                     )
 
                 self.create_account_username_input.proceed()
-                self.create_account_password_input()
-                self.create_account_confirm_password_input()
+                self.create_account_password_input.proceed()
+                if self.create_account_confirm_password_input:
+                    self.create_account_confirm_password_input.proceed()
 
                 if self.create_account_consent_checkbox:
                     self.create_account_consent_checkbox.proceed()
 
                 self.account_created_at = datetime.utcnow()
                 self.create_account_button.proceed()
-            elif login_failure_reason == "email_not_verified":
+            elif login_failure_reason == "email_verification_required":
                 logger.info(
                     f"Email not verified. Triggering email verification email..."
                 )
-                self._trigger_email_verification_email()
+                state = self._trigger_email_verification_email()
 
-            if self.is_verification_email_sent:
+            if (
+                state and (state == "otp_passcode_field_present")
+            ) or self.is_verification_email_sent:
                 logger.info(f"Verifying email...")
                 self.verify_account = VerifyAccount(
                     parent_application_page=self.parent_application_page
@@ -127,12 +139,20 @@ class Login(PageComponent):
                     self.login_form_input_button.proceed()
 
                 self.login_username_input.proceed()
-                self.login_password_input.proceed()
+
+                if self.login_password_input:
+                    self.login_password_input.proceed()
+
+                if self.login_step_consent_checkbox:
+                    self.login_step_consent_checkbox.proceed()
+
                 self.login_button.proceed()
 
-            self._trigger_email_verification_email()
+            state = self._trigger_email_verification_email()
 
-            if self.is_verification_email_sent:
+            if (
+                state == "otp_passcode_field_present"
+            ) or self.is_verification_email_sent:
                 self.verify_account = VerifyAccount(
                     parent_application_page=self.parent_application_page
                 )
@@ -146,7 +166,9 @@ class Login(PageComponent):
         global driver
 
         class LoginStep(str, Enum):
-            click_to_open_form_input = "click_to_open_form_input"
+            click_needed_to_open_credentials_form = (
+                "click_needed_to_open_credentials_form"
+            )
             enter_credentials = "enter_credentials"
 
         class LoginSecurityEnabled(Enum):
@@ -159,36 +181,42 @@ class Login(PageComponent):
                 description="Based on the whole HTML, what is the immediate & mandatory next step to login using"
                 "username and password.\n"
                 "click_to_open_form_input - I have to open username & password form by clicking somewhere\n"
-                "enter_credentials - Form is already open and I have to enter credentials",
+                "enter_credentials - Form is already open and I have to enter credentials (email and/or password)",
             )
-            username_x_path: str = Field(
+            username_x_path: Optional[str] = Field(
                 ...,
-                description="If at enter_credentials stage then XPath of email / username input field which can be used"
-                " in selenium chrome driver to search the input field. Don't use HTML hierarchy to "
-                "construct XPath.",
+                description="If at click_needed_to_open_credentials_form stage then XPath of email / username input "
+                "field which can be used in selenium chrome driver to search the input field. Don't use "
+                "HTML hierarchy to construct XPath.",
             )
-            password_x_path: str = Field(
+            password_x_path: Optional[str] = Field(
                 ...,
                 description="If at enter_credentials stage then XPath of password input field which can be used in "
                 "selenium chrome driver to search the input field. Don't use HTML hierarchy to construct "
                 "XPath.",
+            )
+            mandatory_opt_in_checkbox_x_path: Optional[str] = Field(
+                ...,
+                description="XPath of just 1 mandatory opt-in / consent checkbox that must be clicked in order to"
+                "proceed. The Xpath which can be used in selenium chrome driver to search the checkbox. "
+                "Don't use HTML hierarchy to construct XPath.",
             )
             login_security_enabled: LoginSecurityEnabled = Field(
                 ...,
                 description="If at enter_credentials stage then Whether any captcha or security question or puzzle is "
                 "to be solved to login",
             )
-            login_x_path: str = Field(
+            login_x_path: Optional[str] = Field(
                 ...,
-                description="If at enter_credentials stage then XPath of login button where display is not None. The "
-                "Xpath which can be used in selenium chrome driver to search the button. Don't use HTML "
-                "hierarchy to construct XPath.",
+                description="If at enter_credentials stage then XPath of login / next button where display is not None."
+                " The Xpath which can be used in selenium chrome driver to search the button. Don't use "
+                "HTML hierarchy to construct XPath.",
             )
-            open_form_input_x_path: str = Field(
+            open_form_input_x_path: Optional[str] = Field(
                 ...,
-                description="If at click_to_open_form_input stage then XPath of the button which will open username & "
-                "password form. The Xpath which can be used in selenium chrome driver to search the button."
-                " Don't use HTML hierarchy to construct XPath.",
+                description="If at click_needed_to_open_credentials_form stage then XPath of the button which will "
+                "open username & password form. The Xpath which can be used in selenium chrome driver "
+                "to search the button. Don't use HTML hierarchy to construct XPath.",
             )
 
         while self.login_username_input is None:
@@ -206,7 +234,7 @@ class Login(PageComponent):
                 response_format=LoginNextStep,
             )
             if login_next_step_found:
-                if login_step.step == LoginStep.click_to_open_form_input:
+                if login_step.step == LoginStep.click_needed_to_open_credentials_form:
                     self.first_step = "click_to_open_form_input"
                     self.login_form_input_button = Button(
                         x_path=login_step.open_form_input_x_path,
@@ -223,19 +251,29 @@ class Login(PageComponent):
                             "Security is enabled on login, so skipping login!"
                         )
                     else:
-                        self.login_username_input = TextInput(
-                            x_path=login_step.username_x_path,
-                            category="username",
-                            parent_application_page=self.parent_application_page,
-                        )
-                        self.login_username_input.proceed()
+                        if login_step.username_x_path:
+                            self.login_username_input = TextInput(
+                                x_path=login_step.username_x_path,
+                                category="username",
+                                parent_application_page=self.parent_application_page,
+                            )
+                            self.login_username_input.proceed()
 
-                        self.login_password_input = TextInput(
-                            x_path=login_step.password_x_path,
-                            category="password",
-                            parent_application_page=self.parent_application_page,
-                        )
-                        self.login_password_input.proceed()
+                        if login_step.password_x_path:
+                            self.login_password_input = TextInput(
+                                x_path=login_step.password_x_path,
+                                category="password",
+                                parent_application_page=self.parent_application_page,
+                            )
+                            self.login_password_input.proceed()
+
+                        if login_step.mandatory_opt_in_checkbox_x_path:
+                            self.login_step_consent_checkbox = Button(
+                                x_path=login_step.mandatory_opt_in_checkbox_x_path,
+                                button_type="login_step_consent",
+                                parent_application_page=self.parent_application_page,
+                            )
+                            self.login_step_consent_checkbox.proceed()
 
                         self.login_button = Button(
                             x_path=login_step.login_x_path,
@@ -300,7 +338,7 @@ class Login(PageComponent):
                     description="XPath of new password input field which can be used in selenium chrome driver to "
                     "search the input field. Don't use HTML hierarchy to construct XPath.",
                 )
-                confirm_password_x_path: str = Field(
+                confirm_password_x_path: Optional[str] = Field(
                     ...,
                     description="XPath of confirm password input field which can be used in selenium chrome driver to "
                     "search the input field. Don't use HTML hierarchy to construct XPath.",
@@ -316,7 +354,7 @@ class Login(PageComponent):
                     " be used in selenium chrome driver to search the button. Don't use HTML hierarchy to "
                     "construct XPath.",
                 )
-                mandatory_opt_in_checkbox_x_path: str = Field(
+                mandatory_opt_in_checkbox_x_path: Optional[str] = Field(
                     ...,
                     description="XPath of just 1 mandatory opt-in / consent checkbox that must be clicked in order to"
                     "create account. The Xpath which can be used in selenium chrome driver to search the checkbox. "
@@ -352,12 +390,13 @@ class Login(PageComponent):
                     )
                     self.create_account_password_input.proceed()
 
-                    self.create_account_confirm_password_input = TextInput(
-                        x_path=create_account_steps.confirm_password_x_path,
-                        category="password",
-                        parent_application_page=self.parent_application_page,
-                    )
-                    self.create_account_confirm_password_input.proceed()
+                    if create_account_steps.confirm_password_x_path:
+                        self.create_account_confirm_password_input = TextInput(
+                            x_path=create_account_steps.confirm_password_x_path,
+                            category="password",
+                            parent_application_page=self.parent_application_page,
+                        )
+                        self.create_account_confirm_password_input.proceed()
 
                     if create_account_steps.mandatory_opt_in_checkbox_x_path:
                         self.create_account_consent_checkbox = Button(
@@ -402,7 +441,7 @@ class Login(PageComponent):
         class LoginFailureReason(Enum):
             non_existent_account = "non_existent_account"
             wrong_credentials = "wrong_credentials"
-            email_not_verified = "email_not_verified"
+            email_verification_required = "email_verification_required"
             other = "other"
 
         class IsLoginSuccessful(BaseModel):
@@ -438,7 +477,12 @@ class Login(PageComponent):
         )
 
         class ResendVerificationEmailButton(BaseModel):
-            resend_verification_email_x_path: str = Field(
+            otp_passcode_field_present: bool = Field(
+                ...,
+                description="Whether there is an OTP or passcode field present on current page which is to be filled "
+                "in to verify email.",
+            )
+            resend_verification_email_x_path: Optional[str] = Field(
                 ...,
                 description="XPath of button to resend verification email which can be used in selenium chrome driver "
                 "to search the button. Don't use HTML hierarchy to construct XPath.",
@@ -453,13 +497,18 @@ class Login(PageComponent):
             response_format=ResendVerificationEmailButton,
         )
         if resend_verification_email_button_found:
-            self.resend_verification_email_button = Button(
-                x_path=resend_verification_email_button.resend_verification_email_x_path,
-                button_type="resend_verification_email",
-                parent_application_page=self.parent_application_page,
-            )
-            self.account_created_at = datetime.utcnow()
-            self.resend_verification_email_button.proceed()
+            if not resend_verification_email_button.otp_passcode_field_present:
+                self.resend_verification_email_button = Button(
+                    x_path=resend_verification_email_button.resend_verification_email_x_path,
+                    button_type="resend_verification_email",
+                    parent_application_page=self.parent_application_page,
+                )
+                self.account_created_at = datetime.utcnow()
+                self.resend_verification_email_button.proceed()
+
+                return "verification_email_trigger_processed"
+            else:
+                return "otp_passcode_field_present"
         else:
             raise Exception(
                 f"Resend verification email button could not be found.\nGPT response - "
@@ -500,40 +549,62 @@ class Login(PageComponent):
                 f"Create account step success could not be determined.\nGPT response - {is_create_account_successful}"
             )
 
+    @staticmethod
+    def _to_dict(attribute):
+        if attribute:
+            return attribute.to_dict()
+        else:
+            return None
+
     def to_dict(self):
         return {
             "class": self.__class__.__name__,
             "login_section_url": self.login_section_url,
             "login_steps_identified": self.login_steps_identified,
             "first_step": self.first_step,
-            "login_form_input_button": (
-                self.login_form_input_button.to_dict()
-                if self.login_form_input_button
-                else None
+            "login_form_input_button": self._to_dict(self.login_form_input_button),
+            "login_username_input": self._to_dict(self.login_username_input),
+            "login_password_input": self._to_dict(self.login_password_input),
+            "login_step_consent_checkbox": self._to_dict(
+                self.login_step_consent_checkbox
             ),
-            "login_username_input": self.login_username_input.to_dict(),
-            "login_password_input": self.login_password_input.to_dict(),
             "login_security_enabled": self.login_security_enabled,
-            "login_button": self.login_button.to_dict(),
-            "resend_verification_email_button": (
-                self.resend_verification_email_button.to_dict()
-                if self.resend_verification_email_button
-                else None
+            "login_button": self._to_dict(self.login_button),
+            "resend_verification_email_button": self._to_dict(
+                self.resend_verification_email_button
             ),
-            "create_account_form_input_button": self.create_account_form_input_button.to_dict(),
-            "create_account_username_input": self.create_account_username_input.to_dict(),
-            "create_account_password_input": self.create_account_password_input.to_dict(),
-            "create_account_confirm_password_input": self.create_account_confirm_password_input.to_dict(),
-            "create_account_consent_checkbox": (
-                self.create_account_consent_checkbox.to_dict()
-                if self.create_account_consent_checkbox
-                else None
+            "create_account_form_input_button": self._to_dict(
+                self.create_account_form_input_button
+            ),
+            "create_account_username_input": self._to_dict(
+                self.create_account_username_input
+            ),
+            "create_account_password_input": self._to_dict(
+                self.create_account_password_input
+            ),
+            "create_account_confirm_password_input": self._to_dict(
+                self.create_account_confirm_password_input
+            ),
+            "create_account_consent_checkbox": self._to_dict(
+                self.create_account_consent_checkbox
             ),
             "create_account_security_enabled": self.create_account_security_enabled,
-            "create_account_button": self.create_account_button.to_dict(),
-            "verify_account": self.verify_account.to_dict(),
+            "create_account_button": self._to_dict(self.create_account_button),
+            "verify_account": self._to_dict(self.verify_account),
             "next": self.next.to_dict() if self.next else None,
         }
+
+    @classmethod
+    def _from_dict(cls, input_dict, key, parent_application_page):
+        if input_dict[key]:
+            key_class = globals()[input_dict[key]["class"]]
+
+            return key_class.from_dict(
+                input_dict=input_dict[key],
+                parent_application_page=parent_application_page,
+            )
+        else:
+            return None
 
     @classmethod
     def from_dict(cls, input_dict, parent_application_page):
@@ -543,116 +614,56 @@ class Login(PageComponent):
         instance.login_steps_identified = input_dict["login_steps_identified"]
         instance.first_step = input_dict["first_step"]
 
-        if input_dict["login_form_input_button"]:
-            login_form_input_button_class = globals()[
-                input_dict["login_form_input_button"]["class"]
-            ]
-            instance.login_form_input_button = login_form_input_button_class.from_dict(
-                input_dict=input_dict["login_form_input_button"],
-                parent_application_page=parent_application_page,
-            )
-
-        login_username_input_class = globals()[
-            input_dict["login_username_input"]["class"]
-        ]
-        instance.login_username_input = login_username_input_class.from_dict(
-            input_dict=input_dict["login_username_input"],
-            parent_application_page=parent_application_page,
+        instance.login_form_input_button = Login._from_dict(
+            input_dict, "login_form_input_button", parent_application_page
         )
-
-        login_password_input_class = globals()[
-            input_dict["login_password_input"]["class"]
-        ]
-        instance.login_password_input = login_password_input_class.from_dict(
-            input_dict=input_dict["login_password_input"],
-            parent_application_page=parent_application_page,
+        instance.login_username_input = Login._from_dict(
+            input_dict, "login_username_input", parent_application_page
+        )
+        instance.login_password_input = Login._from_dict(
+            input_dict, "login_password_input", parent_application_page
+        )
+        instance.login_step_consent_checkbox = Login._from_dict(
+            input_dict, "login_step_consent_checkbox", parent_application_page
         )
 
         instance.login_security_enabled = input_dict["login_security_enabled"]
 
-        login_button_class = globals()[input_dict["login_button"]["class"]]
-        instance.login_button = login_button_class.from_dict(
-            input_dict=input_dict["login_button"],
-            parent_application_page=parent_application_page,
+        instance.login_button = Login._from_dict(
+            input_dict, "login_button", parent_application_page
         )
-
-        resend_verification_email_button_class = globals()[
-            input_dict["resend_verification_email_button"]["class"]
-        ]
-        instance.resend_verification_email_button = (
-            resend_verification_email_button_class.from_dict(
-                input_dict=input_dict["resend_verification_email_button"],
-                parent_application_page=parent_application_page,
-            )
+        instance.resend_verification_email_button = Login._from_dict(
+            input_dict, "resend_verification_email_button", parent_application_page
         )
-
-        create_account_form_input_button_class = globals()[
-            input_dict["create_account_form_input_button"]["class"]
-        ]
-        instance.create_account_form_input_button = (
-            create_account_form_input_button_class.from_dict(
-                input_dict=input_dict["create_account_form_input_button"],
-                parent_application_page=parent_application_page,
-            )
+        instance.create_account_form_input_button = Login._from_dict(
+            input_dict, "create_account_form_input_button", parent_application_page
         )
-
-        create_account_username_input_class = globals()[
-            input_dict["create_account_username_input"]["class"]
-        ]
-        instance.create_account_username_input = (
-            create_account_username_input_class.from_dict(
-                input_dict=input_dict["create_account_username_input"],
-                parent_application_page=parent_application_page,
-            )
+        instance.create_account_username_input = Login._from_dict(
+            input_dict, "create_account_username_input", parent_application_page
         )
-
-        create_account_password_input_class = globals()[
-            input_dict["create_account_password_input"]["class"]
-        ]
-        instance.create_account_password_input = (
-            create_account_password_input_class.from_dict(
-                input_dict=input_dict["create_account_password_input"],
-                parent_application_page=parent_application_page,
-            )
+        instance.create_account_password_input = Login._from_dict(
+            input_dict, "create_account_password_input", parent_application_page
         )
-
-        create_account_confirm_password_input_class = globals()[
-            input_dict["create_account_confirm_password_input"]["class"]
-        ]
-        instance.create_account_confirm_password_input = (
-            create_account_confirm_password_input_class.from_dict(
-                input_dict=input_dict["create_account_confirm_password_input"],
-                parent_application_page=parent_application_page,
-            )
+        instance.create_account_confirm_password_input = Login._from_dict(
+            input_dict, "create_account_confirm_password_input", parent_application_page
         )
-
-        if input_dict["create_account_consent_checkbox"]:
-            create_account_consent_checkbox_class = globals()[
-                input_dict["create_account_consent_checkbox"]["class"]
-            ]
-            instance.create_account_consent_checkbox = (
-                create_account_consent_checkbox_class.from_dict(
-                    input_dict=input_dict["create_account_consent_checkbox"],
-                    parent_application_page=parent_application_page,
-                )
-            )
+        instance.create_account_consent_checkbox = Login._from_dict(
+            input_dict, "create_account_consent_checkbox", parent_application_page
+        )
 
         instance.create_account_security_enabled = input_dict[
             "create_account_security_enabled"
         ]
 
-        create_account_button_class = globals()[
-            input_dict["create_account_button"]["class"]
-        ]
-        instance.create_account_button = create_account_button_class.from_dict(
-            input_dict=input_dict["create_account_button"],
-            parent_application_page=parent_application_page,
+        instance.create_account_button = Login._from_dict(
+            input_dict, "create_account_button", parent_application_page
         )
 
-        instance.verify_account = VerifyAccount.from_dict(
-            input_dict=input_dict["verify_account"],
-            parent_application_page=parent_application_page,
-        )
+        if input_dict["verify_account"]:
+            instance.verify_account = VerifyAccount.from_dict(
+                input_dict=input_dict["verify_account"],
+                parent_application_page=parent_application_page,
+            )
 
         if input_dict["next"]:
             next_class = get_page_component_class_name(
