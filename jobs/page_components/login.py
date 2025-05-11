@@ -57,11 +57,18 @@ class Login(PageComponent):
             self._identify_login_section_steps()
 
             self.is_component_functional = True
-            self.parent_application_page.run_steps()
+
+            if (
+                self.verify_account
+                and self.verify_account.verification_method == "link"
+            ):
+                self.parent_application_page.run_steps()
 
             is_login_successful, login_failure_reason = self.is_login_successful
             if is_login_successful:
                 return
+            else:
+                raise Exception("Login unsuccessful")
 
         if self.login_security_enabled:
             raise Exception("Security is enabled on login, so skipping login!")
@@ -111,7 +118,7 @@ class Login(PageComponent):
                 state = self._trigger_email_verification_email()
 
             if (
-                state and (state == "otp_passcode_field_present")
+                state == "otp_passcode_field_present"
             ) or self.is_verification_email_sent:
                 logger.info(f"Verifying email...")
                 self.verify_account = VerifyAccount(
@@ -119,7 +126,9 @@ class Login(PageComponent):
                 )
                 self.verify_account.proceed()
 
-        self.parent_application_page.run_steps(stop_step=self)
+                if self.verify_account.verification_method == "link":
+                    self.parent_application_page.run_steps(stop_step=self)
+
         return
 
     def _identify_login_section_steps(self):
@@ -219,7 +228,8 @@ class Login(PageComponent):
                 "to search the button. Don't use HTML hierarchy to construct XPath.",
             )
 
-        while self.login_username_input is None:
+        login_steps_identified = False
+        while not login_steps_identified:
             user_prompt = (
                 f"Following HTML page is job application page for {self.parent_application_page.parent_job.title}. "
                 f"Currently I am at login section. I have to login using username and password. Analyse the whole HTML "
@@ -281,6 +291,8 @@ class Login(PageComponent):
                             parent_application_page=self.parent_application_page,
                         )
                         self.login_button.proceed()
+
+                login_steps_identified = True
             else:
                 raise Exception(
                     f"First login step could not be identified.\nGPT response - {login_step}"

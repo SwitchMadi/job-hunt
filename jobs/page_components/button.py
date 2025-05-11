@@ -137,6 +137,7 @@ class Button(PageComponent):
                     f"Unexpected error occurred in class Button's proceed method.\n{e}\nButton instance - {vars(self)}"
                 )
                 self.is_component_functional = False
+                raise e
 
         return
 

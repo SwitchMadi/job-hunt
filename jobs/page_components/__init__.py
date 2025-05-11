@@ -295,7 +295,7 @@ class ApplicationField:
             return user.last_name
         elif field_category == "full_name":
             return user.name
-        elif field_category == "email":
+        elif field_category in ["email", "username"]:
             return user.email
         elif field_category == "password":
             return user.password

@@ -624,7 +624,14 @@ class ApplicationPage:
             self._identify_cookies_consent()
 
         if elements.mandatory_account_login_signup.value:
-            self._extract_login_step_details()
+            is_login_functional = self._extract_login_step_details()
+
+            if is_login_functional:
+                latest_elements = self._identify_current_page_elements()
+                if latest_elements:
+                    return self._act_on_current_page_elements(latest_elements)
+
+                return
 
         if elements.account_verification.value:
             is_verify_email_field_functional = self._identify_verify_email_field()
@@ -838,6 +845,8 @@ class ApplicationPage:
         login_step = Login(parent_application_page=self)
         login_step.proceed()
         self._update_steps(login_step)
+
+        return login_step.is_component_functional
 
     @retry()
     def _identify_tnc_field(self, job_field):
