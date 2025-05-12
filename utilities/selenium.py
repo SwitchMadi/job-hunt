@@ -383,12 +383,21 @@ def simulate_empty_area_click(text_to_click=None):
 
     action.send_keys(Keys.ESCAPE).perform()
 
+    body = driver.find_element(By.TAG_NAME, 'body')
+    ActionChains(driver).move_to_element(body).click().perform()
+
     # if text_to_click is set, then click the text to simulate empty area click
     if text_to_click:
         text_x_path = get_xpath_by_text(text_to_click)
         if text_x_path:
             element = driver.find_element(By.XPATH, text_x_path)
-            element.click()
+            driver.execute_script(
+                "arguments[0].scrollIntoView({block: 'center'});", element
+            )
+            try:
+                element.click()
+            except ElementNotInteractableException:
+                pass
 
     return
 
