@@ -98,7 +98,7 @@ class DropDown(PageComponent):
         global driver
 
         if not self.options_container_x_path:
-            simulate_empty_area_click()
+            simulate_empty_area_click(self.title)
             start_dom_mutation_observer()
             self.dropdown_button.proceed()
             options_container = get_observed_element()

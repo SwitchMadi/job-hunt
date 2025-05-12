@@ -1,5 +1,6 @@
 import time
 from selenium.webdriver.common.by import By
+from selenium.common import ElementNotInteractableException
 
 from jobs import ApplicationField
 from jobs.page_components import PageComponent, get_page_component_class_name
@@ -54,6 +55,10 @@ class SearchField(PageComponent):
             special_key = "special_key"
             element.send_keys(special_key)
             time.sleep(2)  # Allow API calls to trigger
+        except ElementNotInteractableException:
+            clear_text_field(x_path)
+            simulate_empty_area_click(field_title)
+            return False
         except Exception as e:
             if not retry:
                 return SearchField.validate_search_field(
