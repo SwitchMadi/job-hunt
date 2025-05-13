@@ -5,15 +5,16 @@ from selenium.common import ElementNotInteractableException
 from jobs import ApplicationField
 from jobs.page_components import PageComponent, get_page_component_class_name
 from jobs.page_components.drop_down import DropDown
+from jobs.page_components.button import Button
 from utilities.selenium import (
+    find_clickable_parent_xpath,
     get_selenium_driver,
     start_network_observer,
     get_observed_network_calls,
     stop_network_observer,
     simulate_empty_area_click,
     start_dom_mutation_observer,
-    get_observed_element,
-    get_element_xpath,
+    get_observed_elements,
     element_exists,
     clear_text_field,
 )
@@ -25,6 +26,7 @@ driver.set_page_load_timeout(15)
 
 class SearchField(PageComponent):
     def __init__(self, x_path, title, question, category, parent_application_page):
+        self.options_xpath_pattern = None
         self.x_path = x_path
         self.title = title
         self.question = question
@@ -130,19 +132,39 @@ class SearchField(PageComponent):
                     start_dom_mutation_observer()
                     element.send_keys(input_key)
                     time.sleep(2)
-                    options_container = get_observed_element()
-                    self.options_container_x_path = get_element_xpath(options_container)
+                    observed_elements = get_observed_elements()
+
+                    is_container_present, container_x_path = (
+                        ApplicationField.identify_options_container(
+                            field_title=self.title,
+                            field_x_path=self.x_path,
+                            observed_elements=observed_elements,
+                            html_type="search_field",
+                            job_title=self.parent_application_page.parent_job.title,
+                        )
+                    )
+                    self.options_container_x_path = container_x_path
+                    if not is_container_present or not container_x_path:
+                        raise Exception(
+                            f"Couldn't find options container for {self.category} "
+                            f"for {self.parent_application_page.parent_job.title}. "
+                            f"URL - {self.parent_application_page.url}"
+                        )
+
                 else:
                     element.send_keys(input_key)
                     time.sleep(2)
 
-                options = DropDown.extract_dropdown_options(
-                    job_title=self.parent_application_page.parent_job.title,
-                    job_url=self.parent_application_page.url,
-                    field_title=self.title,
-                    question=self.question,
-                    options_container_x_path=self.options_container_x_path,
-                )
+                if not self.options_xpath_pattern:
+                    self.options_xpath_pattern, options = DropDown.get_dropdown_options(
+                        job_title=self.parent_application_page.parent_job.title,
+                        job_url=self.parent_application_page.url,
+                        field_title=self.title,
+                        question=self.question,
+                        options_container_x_path=self.options_container_x_path,
+                    )
+                else:
+                    options = DropDown.build_options_list(self.options_xpath_pattern)
                 if options:
                     closest_option = (
                         self.answer
@@ -169,8 +191,18 @@ class SearchField(PageComponent):
                     option = [
                         option for option in options if option["text"] == closest_option
                     ][0]
-                    option_element = driver.find_element(By.XPATH, option["x_path"])
-                    option_element.click()
+                    # Get the clickable parent xpath for this option
+                    clickable_xpath = find_clickable_parent_xpath(
+                        option["x_path"], option["text"]
+                    )
+
+                    # Create a Button instance for the clickable element
+                    option_button = Button(
+                        x_path=clickable_xpath,
+                        button_type="search_option",
+                        parent_application_page=self.parent_application_page,
+                    )
+                    option_button.proceed()
                     break
                 else:
                     input_count -= 1
@@ -221,6 +253,7 @@ class SearchField(PageComponent):
             "question": self.question,
             "category": self.category,
             "options_container_x_path": self.options_container_x_path,
+            "options_xpath_pattern": self.options_xpath_pattern,
             "next": self.next.to_dict() if self.next else None,
         }
 
@@ -235,6 +268,7 @@ class SearchField(PageComponent):
         )
 
         instance.options_container_x_path = input_dict["options_container_x_path"]
+        instance.options_xpath_pattern = input_dict["options_xpath_pattern"]
         instance.is_component_functional = True
 
         if input_dict["next"]:

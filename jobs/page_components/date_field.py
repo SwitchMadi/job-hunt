@@ -10,7 +10,7 @@ from utilities.selenium import (
     simulate_typing,
     simulate_empty_area_click,
     start_dom_mutation_observer,
-    get_observed_element,
+    get_observed_elements,
     minify_html_for_gpt_prompt,
 )
 from utilities import constants
@@ -85,9 +85,9 @@ class DateField(PageComponent):
 
         start_dom_mutation_observer()
         date_field.click()
-        observed_element = get_observed_element()
+        observed_elements = get_observed_elements()
 
-        if not observed_element:
+        if not self._has_datepicker_elements(observed_elements):
             date_picker_x_path = self._identify_calendar_button()
         else:
             date_picker_x_path = self.x_path
@@ -142,6 +142,41 @@ class DateField(PageComponent):
                 f"URL - {self.parent_application_page.url}"
             )
 
+    def _has_datepicker_elements(self, observed_elements):
+        """Check if any of the observed elements is a datepicker/calendar widget"""
+        if not observed_elements:
+            return False
+
+        observed_elements_html = "\n".join(
+            f"{i + 1}. Element {i + 1} - {el.get_attribute('outerHTML')}"
+            for i, el in enumerate(observed_elements)
+        )
+
+        user_prompt = (
+            f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title}."
+            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
+            f"I have to enter date in following date field -\n"
+            f"Field title - {self.title}\n"
+            f"Field XPath - {self.question}\n"
+            f"When I clicked the date field, javascript mutation observer observed that following elements "
+            f"were added or modified in the DOM -\n{observed_elements_html}\n\n"
+            f"Determine if any of these observed elements is a datepicker / calendar widget where I can select date."
+        )
+
+        class DatepickerValidation(BaseModel):
+            has_datepicker: bool = Field(
+                ...,
+                description="Whether any of the observed elements appears to be a datepicker/calendar widget",
+            )
+
+        validation_found, validation = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=DatepickerValidation,
+        )
+
+        return validation_found and validation.has_datepicker
+
     def _select_date(self, date_picker_x_path, retry=False):
         global driver
 
@@ -149,7 +184,12 @@ class DateField(PageComponent):
 
         start_dom_mutation_observer()
         date_picker_button.click()
-        date_picker = get_observed_element()
+        observed_elements = get_observed_elements()
+
+        observed_elements_html = "\n".join(
+            f"{i + 1}. Element {i + 1} - {el.get_attribute('outerHTML')}"
+            for i, el in enumerate(observed_elements)
+        )
 
         user_prompt = (
             f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title}."
@@ -160,8 +200,8 @@ class DateField(PageComponent):
             f"Date picker button XPath - {date_picker_x_path}\n"
             f"In order to do that I need to click open the date picker and choose my date. I am using javascript "
             f"mutation observer to observer DOM changes. When I clicked the date picker button"
-            f", the observer observed that following element was added to the DOM -\n"
-            f"{date_picker.get_attribute('outerHTML')}\n"
+            f", the observer observed that following elements were added or modified in the DOM -\n"
+            f"{observed_elements_html}\n\n"
             f"I need to select 27th date of the month currently visible in the date picker. Give me XPath of the button"
             f" clicking which I can select 27th."
         )

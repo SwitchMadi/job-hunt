@@ -185,9 +185,8 @@ def element_exists(x_path):
 
 def start_dom_mutation_observer():
     """
-    Injects a MutationObserver into the page that looks for a new element
-    that is rendered and visible (i.e. not hidden via display:none or zero dimensions).
-    When found, the element is stored in window.__observedElement.
+    MutationObserver that collects visible + attached DOM elements,
+    and ignores irrelevant elements like <html>, <body>, etc.
     """
     global driver
 
@@ -197,28 +196,57 @@ def start_dom_mutation_observer():
         window.__observer.disconnect();
         window.__observer = null;
       }
-      
-      // reset the “found” element
-      window.__observedElement = null;
-      
+
+      window.__observedElements = [];
+
+      const IGNORED_TAGS = ["HTML", "BODY", "HEAD", "SCRIPT", "STYLE"];
+
+      function isVisibleAndAttached(node) {
+        if (!node || !document.documentElement.contains(node)) return false;
+        if (IGNORED_TAGS.includes(node.tagName)) return false;
+
+        const style = window.getComputedStyle(node);
+        return (
+          style.display !== "none" &&
+          style.visibility !== "hidden" &&
+          node.offsetWidth > 0 &&
+          node.offsetHeight > 0
+        );
+      }
+
+      function addIfValid(node) {
+        if (!isVisibleAndAttached(node)) return;
+        if (!window.__observedElements.includes(node)) {
+          window.__observedElements.push(node);
+        }
+      }
+
       window.__observer = new MutationObserver(function(mutations) {
-        for (var mutation of mutations) {
-          for (var node of mutation.addedNodes) {
-            if (node.nodeType !== Node.ELEMENT_NODE) continue;
-            var computedStyle = window.getComputedStyle(node);
-            if (computedStyle.display === "none") continue;
-            if (node.offsetWidth === 0 && node.offsetHeight === 0) continue;
-            window.__observedElement = node;
-            return;
+        for (const mutation of mutations) {
+          if (mutation.type === "childList") {
+            for (const added of mutation.addedNodes) {
+              if (added.nodeType !== Node.ELEMENT_NODE) continue;
+              setTimeout(() => addIfValid(added), 100);
+            }
+          }
+
+          if (mutation.type === "attributes" && mutation.attributeName.match(/class|style/)) {
+            setTimeout(() => addIfValid(mutation.target), 100);
           }
         }
       });
-      window.__observer.observe(document.body, { childList: true, subtree: true });
+
+      window.__observer.observe(document.documentElement, {
+        childList: true,
+        attributes: true,
+        attributeFilter: ["class", "style"],
+        subtree: true
+      });
     """
     driver.execute_script(script)
 
 
-def get_observed_element(timeout=10, poll_frequency=0.5):
+def get_observed_elements(timeout=10, poll_frequency=0.5):
     """
     Polls the global variable window.__observedElement until it is non-null
     or until the timeout is reached.
@@ -231,26 +259,49 @@ def get_observed_element(timeout=10, poll_frequency=0.5):
     """
     global driver
 
+    elements = []
     end_time = time.time() + timeout
-    while time.time() < end_time:
+    while (time.time() < end_time) and (len(elements) == 0):
         try:
-            element = driver.execute_script("return window.__observedElement;")
-            if element is not None:
-                # Disconnect the observer from JS.
-                driver.execute_script(
-                    "if(window.__observer){ window.__observer.disconnect(); window.__observer = null; }"
-                )
+            elements = driver.execute_script(
+                """
+              return (function() {
+                if (!window.__observedElements) return [];
+            
+                function isValid(node) {
+                  if (!node || !document.documentElement.contains(node)) return false;
+                  const style = window.getComputedStyle(node);
+                  return (
+                    style.display !== "none" &&
+                    style.visibility !== "hidden" &&
+                    node.offsetWidth > 0 &&
+                    node.offsetHeight > 0
+                  );
+                }
+            
+                return window.__observedElements.filter(isValid);
+              })();
+            """
+            )
 
-                time.sleep(1)
-                if is_stale(element):
-                    return None
-
-                return element
+            if elements:
+                elements = [element for element in elements if not is_stale(element)]
         except StaleElementReferenceException:
             pass
+
         time.sleep(poll_frequency)
 
-    return None
+    # Disconnect the observer from JS.
+    driver.execute_script(
+        """
+        if(window.__observer) {
+            window.__observer.disconnect(); 
+            window.__observer = null; 
+        }
+        window.__observedElements = [];
+    """
+    )
+    return elements
 
 
 def get_element_xpath(element):
@@ -383,7 +434,7 @@ def simulate_empty_area_click(text_to_click=None):
 
     action.send_keys(Keys.ESCAPE).perform()
 
-    body = driver.find_element(By.TAG_NAME, 'body')
+    body = driver.find_element(By.TAG_NAME, "body")
     ActionChains(driver).move_to_element(body).click().perform()
 
     # if text_to_click is set, then click the text to simulate empty area click
@@ -906,6 +957,40 @@ def minify_html_for_gpt_prompt(html_content):
 
     # Return the prettified, filtered HTML
     return soup.prettify()
+
+
+def find_clickable_parent_xpath(element_xpath, original_text):
+    """Find the outermost clickable parent element that maintains the same text content.
+
+    Args:
+        element_xpath: XPath of the starting element
+        original_text: Text content that must be preserved in parent elements
+
+    Returns:
+        XPath of the outermost clickable parent that maintains the same text
+    """
+    global driver
+
+    element = driver.find_element(By.XPATH, element_xpath)
+    target_element = element
+    parent = element
+
+    while parent:
+        try:
+            # Check if parent element is clickable
+            if parent.is_enabled() and parent.is_displayed():
+                # Verify text hasn't changed
+                if parent.text == original_text:
+                    target_element = parent
+                else:
+                    break
+
+            # Try next parent
+            parent = parent.find_element(By.XPATH, "./..")
+        except:
+            break
+
+    return get_element_xpath(target_element)
 
 
 def is_stale(element):

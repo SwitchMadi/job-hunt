@@ -12,7 +12,7 @@ from jobs.page_components.button import Button
 from utilities.selenium import (
     get_selenium_driver,
     start_dom_mutation_observer,
-    get_observed_element,
+    get_observed_elements,
     minify_html_for_gpt_prompt,
 )
 from utilities import constants
@@ -118,16 +118,18 @@ class WorkExperienceSection(PageComponent):
 
         start_dom_mutation_observer()
         curr_node.proceed()
-        observed_elem = get_observed_element()
+        observed_elements = get_observed_elements()
 
         if not self.work_experience_fields:
-            curr_node = self._identify_work_experience_fields(observed_elem)
+            curr_node = self._identify_work_experience_fields(observed_elements)
         else:
-            curr_node = self._extract_known_work_experience_fields_info(observed_elem)
+            curr_node = self._extract_known_work_experience_fields_info(
+                observed_elements
+            )
 
         return curr_node
 
-    def _extract_known_work_experience_fields_info(self, observed_elem=None):
+    def _extract_known_work_experience_fields_info(self, observed_elements=None):
         global driver
 
         field_details_prompt = "\n\n".join(
@@ -135,15 +137,19 @@ class WorkExperienceSection(PageComponent):
             for i, field in enumerate(self.work_experience_fields)
         )
 
-        if observed_elem:
-            observed_element_prompt = (
+        if observed_elements:
+            observed_elements_html = "\n".join(
+                f"{i + 1}. Element {i + 1} - {el.get_attribute('outerHTML')}"
+                for i, el in enumerate(observed_elements)
+            )
+            observed_elements_prompt = (
                 "I clicked a button to add work experience. I am using javascript mutation observer to "
                 "observe DOM changes. When I clicked the button, the observer observed that following "
-                "element was added to the DOM -\n"
-                f"{observed_elem.get_attribute('outerHTML')}\n"
+                "elements were added or modified in the DOM -\n"
+                f"{observed_elements_html}\n\n"
             )
         else:
-            observed_element_prompt = ""
+            observed_elements_prompt = ""
 
         user_prompt = (
             f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title} at a "
@@ -158,7 +164,7 @@ class WorkExperienceSection(PageComponent):
             f"experience section number {self.identified_work_experiences_count + 1} only. There are following fields "
             f"to fill in -\n"
             f"{field_details_prompt}\n"
-            f"{observed_element_prompt}"
+            f"{observed_elements_prompt}"
             f"Carefully analyse whole HTML and give XPath of the above fields along with add new experience button if "
             f"there is any. STRICTLY IGNORE all fields which are not related to candidate's work experience"
             f" section or sections which are already filled."
@@ -229,18 +235,23 @@ class WorkExperienceSection(PageComponent):
         )
         return None
 
-    def _identify_work_experience_fields(self, observed_elem=None):
+    def _identify_work_experience_fields(self, observed_elements=None):
         global driver
 
-        if observed_elem:
-            observed_element_prompt = (
+        if observed_elements:
+            observed_elements_html = "\n".join(
+                f"{i + 1}. Element {i + 1} - {el.get_attribute('outerHTML')}"
+                for i, el in enumerate(observed_elements)
+            )
+
+            observed_elements_prompt = (
                 "I clicked a button to add work experience. I am using javascript mutation observer to "
                 "observe DOM changes. When I clicked the button, the observer observed that following "
-                "element was added to the DOM -\n"
-                f"{observed_elem.get_attribute('outerHTML')}\n"
+                "elements were added or modified in the DOM -\n"
+                f"{observed_elements_html}\n\n"
             )
         else:
-            observed_element_prompt = ""
+            observed_elements_prompt = ""
 
         user_prompt = (
             f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title} at a "
@@ -250,7 +261,7 @@ class WorkExperienceSection(PageComponent):
             f"elements on the current page -\n"
             f"1. Fields to start adding work experience details like company, job title, responsibilities etc.\n"
             f"2. A button to start adding new work experiences.\n"
-            f"{observed_element_prompt}"
+            f"{observed_elements_prompt}"
             f"Carefully analyse whole HTML and find out whether only one of the above two elements are present on the "
             f"page OR both are present. STRICTLY IGNORE all fields which are not related to candidate's work experience"
             f" section. Extract details of the elements present."

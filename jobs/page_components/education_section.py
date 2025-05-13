@@ -12,7 +12,7 @@ from jobs.page_components.button import Button
 from utilities.selenium import (
     get_selenium_driver,
     start_dom_mutation_observer,
-    get_observed_element,
+    get_observed_elements,
     minify_html_for_gpt_prompt,
 )
 from utilities import constants
@@ -118,16 +118,16 @@ class EducationSection(PageComponent):
 
         start_dom_mutation_observer()
         curr_node.proceed()
-        observed_elem = get_observed_element()
+        observed_elements = get_observed_elements()
 
         if not self.education_fields:
-            curr_node = self._identify_education_fields(observed_elem)
+            curr_node = self._identify_education_fields(observed_elements)
         else:
-            curr_node = self._extract_known_education_fields_info(observed_elem)
+            curr_node = self._extract_known_education_fields_info(observed_elements)
 
         return curr_node
 
-    def _extract_known_education_fields_info(self, observed_elem=None):
+    def _extract_known_education_fields_info(self, observed_elements=None):
         global driver
 
         field_details_prompt = "\n\n".join(
@@ -135,15 +135,19 @@ class EducationSection(PageComponent):
             for i, field in enumerate(self.education_fields)
         )
 
-        if observed_elem:
-            observed_element_prompt = (
+        if observed_elements:
+            observed_elements_html = "\n".join(
+                f"{i + 1}. Element {i + 1} - {el.get_attribute('outerHTML')}"
+                for i, el in enumerate(observed_elements)
+            )
+            observed_elements_prompt = (
                 "I clicked a button to add education qualification details. I am using javascript mutation observer to "
                 "observe DOM changes. When I clicked the button, the observer observed that following "
-                "element was added to the DOM -\n"
-                f"{observed_elem.get_attribute('outerHTML')}\n"
+                "elements were added or modified in the DOM -\n"
+                f"{observed_elements_html}\n\n"
             )
         else:
-            observed_element_prompt = ""
+            observed_elements_prompt = ""
 
         user_prompt = (
             f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title} at a "
@@ -157,8 +161,8 @@ class EducationSection(PageComponent):
             f"in education qualification number {self.identified_educations_count + 1}. Give me XPath details about "
             f"education qualification section number {self.identified_educations_count + 1} only. There are following "
             f"fields to fill in -\n"
-            f"{field_details_prompt}\n"
-            f"{observed_element_prompt}"
+            f"{field_details_prompt}\n\n"
+            f"{observed_elements_prompt}"
             f"Carefully analyse whole HTML and give XPath of the above fields along with add new education "
             f"qualification button if there is any. STRICTLY IGNORE all fields which are not related to candidate's "
             f"education qualification section or sections which are already filled."
@@ -228,18 +232,23 @@ class EducationSection(PageComponent):
         )
         return None
 
-    def _identify_education_fields(self, observed_elem=None):
+    def _identify_education_fields(self, observed_elements=[]):
         global driver
 
-        if observed_elem:
-            observed_element_prompt = (
+        if observed_elements:
+            observed_elements_html = "\n".join(
+                f"{i + 1}. Element {i + 1} - {el.get_attribute('outerHTML')}"
+                for i, el in enumerate(observed_elements)
+            )
+
+            observed_elements_prompt = (
                 "I clicked a button to add education qualification. I am using javascript mutation observer to "
                 "observe DOM changes. When I clicked the button, the observer observed that following "
-                "element was added to the DOM -\n"
-                f"{observed_elem.get_attribute('outerHTML')}\n"
+                "elements were added or modified in the DOM -\n"
+                f"{observed_elements_html}\n\n"
             )
         else:
-            observed_element_prompt = ""
+            observed_elements_prompt = ""
 
         user_prompt = (
             f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title} at a "
@@ -248,8 +257,8 @@ class EducationSection(PageComponent):
             f"Current page has UI elements to add candidate's education qualification. It has either or both of the "
             f"following elements on the current page -\n"
             f"1. Fields to start adding education qualification details like college, degree etc.\n"
-            f"2. A button to start adding new education qualification.\n"
-            f"{observed_element_prompt}"
+            f"2. A button to start adding new education qualification.\n\n"
+            f"{observed_elements_prompt}"
             f"Carefully analyse whole HTML and find out whether only one of the above two elements are present on the "
             f"page OR both are present. STRICTLY IGNORE all fields which are not related to candidate's education "
             f"qualification section. Extract details of the elements present."

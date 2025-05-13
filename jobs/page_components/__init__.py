@@ -7,7 +7,7 @@ from typing import Optional, List
 from utilities.selenium import (
     get_selenium_driver,
     start_dom_mutation_observer,
-    get_observed_element,
+    get_observed_elements,
     simulate_empty_area_click,
     element_exists,
     minify_html_for_gpt_prompt,
@@ -180,12 +180,14 @@ class ApplicationField:
         self._identify()
 
         if self.x_path:
-            self.html_type = ApplicationField.revalidate_component_type(
-                x_path=self.x_path,
-                html_type=self.html_type,
-                field_title=self.title,
-                job_title=self.parent_application_page.parent_job.title,
-                options=self.options,
+            self.html_type, container_x_path = (
+                ApplicationField.revalidate_component_type(
+                    x_path=self.x_path,
+                    html_type=self.html_type,
+                    field_title=self.title,
+                    job_title=self.parent_application_page.parent_job.title,
+                    options=self.options,
+                )
             )
 
             if self.html_type == "text_box":
@@ -206,6 +208,7 @@ class ApplicationField:
                     title=self.title,
                     question=self.question,
                     category=self.category,
+                    options_container_x_path=container_x_path,
                     parent_application_page=self.parent_application_page,
                 )
             elif self.html_type == "search_field":
@@ -254,38 +257,35 @@ class ApplicationField:
 
             is_search_field = SearchField.validate_search_field(x_path, field_title)
             if is_search_field:
-                return "search_field"
+                return "search_field", None
 
             start_dom_mutation_observer()
             element = driver.find_element(By.XPATH, x_path)
             element.click()
-            observed_element = get_observed_element()
+            observed_elements = get_observed_elements()
 
-            if observed_element:
-                from jobs.page_components.drop_down import DropDown
-
-                is_observed_element_dropdown = (
-                    DropDown.validate_observed_element_for_dropdown(
-                        job_title=job_title,
-                        element_x_path=x_path,
-                        field_title=field_title,
-                        observed_element=observed_element,
-                    )
+            if observed_elements:
+                is_container_present, container_x_path = cls.identify_options_container(
+                    job_title=job_title,
+                    field_title=field_title,
+                    field_x_path=x_path,
+                    observed_elements=observed_elements,
+                    html_type="dropdown",
                 )
-                if is_observed_element_dropdown:
+                if is_container_present:
                     simulate_empty_area_click(field_title)
-                    return "dropdown"
+                    return "dropdown", container_x_path
 
-            return "text_box"
+            return "text_box", None
 
         elif html_type == "check_box":
             from jobs.page_components.check_box import CheckBox
 
             multiple_correct = CheckBox.validate_checkbox(options)
             if not multiple_correct:
-                return "radio_button"
+                return "radio_button", None
 
-        return html_type
+        return html_type, None
 
     @classmethod
     def get_field_value(cls, field_category, user):
@@ -378,6 +378,97 @@ class ApplicationField:
                 return work_info.get("employment_type")
 
         return None
+
+    @classmethod
+    def identify_options_container(
+        cls,
+        field_title,
+        field_x_path,
+        observed_elements,
+        html_type,
+        job_title,
+        retry=False,
+        prev_xpath=None,
+    ):
+        """Identify if any observed element is an options container and return its XPath"""
+        global driver
+
+        class ContainerValidation(BaseModel):
+            is_container: bool = Field(
+                ...,
+                description="Whether any of the observed elements is an options container",
+            )
+            container_xpath: str | None = Field(
+                default=None,
+                description="XPath of the observed element that contains the options. Should be returned only if is_container is True.",
+            )
+
+        observed_elements_html = "\n".join(
+            f"{i+1}. Element {i+1} - {el.get_attribute('outerHTML')}"
+            for i, el in enumerate(observed_elements)
+        )
+
+        # Generic prompts that work across different websites and HTML structures
+        type_specific_prompts = {
+            "dropdown": (
+                "1. Element has a container-like structure that could hold selectable items\n"
+                "2. May contain interactive elements or items that can be selected\n"
+                "3. Often has container, popup, or list-related attributes or styles\n"
+            ),
+            "search_field": (
+                "1. Element appears to be a suggestions or results container\n"
+                "2. May contain selectable items or suggestions\n"
+                "3. Often has attributes or styles related to suggestions/results display\n"
+            ),
+        }
+
+        validation_prompt = type_specific_prompts.get(
+            html_type,
+            "1. Element has container-like characteristics\n2. Contains selectable or interactive items\n3. Has relevant styling that suggests it holds options",
+        )
+
+        user_prompt = (
+            f"Following HTML page is job application webpage for {job_title}. "
+            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
+            f"There is a field with title {field_title} at XPath {field_x_path}.\n"
+            f"When this field was clicked or typed in, javascript mutation observer observed that following elements "
+            f"were added or modified in the DOM -\n{observed_elements_html}\n"
+            f"1. Determine if any of the observed elements appears to be an options container. Consider:\n"
+            f"{validation_prompt}\n"
+            f"2. If it is a container, identify which element number (1, 2, etc.) contains the options."
+        )
+
+        if retry and prev_xpath:
+            user_prompt += (
+                f"\n\nIn previous try you gave following XPath for the container but the element "
+                f"couldn't be found using that. So, find correct XPath for the container.\n"
+                f"Previous XPath - {prev_xpath}\n"
+            )
+
+        validation_found, validation = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=ContainerValidation,
+        )
+
+        if validation_found:
+            if validation.is_container:
+                if validation.container_xpath and element_exists(
+                    validation.container_xpath
+                ):
+                    return validation.is_container, validation.container_xpath
+                elif not retry:
+                    return cls.identify_options_container(
+                        field_title=field_title,
+                        field_x_path=field_x_path,
+                        observed_elements=observed_elements,
+                        html_type=html_type,
+                        job_title=job_title,
+                        retry=True,
+                        prev_xpath=validation.container_xpath,
+                    )
+
+        return False, None
 
     @classmethod
     def extract_field_answer(
