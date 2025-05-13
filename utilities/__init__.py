@@ -232,7 +232,7 @@ def retry(times=3, delay=1, exceptions=(Exception,)):
                 try:
                     return func(*args, **kwargs)
                 except exceptions as e:
-                    logger.info(f"[{func.__name__}] Attempt {attempt} failed: {e}")
+                    logger.exception(f"[{func.__name__}] Attempt {attempt} failed: {e}")
                     if attempt < times:
                         time.sleep(delay)
                     else:

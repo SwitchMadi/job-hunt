@@ -12,6 +12,7 @@ from utilities.selenium import (
     start_dom_mutation_observer,
     get_observed_elements,
     minify_html_for_gpt_prompt,
+    is_stale,
 )
 from utilities import constants
 from utilities.gpt import get_gpt_response
@@ -148,8 +149,9 @@ class DateField(PageComponent):
             return False
 
         observed_elements_html = "\n".join(
-            f"{i + 1}. Element {i + 1} - {el.get_attribute('outerHTML')}"
+            f"{i + 1}. Element {i + 1} - {minify_html_for_gpt_prompt(el.get_attribute('outerHTML'))}"
             for i, el in enumerate(observed_elements)
+            if not is_stale(el)
         )
 
         user_prompt = (
@@ -187,8 +189,9 @@ class DateField(PageComponent):
         observed_elements = get_observed_elements()
 
         observed_elements_html = "\n".join(
-            f"{i + 1}. Element {i + 1} - {el.get_attribute('outerHTML')}"
+            f"{i + 1}. Element {i + 1} - {minify_html_for_gpt_prompt(el.get_attribute('outerHTML'))}"
             for i, el in enumerate(observed_elements)
+            if not is_stale(el)
         )
 
         user_prompt = (

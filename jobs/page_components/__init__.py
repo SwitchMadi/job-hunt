@@ -11,6 +11,7 @@ from utilities.selenium import (
     simulate_empty_area_click,
     element_exists,
     minify_html_for_gpt_prompt,
+    is_stale,
 )
 from utilities.logging import get_logger
 from utilities import pascal_to_snake_casing
@@ -400,12 +401,14 @@ class ApplicationField:
             )
             container_xpath: str | None = Field(
                 default=None,
-                description="XPath of the observed element that contains the options. Should be returned only if is_container is True.",
+                description="XPath of the observed element that contains the options. Should be returned only if "
+                "is_container is True.",
             )
 
         observed_elements_html = "\n".join(
-            f"{i+1}. Element {i+1} - {el.get_attribute('outerHTML')}"
+            f"{i+1}. Element {i+1} - {minify_html_for_gpt_prompt(el.get_attribute('outerHTML'))}"
             for i, el in enumerate(observed_elements)
+            if not is_stale(el)
         )
 
         # Generic prompts that work across different websites and HTML structures
@@ -424,7 +427,9 @@ class ApplicationField:
 
         validation_prompt = type_specific_prompts.get(
             html_type,
-            "1. Element has container-like characteristics\n2. Contains selectable or interactive items\n3. Has relevant styling that suggests it holds options",
+            "1. Element has container-like characteristics\n"
+            "2. Contains selectable or interactive items\n"
+            "3. Has relevant styling that suggests it holds options",
         )
 
         user_prompt = (
