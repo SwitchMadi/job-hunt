@@ -10,6 +10,7 @@ from selenium.common.exceptions import (
     StaleElementReferenceException,
     ElementClickInterceptedException,
     ElementNotInteractableException,
+    NoSuchElementException,
 )
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
@@ -180,6 +181,19 @@ def element_exists(x_path):
         else:
             return False
     except InvalidSelectorException:
+        return False
+
+
+def is_element_visible(x_path):
+    global driver
+
+    try:
+        elements = driver.find_elements(By.XPATH, x_path)
+        for element in elements:
+            if element.is_displayed():
+                return True
+        return False
+    except (InvalidSelectorException, NoSuchElementException):
         return False
 
 
@@ -959,7 +973,7 @@ def minify_html_for_gpt_prompt(html_content):
     return soup.prettify()
 
 
-def find_clickable_parent_xpath(element_xpath, original_text):
+def find_clickable_parent_xpath(element_xpath, original_text=None):
     """Find the outermost clickable parent element that maintains the same text content.
 
     Args:
@@ -972,13 +986,31 @@ def find_clickable_parent_xpath(element_xpath, original_text):
     global driver
 
     element = driver.find_element(By.XPATH, element_xpath)
+
+    if not original_text:
+        original_text = element.text
+
+    if not original_text:
+        return element_xpath
+
     target_element = element
     parent = element
 
     while parent:
         try:
             # Check if parent element is clickable
-            if parent.is_enabled() and parent.is_displayed():
+            parent_width = driver.execute_script(
+                "return arguments[0].offsetWidth;", parent
+            )
+            parent_height = driver.execute_script(
+                "return arguments[0].offsetHeight;", parent
+            )
+            if (
+                parent.is_enabled()
+                and parent.is_displayed()
+                and (parent_height > 0)
+                and (parent_width > 0)
+            ):
                 # Verify text hasn't changed
                 if parent.text == original_text:
                     target_element = parent

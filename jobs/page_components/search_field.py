@@ -15,7 +15,7 @@ from utilities.selenium import (
     simulate_empty_area_click,
     start_dom_mutation_observer,
     get_observed_elements,
-    element_exists,
+    is_element_visible,
     clear_text_field,
 )
 
@@ -207,7 +207,7 @@ class SearchField(PageComponent):
                 else:
                     input_count -= 1
 
-            if element_exists(self.options_container_x_path):
+            if is_element_visible(self.options_container_x_path):
                 raise Exception(
                     f"Couldn't proceed on following search field {self.category} for "
                     f"{self.parent_application_page.parent_job.title}. "

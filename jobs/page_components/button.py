@@ -6,6 +6,8 @@ from selenium.common import (
 )
 from selenium.webdriver import ActionChains
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 
 from jobs.page_components import PageComponent, logger, get_page_component_class_name
 from utilities.selenium import get_selenium_driver
@@ -85,6 +87,20 @@ class Button(PageComponent):
             actions.pause(random.uniform(0.1, 0.3))
 
             if self.button_type == "dropdown":
+                driver.execute_script(
+                    """
+                    const element = arguments[0];
+                    const rect = element.getBoundingClientRect();
+                    const elementTop = rect.top + window.pageYOffset;
+                    const viewportHeight = window.innerHeight;
+                    const offsetToCenter = elementTop - (viewportHeight / 2) + (rect.height / 2) - 25;
+                    window.scrollTo({top: offsetToCenter, behavior: 'smooth'});
+                """,
+                    element,
+                )
+                WebDriverWait(driver, 5).until(
+                    EC.element_to_be_clickable((By.XPATH, self.x_path))
+                )
                 element.click()
             else:
                 # Use JavaScript to dispatch native events for more reliable clicking

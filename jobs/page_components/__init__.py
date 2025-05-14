@@ -3,6 +3,7 @@ from selenium.webdriver.common.by import By
 from pydantic import BaseModel, Field
 from enum import Enum
 from typing import Optional, List
+from selenium.common import ElementClickInterceptedException
 
 from utilities.selenium import (
     get_selenium_driver,
@@ -12,6 +13,7 @@ from utilities.selenium import (
     element_exists,
     minify_html_for_gpt_prompt,
     is_stale,
+    find_clickable_parent_xpath,
 )
 from utilities.logging import get_logger
 from utilities import pascal_to_snake_casing
@@ -261,8 +263,15 @@ class ApplicationField:
                 return "search_field", None
 
             start_dom_mutation_observer()
+
             element = driver.find_element(By.XPATH, x_path)
-            element.click()
+            try:
+                element.click()
+            except ElementClickInterceptedException:
+                x_path = find_clickable_parent_xpath(x_path)
+                element = driver.find_element(By.XPATH, x_path)
+                element.click()
+
             observed_elements = get_observed_elements()
 
             if observed_elements:
@@ -520,7 +529,15 @@ class ApplicationField:
                 )
 
             FieldAnswerOptions = Enum(
-                "FieldAnswerOptions", {option: option for option in options}
+                "FieldAnswerOptions",
+                {
+                    (
+                        text
+                        if text.isidentifier() and text
+                        else text.replace(" ", "_") if text else f"Option_{i}"
+                    ): text
+                    for i, text in enumerate(options)
+                },
             )
 
             if multiple_correct:

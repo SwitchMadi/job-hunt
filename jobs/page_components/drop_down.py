@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.action_chains import ActionChains
 
 from jobs.page_components import (
     PageComponent,
@@ -12,7 +13,7 @@ from utilities.gpt import get_gpt_response
 from utilities.selenium import (
     find_clickable_parent_xpath,
     get_selenium_driver,
-    element_exists,
+    is_element_visible,
     get_element_xpath,
     minify_html_for_gpt_prompt,
     simulate_empty_area_click,
@@ -56,7 +57,8 @@ class DropDown(PageComponent):
         global driver
 
         option = None
-        while (option is None) or element_exists(self.options_container_x_path):
+        while (option is None) or is_element_visible(self.options_container_x_path):
+            simulate_empty_area_click(self.title)
             self.dropdown_button.proceed()
 
             if not self.options_xpath_pattern:
@@ -69,6 +71,7 @@ class DropDown(PageComponent):
                 )
             else:
                 options = self.build_options_list(self.options_xpath_pattern)
+
             if not options:
                 simulate_empty_area_click(self.title)
                 continue
@@ -201,14 +204,50 @@ class DropDown(PageComponent):
             )
 
     @classmethod
-    def build_options_list(cls, xpath_pattern):
-        """Build list of options using the XPath pattern"""
+    def build_options_list(cls, xpath_pattern, max_scroll_attempts=50):
+        """
+        Scrolls through a dropdown container and collects all visible option elements.
+
+        :param xpath_pattern: XPath pattern for the dropdown options inside the container
+        :param max_scroll_attempts: Safety limit to prevent infinite loops
+        :return: List of all option WebElement objects
+        """
         global driver
-        options = []
-        option_elements = driver.find_elements(By.XPATH, xpath_pattern)
-        for element in option_elements:
-            options.append({"text": element.text, "x_path": get_element_xpath(element)})
-        return options
+
+        # Scroll the container by sending PAGE_DOWN or using JS scroll
+        last_count = 0
+        same_count_attempts = 0
+        all_options = []
+
+        for _ in range(max_scroll_attempts):
+            options = driver.find_elements(By.XPATH, xpath_pattern)
+            if not options:
+                break
+
+            last_option = options[-1]
+            actions = ActionChains(driver)
+            actions.move_to_element(last_option).perform()
+
+            if len(options) == last_count:
+                same_count_attempts += 1
+                if same_count_attempts >= 3:
+                    break  # No more new options
+            else:
+                same_count_attempts = 0
+                last_count = len(options)
+
+            all_options = options
+
+        output_options = []
+        option_texts = []
+        for option in all_options:
+            if option.text not in option_texts:
+                output_options.append(
+                    {"text": option.text, "x_path": get_element_xpath(option)}
+                )
+                option_texts.append(option.text)
+
+        return output_options
 
     def to_dict(self):
         return {
