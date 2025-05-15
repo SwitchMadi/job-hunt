@@ -42,6 +42,14 @@ def get_gpt_response(
             completion = client.beta.chat.completions.parse(**payload)
             resp = completion.choices[0].message
 
+            # Log token usage
+            logger.info(
+                f"OpenAI token usage - "
+                f"Input: {completion.usage.prompt_tokens}, "
+                f"Output: {completion.usage.completion_tokens}, "
+                f"Total: {completion.usage.total_tokens}"
+            )
+
             if resp.refusal:
                 logger.warn(
                     f"GPT could not respond with structured output - \n{resp.refusal}"
@@ -53,6 +61,14 @@ def get_gpt_response(
         else:
             completion = client.chat.completions.create(**payload)
             resp = completion.choices[0].message.content
+
+            # Log token usage
+            logger.info(
+                f"OpenAI token usage - "
+                f"Input: {completion.usage.prompt_tokens}, "
+                f"Output: {completion.usage.completion_tokens}, "
+                f"Total: {completion.usage.total_tokens}"
+            )
 
             logger.debug(f"GPT response - \n{resp}")
             return resp
