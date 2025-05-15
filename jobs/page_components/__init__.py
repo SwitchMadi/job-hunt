@@ -3,7 +3,13 @@ from selenium.webdriver.common.by import By
 from pydantic import BaseModel, Field
 from enum import Enum
 from typing import Optional, List
-from selenium.common import ElementClickInterceptedException
+from selenium.common import (
+    ElementClickInterceptedException,
+    ElementNotInteractableException,
+)
+import time
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 
 from utilities.selenium import (
     get_selenium_driver,
@@ -265,9 +271,24 @@ class ApplicationField:
             start_dom_mutation_observer()
 
             element = driver.find_element(By.XPATH, x_path)
+            driver.execute_script(
+                """
+                const element = arguments[0];
+                const rect = element.getBoundingClientRect();
+                const elementTop = rect.top + window.pageYOffset;
+                const viewportHeight = window.innerHeight;
+                const offsetToCenter = elementTop - (viewportHeight / 2) + (rect.height / 2) + 100;
+                window.scrollTo({top: offsetToCenter, behavior: 'smooth'});
+            """,
+                element,
+            )
+            time.sleep(0.2)
+            WebDriverWait(driver, 5).until(
+                EC.element_to_be_clickable((By.XPATH, x_path))
+            )
             try:
                 element.click()
-            except ElementClickInterceptedException:
+            except (ElementClickInterceptedException, ElementNotInteractableException):
                 x_path = find_clickable_parent_xpath(x_path)
                 element = driver.find_element(By.XPATH, x_path)
                 element.click()
@@ -516,6 +537,7 @@ class ApplicationField:
             options_list = "\n".join(
                 f"{i + 1}. {option}" for i, option in enumerate(options)
             )
+
             if closest_answer:
                 user_prompt += (
                     f"Answer to the question is '{closest_answer}', but I have to select out of following "
@@ -540,7 +562,15 @@ class ApplicationField:
                 },
             )
 
-            if multiple_correct:
+            if len(options) > 250:
+
+                class FieldAnswer(BaseModel):
+                    answer: str = Field(
+                        ...,
+                        description="Correct or most close but exact option out of the given options.",
+                    )
+
+            elif multiple_correct:
 
                 class FieldAnswer(BaseModel):
                     answers: List[FieldAnswerOptions] = Field(
@@ -608,7 +638,9 @@ class ApplicationField:
             response_format=FieldAnswer,
         )
         if field_answer_found:
-            if answer_type == "text":
+            if (answer_type == "text") or (
+                (answer_type == "enum") and len(options) > 250
+            ):
                 return field_answer.answer
             elif multiple_correct:
                 return [answer.value for answer in field_answer.answers]

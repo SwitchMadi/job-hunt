@@ -220,7 +220,7 @@ def pascal_to_snake_casing(name: str) -> str:
     return s1.lower()
 
 
-def retry(times=3, delay=1, exceptions=(Exception,)):
+def retry(times=3, delay=1, exceptions=(Exception,), raise_exception=True):
     from utilities.logging import get_logger
 
     logger = get_logger("utilities")
@@ -236,7 +236,13 @@ def retry(times=3, delay=1, exceptions=(Exception,)):
                     if attempt < times:
                         time.sleep(delay)
                     else:
-                        raise
+                        if raise_exception:
+                            raise
+                        else:
+                            logger.warning(
+                                f"[{func.__name__}] All attempts failed. Returning..."
+                            )
+                            return
 
         return wrapper
 

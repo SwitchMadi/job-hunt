@@ -10,7 +10,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
 from jobs.page_components import PageComponent, logger, get_page_component_class_name
-from utilities.selenium import get_selenium_driver
+from utilities.selenium import get_selenium_driver, is_element_visible
 
 
 driver = get_selenium_driver()
@@ -66,6 +66,13 @@ class Button(PageComponent):
         global driver
 
         try:
+            if not is_element_visible(self.x_path):
+                logger.warning(
+                    f"Element not visible in class Button's proceed method.\nButton instance - {vars(self)}"
+                )
+                self.is_component_functional = False
+                return
+
             # Add initial random delay
             self._human_like_delay()
 
@@ -93,11 +100,12 @@ class Button(PageComponent):
                     const rect = element.getBoundingClientRect();
                     const elementTop = rect.top + window.pageYOffset;
                     const viewportHeight = window.innerHeight;
-                    const offsetToCenter = elementTop - (viewportHeight / 2) + (rect.height / 2) - 25;
+                    const offsetToCenter = elementTop - (viewportHeight / 2) + (rect.height / 2) + 100;
                     window.scrollTo({top: offsetToCenter, behavior: 'smooth'});
                 """,
                     element,
                 )
+                time.sleep(0.2)
                 WebDriverWait(driver, 5).until(
                     EC.element_to_be_clickable((By.XPATH, self.x_path))
                 )

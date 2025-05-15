@@ -6,6 +6,7 @@ from jobs.page_components import (
     PageComponent,
     ApplicationField,
     get_page_component_class_name,
+    logger,
 )
 from jobs.page_components.button import Button
 from utilities import constants
@@ -57,6 +58,8 @@ class DropDown(PageComponent):
         global driver
 
         option = None
+        max_tries = 3
+        current_try = 1
         while (option is None) or is_element_visible(self.options_container_x_path):
             simulate_empty_area_click(self.title)
             self.dropdown_button.proceed()
@@ -73,7 +76,13 @@ class DropDown(PageComponent):
                 options = self.build_options_list(self.options_xpath_pattern)
 
             if not options:
+                self.options_xpath_pattern = None
                 simulate_empty_area_click(self.title)
+
+                if current_try >= max_tries:
+                    return
+                current_try += 1
+
                 continue
 
             answer = ApplicationField.get_field_value(
@@ -96,7 +105,14 @@ class DropDown(PageComponent):
                     parsed_resume=self.parent_application_page.parent_job.user.parsed_resume,
                 )
 
-            option = [opt for opt in options if opt["text"] == answer][0]
+            option = [opt for opt in options if opt["text"] == answer]
+            if option:
+                option = option[0]
+            else:
+                logger.warning(
+                    f"Couldn't find a matching option for {self.title} in the dropdown."
+                )
+                return
 
             # Get the clickable parent xpath for this option
             clickable_xpath = find_clickable_parent_xpath(
@@ -186,7 +202,7 @@ class DropDown(PageComponent):
             response_format=OptionsXPath,
         )
 
-        if pattern_found:
+        if pattern_found and is_element_visible(pattern_result.xpath_pattern):
             return pattern_result.xpath_pattern
         else:
             if not retry:

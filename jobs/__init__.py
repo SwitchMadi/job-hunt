@@ -297,7 +297,7 @@ class ApplicationPage:
         next_step = self.head_step
         while True:
 
-            @retry()
+            @retry(raise_exception=False)
             def _():
                 return next_step.proceed()
 
