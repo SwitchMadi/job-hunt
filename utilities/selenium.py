@@ -24,6 +24,7 @@ import platform
 import subprocess
 import sys
 import glob
+import htmlmin
 
 
 driver = None
@@ -190,7 +191,12 @@ def is_element_visible(x_path):
     try:
         elements = driver.find_elements(By.XPATH, x_path)
         for element in elements:
-            if element.is_displayed():
+            element_size = element.size
+            if (
+                element.is_displayed()
+                and element_size["width"] > 0
+                and element_size["height"] > 0
+            ):
                 return True
         return False
     except (InvalidSelectorException, NoSuchElementException):
@@ -970,7 +976,7 @@ def minify_html_for_gpt_prompt(html_content):
             tag.string.replace_with(trimmed_text)
 
     # Return the prettified, filtered HTML
-    return soup.prettify()
+    return htmlmin.minify(str(soup), remove_empty_space=True)
 
 
 def find_clickable_parent_xpath(element_xpath, original_text=None):
