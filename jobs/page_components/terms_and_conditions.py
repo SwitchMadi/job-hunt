@@ -4,7 +4,11 @@ from jobs.page_components import PageComponent, get_page_component_class_name, l
 from jobs.page_components.button import Button
 from utilities import constants
 from utilities.gpt import get_gpt_response
-from utilities.selenium import get_selenium_driver, minify_html_for_gpt_prompt
+from utilities.selenium import (
+    get_selenium_driver,
+    minify_html_for_gpt_prompt,
+    is_element_visible,
+)
 
 driver = get_selenium_driver()
 driver.set_page_load_timeout(15)
@@ -28,7 +32,7 @@ class TermsAndConditions(PageComponent):
 
         self.field_component.proceed()
 
-    def _identify(self, retry=False):
+    def _identify(self, retry=False, prev_xpath=None):
         global driver
         user_prompt = (
             f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title}."
@@ -36,8 +40,16 @@ class TermsAndConditions(PageComponent):
             f"The webpage has TnC field for applying to the job. Following is info about the TnC field -\n"
             f"Field title - {self.field_info.field_title}\n"
             f"Field category - {self.field_info.field_category}\n"
-            f"Analyse the whole HTML very carefully for extracting XPath of the TnC field."
+            f"Analyse the whole HTML very carefully for extracting XPath of the TnC field. It is usually a checkbox "
+            f"or a button."
         )
+
+        if retry and prev_xpath:
+            user_prompt += (
+                f"\n\nIn previous try you gave following xpath but the element couldn't be found or wasn't visible. "
+                f"So, find correct xpath for the same field.\n"
+                f"Previous xpath - {prev_xpath}\n"
+            )
 
         class TnCField(BaseModel):
             x_path: str = Field(
@@ -51,7 +63,7 @@ class TermsAndConditions(PageComponent):
             user_prompt,
             response_format=TnCField,
         )
-        if tnc_field_found:
+        if tnc_field_found and is_element_visible(tnc_field.x_path):
             if self.parent_application_page.component_x_path_exists(tnc_field.x_path):
                 logger.warn(
                     f"Page component with following x_path already exists - {tnc_field.x_path}"
@@ -68,15 +80,17 @@ class TermsAndConditions(PageComponent):
             if self.field_component.is_component_functional:
                 self.is_component_functional = True
                 self.component_identified = True
-            elif not retry:
-                self._identify(retry=True)
             else:
                 raise Exception(
-                    f"Couldn't extract TnC field for {self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+                    f"Couldn't extract TnC field for {self.parent_application_page.parent_job.title}. "
+                    f"URL - {self.parent_application_page.url}"
                 )
+        elif not retry:
+            return self._identify(retry=True, prev_xpath=tnc_field.x_path)
         else:
             raise Exception(
-                f"Couldn't extract TnC field for {self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+                f"Couldn't extract TnC field for {self.parent_application_page.parent_job.title}. "
+                f"URL - {self.parent_application_page.url}"
             )
 
     def to_dict(self):

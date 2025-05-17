@@ -61,7 +61,7 @@ class DropDown(PageComponent):
         max_tries = 3
         current_try = 1
         while (option is None) or is_element_visible(self.options_container_x_path):
-            simulate_empty_area_click(self.title)
+            simulate_empty_area_click()
             self.dropdown_button.proceed()
 
             if not self.options_xpath_pattern:
@@ -77,9 +77,9 @@ class DropDown(PageComponent):
 
             if not options:
                 self.options_xpath_pattern = None
-                simulate_empty_area_click(self.title)
 
                 if current_try >= max_tries:
+                    simulate_empty_area_click()
                     return
                 current_try += 1
 

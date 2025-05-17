@@ -442,7 +442,7 @@ class Login(PageComponent):
             f"Following HTML page is job application page for {self.parent_application_page.parent_job.title}. "
             f"I just tried to login using username and password. Either I logged in successfully and current HTML is of"
             f" the page next to login section OR login was unsuccessful and there is some error message. Analyse the "
-            f"HTML very carefully for determining whether login was successful or not.\n"
+            f"HTML very carefully for determining whether login was successful or there is some login related error.\n"
             f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}"
         )
 

@@ -73,6 +73,7 @@ class TextInput(PageComponent):
                 f"Unexpected error occurred in class TextInput's proceed method.\n{e}\n"
                 f"TextInput instance - {vars(self)}"
             )
+            raise e
 
         return
 
