@@ -7,9 +7,6 @@ from selenium.common import (
     ElementClickInterceptedException,
     ElementNotInteractableException,
 )
-import time
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
 
 from utilities.selenium import (
     get_selenium_driver,
@@ -82,8 +79,25 @@ class ApplicationField:
             f"The webpage has following application field for applying to the job -\n"
             f"Field title - {self.title}\n"
             f"Field category - {self.category}\n"
-            f"Analyse the whole HTML very carefully for extracting XPath and other info of the application field."
+            f"Analyse the whole HTML very carefully for extracting XPath and other info of the interactive application "
+            f"field for above given field title and category.\n"
+            f"Please keep in mind following -\n"
+            f"1. Get XPath of the application field which is interactive in nature. Don't get XPath of the field which"
+            f" is not interactive.\n"
+            f"2. Sometimes under one field title there can be multiple fields as in same vicinity or under same parent."
+            f" In that case, get XPath of the field which is most relevant to the field title & category.\n"
+            f"3. XPath should be of one interactive element only. Don't get XPath for element which has multiple "
+            f"interactive elements in it and the element is not interactive itself."
         )
+
+        if self.category in ["phone_country_code", "phone_number_without_country_code"]:
+            user_prompt += (
+                f"\n4. Put extra effort to understand HTML hierarchy and don't confuse yourself between country code "
+                f"field and phone number field. They may be different fields or same field. If they seem to be "
+                f"different fields then very carefully return XPath of the interactive element for {self.category} "
+                f"field. Focus on HTML hierarchy, elements grouping and different attributes of the elements, "
+                f"to identify & distinguish correctly."
+            )
 
         if retry and prev_x_path:
             user_prompt += (
@@ -268,30 +282,26 @@ class ApplicationField:
             if is_search_field:
                 return "search_field", None
 
+            simulate_empty_area_click()
+
             start_dom_mutation_observer()
 
-            element = driver.find_element(By.XPATH, x_path)
-            driver.execute_script(
-                """
-                const element = arguments[0];
-                const rect = element.getBoundingClientRect();
-                const elementTop = rect.top + window.pageYOffset;
-                const viewportHeight = window.innerHeight;
-                const offsetToCenter = elementTop - (viewportHeight / 2) + (rect.height / 2) + 100;
-                window.scrollTo({top: offsetToCenter, behavior: 'smooth'});
-            """,
-                element,
-            )
-            time.sleep(0.2)
-            WebDriverWait(driver, 5).until(
-                EC.element_to_be_clickable((By.XPATH, x_path))
-            )
+            from jobs import Button
+
             try:
-                element.click()
+                element_button = Button(
+                    x_path=x_path,
+                    button_type="dropdown",
+                    parent_application_page=None,
+                )
+                element_button.proceed()
             except (ElementClickInterceptedException, ElementNotInteractableException):
-                x_path = find_clickable_parent_xpath(x_path)
-                element = driver.find_element(By.XPATH, x_path)
-                element.click()
+                element_button = Button(
+                    x_path=find_clickable_parent_xpath(x_path),
+                    button_type="dropdown",
+                    parent_application_page=None,
+                )
+                element_button.proceed()
 
             observed_elements = get_observed_elements()
 
@@ -304,8 +314,10 @@ class ApplicationField:
                     html_type="dropdown",
                 )
                 if is_container_present:
-                    simulate_empty_area_click(field_title)
+                    simulate_empty_area_click()
                     return "dropdown", container_x_path
+
+            simulate_empty_area_click(field_title)
 
             return "text_box", None
 
@@ -322,6 +334,8 @@ class ApplicationField:
     def get_field_value(cls, field_category, user):
         if field_category == "first_name":
             return user.first_name
+        elif field_category == "middle_name":
+            return user.middle_name
         elif field_category == "last_name":
             return user.last_name
         elif field_category == "full_name":
@@ -333,11 +347,15 @@ class ApplicationField:
         elif field_category == "salutation_prefix":
             return user.parsed_resume.get("personal_details", {}).get("salutation")
         elif field_category == "phone_country_code":
-            return (
-                user.parsed_resume.get("personal_details", {})
-                .get("phone", {})
-                .get("country_code")
-            )
+            return user.phone_country_code
+        elif field_category == "phone_number_without_country_code":
+            return user.phone_number
+        elif field_category == "country":
+            return user.country
+        elif field_category == "city":
+            return user.city
+        elif field_category == "state":
+            return user.state
         elif field_category.startswith("job_title"):
             experience_no = int(field_category.split("__")[-1])
             work_info = user.parsed_resume.get("work_experience", [])
@@ -427,7 +445,8 @@ class ApplicationField:
         class ContainerValidation(BaseModel):
             is_container: bool = Field(
                 ...,
-                description="Whether any of the observed elements is an options container",
+                description=f"Whether any of the observed elements is an options container strictly for the field title"
+                f" {field_title} and nothing else",
             )
             container_xpath: str | None = Field(
                 default=None,
@@ -441,15 +460,21 @@ class ApplicationField:
             if not is_stale(el)
         )
 
+        if not observed_elements_html.strip():
+            return False, None
+
         # Generic prompts that work across different websites and HTML structures
         type_specific_prompts = {
             "dropdown": (
-                "1. Element has a container-like structure that could hold selectable items\n"
-                "2. May contain interactive elements or items that can be selected\n"
-                "3. Often has container, popup, or list-related attributes or styles\n"
+                f"1. Element appears to be a dropdown or list container strictly for the field title {field_title} and "
+                f"nothing else\n"
+                "2. Element has a container-like structure that could hold selectable items\n"
+                "3. May contain interactive elements or items that can be selected\n"
+                "4. Often has container, popup, or list-related attributes or styles\n"
             ),
             "search_field": (
-                "1. Element appears to be a suggestions or results container\n"
+                f"1. Element appears to be a suggestions or results container strictly for the field title "
+                f"{field_title} and nothing else\n"
                 "2. May contain selectable items or suggestions\n"
                 "3. Often has attributes or styles related to suggestions/results display\n"
             ),
@@ -468,7 +493,8 @@ class ApplicationField:
             f"There is a field with title {field_title} at XPath {field_x_path}.\n"
             f"When this field was clicked or typed in, javascript mutation observer observed that following elements "
             f"were added or modified in the DOM -\n{observed_elements_html}\n"
-            f"1. Determine if any of the observed elements appears to be an options container. Consider:\n"
+            f"1. Determine if any of the observed elements appears to be an options container strictly for the field "
+            f"title {field_title} and nothing else. Consider:\n"
             f"{validation_prompt}\n"
             f"2. If it is a container, identify which element number (1, 2, etc.) contains the options."
         )

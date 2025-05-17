@@ -21,6 +21,7 @@ from jobs.page_components.login import Login, VerifyAccount
 from jobs.page_components.start_application import StartApplication
 from jobs.page_components.next_page import NextPage
 from jobs.page_components.work_experience_section import WorkExperienceSection
+from jobs.page_components.phone_info import PhoneInfo
 from jobs.page_components.education_section import EducationSection
 from jobs.page_components.resume_upload import ResumeUpload
 from jobs.page_components.submit_application import SubmitApplication
@@ -199,6 +200,15 @@ class ApplicationPage:
         return False
 
     @property
+    def phone_info_identified(self):
+        curr_application_step = self.head_step
+        while curr_application_step:
+            if isinstance(curr_application_step, PhoneInfo):
+                return True
+            curr_application_step = curr_application_step.next
+        return False
+
+    @property
     def resume_upload_identified(self):
         cur_application_step = self.head_step
         while cur_application_step:
@@ -211,6 +221,15 @@ class ApplicationPage:
     def component_x_path_exists(self, x_path):
         cur_application_step = self.head_step
         while cur_application_step:
+            # if identified_fields exists as attribute then loop over it to check for existing xpath match
+            if hasattr(cur_application_step, "identified_fields"):
+                for field in cur_application_step.identified_fields:
+                    component_x_paths = [
+                        getattr(field, attr) for attr in dir(field) if "x_path" in attr
+                    ]
+                    if x_path in component_x_paths:
+                        return True
+
             component_x_paths = [
                 getattr(cur_application_step, attr)
                 for attr in dir(cur_application_step)
@@ -717,12 +736,13 @@ class ApplicationPage:
 
         class FieldCategory(Enum):
             first_name = "first_name"
+            middle_name = "middle_name"
             last_name = "last_name"
             full_name = "full_name"
             salutation_prefix = "salutation_prefix"
             email = "email"
             phone_country_code = "phone_country_code"
-            phone_number = "phone_number"
+            phone_number_without_country_code = "phone_number_without_country_code"
             password = "password"
             tnc = "tnc"
             work_experience = "work_experience"
@@ -793,7 +813,14 @@ class ApplicationPage:
 
     def _act_on_job_fields(self, job_fields):
         for job_field in job_fields:
-            if job_field.field_category.value == "tnc":
+            # Handle phone number/code fields together
+            if job_field.field_category.value in [
+                "phone_country_code",
+                "phone_number_without_country_code",
+            ]:
+                if not self.phone_info_identified:
+                    self._identify_phone_fields()
+            elif job_field.field_category.value == "tnc":
                 self._identify_tnc_field(job_field)
             elif job_field.field_category.value == "work_experience":
                 if self.work_experience_section_identified:
@@ -915,6 +942,12 @@ class ApplicationPage:
         self._update_steps(popup)
 
     @retry()
+    def _identify_phone_fields(self):
+        """Identify and handle phone number related fields"""
+        phone_info = PhoneInfo(parent_application_page=self)
+        phone_info.proceed()
+        self._update_steps(phone_info)
+
     def _identify_submit_application_button(self):
         submit_application_button = SubmitApplication(parent_application_page=self)
         submit_application_button.proceed()
