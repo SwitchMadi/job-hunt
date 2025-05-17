@@ -516,5 +516,55 @@ class User:
         return self.name.split(" ")[0]
 
     @property
+    def middle_name(self):
+        name_parts = self.name.split(" ")
+        if len(name_parts) > 2:
+            return " ".join(name_parts[1:-1])
+        return None
+
+    @property
     def last_name(self):
         return self.name.split(" ")[-1]
+
+    @property
+    def country(self):
+        if self.parsed_resume:
+            return self.parsed_resume.get("personal_details").get("country")
+        return None
+
+    @property
+    def city(self):
+        if self.parsed_resume:
+            return self.parsed_resume.get("personal_details").get("city")
+        return None
+
+    @property
+    def state(self):
+        if self.parsed_resume:
+            return self.parsed_resume.get("personal_details").get("state")
+        return None
+
+    @property
+    def phone_number(self):
+        if self.parsed_resume:
+            # without special characters
+            phone = (
+                self.parsed_resume.get("personal_details").get("phone").get("number")
+            )
+            if phone:
+                phone = "".join(filter(str.isdigit, phone))
+                # remove country code
+                if len(phone) > 10:
+                    phone = phone[-10:]
+                return phone
+        return None
+
+    @property
+    def phone_country_code(self):
+        if self.parsed_resume:
+            return (
+                self.parsed_resume.get("personal_details")
+                .get("phone")
+                .get("country_code")
+            )
+        return None

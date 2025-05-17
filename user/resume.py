@@ -52,7 +52,11 @@ class DateField(BaseModel):
 # Model for phone details
 class Phone(BaseModel):
     country_code: str = Field(..., description="Country calling code, e.g. '+91'")
-    number: str = Field(..., description="Phone number without the country code")
+    number: str = Field(
+        ...,
+        description="Phone number without the country code. Having only the digits without any "
+        "special character",
+    )
 
 
 class Platform(Enum):
@@ -97,7 +101,14 @@ class PersonalDetails(BaseModel):
         None, description="Phone details with country code and number"
     )
     email: Optional[str] = Field(None, description="Email address")
-    address: Optional[str] = Field(None, description="Residential address or location")
+    address: Optional[str] = Field(
+        None, description="Full residential address or location"
+    )
+    country: Optional[str] = Field(
+        None, description="Residential country of the candidate"
+    )
+    state: Optional[str] = Field(None, description="Residential state of the candidate")
+    city: Optional[str] = Field(None, description="Residential city of the candidate")
     social_links: Optional[List[SocialLink]] = Field(
         None, description="List of social media profiles or personal website links"
     )
