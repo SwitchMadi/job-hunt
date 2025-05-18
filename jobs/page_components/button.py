@@ -11,7 +11,11 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
 from jobs.page_components import PageComponent, logger, get_page_component_class_name
-from utilities.selenium import get_selenium_driver, is_element_visible
+from utilities.selenium import (
+    get_selenium_driver,
+    is_element_visible,
+    generalize_xpath_attributes,
+)
 
 
 driver = get_selenium_driver()
@@ -67,6 +71,20 @@ class Button(PageComponent):
         global driver
 
         try:
+            if not is_element_visible(self.x_path):
+                logger.warning(
+                    f"Element with XPath {self.x_path} not found at url {self.parent_application_page.url}. Retrying "
+                    f"with generalized XPath..."
+                )
+                self.x_path = generalize_xpath_attributes(self.x_path)
+
+                if not is_element_visible(self.x_path):
+                    logger.warning(
+                        f"Element not visible in class Button's proceed method.\nButton instance - {vars(self)}"
+                    )
+                    self.is_component_functional = False
+                    return
+
             # Add initial random delay
             self._human_like_delay()
 
@@ -83,13 +101,6 @@ class Button(PageComponent):
             """,
                 element,
             )
-
-            if not is_element_visible(self.x_path):
-                logger.warning(
-                    f"Element not visible in class Button's proceed method.\nButton instance - {vars(self)}"
-                )
-                self.is_component_functional = False
-                return
 
             # Add small delay after scrolling
             time.sleep(random.uniform(0.3, 0.7))
@@ -132,14 +143,14 @@ class Button(PageComponent):
             time.sleep(random.uniform(1.5, 2.5))
         except ElementNotInteractableException as e:
             logger.info(
-                f"element not interactable in class Button's proceed method.\n{e}\nButton instance - {vars(self)}"
+                f"element not interactable in class Button's proceed method.\n{e.msg}\nButton instance - {vars(self)}"
             )
             element = driver.find_element(By.XPATH, self.x_path)
             driver.execute_script("arguments[0].click();", element)
             time.sleep(random.uniform(1.5, 2.5))
         except (ElementClickInterceptedException, TimeoutException) as e:
             logger.info(
-                f"element click intercepted in class Button's proceed method.\n{e}\nButton instance - {vars(self)}"
+                f"element click intercepted in class Button's proceed method.\n{e.msg}\nButton instance - {vars(self)}"
             )
             element = driver.find_element(By.XPATH, self.x_path)
             actions = ActionChains(driver)
@@ -148,14 +159,14 @@ class Button(PageComponent):
         except Exception as e:
             if self.attempt <= self.max_attempt:
                 logger.info(
-                    f"Retrying class Button's proceed method due to exception -\n{e}\nButton instance - {vars(self)}"
+                    f"Retrying class Button's proceed method due to an exception.\nButton instance - {vars(self)}"
                 )
                 time.sleep(2 * (self.attempt**2))
                 self.attempt += 1
                 return self.proceed()
             else:
                 logger.exception(
-                    f"Unexpected error occurred in class Button's proceed method.\n{e}\nButton instance - {vars(self)}"
+                    f"Unexpected error occurred in class Button's proceed method.\nButton instance - {vars(self)}"
                 )
                 self.is_component_functional = False
                 raise e

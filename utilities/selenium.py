@@ -25,6 +25,7 @@ import subprocess
 import sys
 import glob
 import htmlmin
+import re
 
 
 driver = None
@@ -1038,3 +1039,57 @@ def is_stale(element):
         return False
     except StaleElementReferenceException:
         return True
+
+
+def generalize_xpath_attributes(xpath: str) -> str:
+    """
+    Converts XPath expressions to use starts-with(), contains(), and XPath 1.0-compatible ends-with().
+    """
+    attr_value_pattern = re.compile(r'@([\w:-]+)\s*=\s*([\'"])(.*?)\2')
+
+    def to_starts_with(attr, val):
+        return f"starts-with(@{attr}, '{val}')"
+
+    def to_contains(attr, val):
+        return f"contains(@{attr}, '{val}')"
+
+    def to_ends_with(attr, val):
+        return f"substring(@{attr}, string-length(@{attr}) - string-length('{val}') + 1) = '{val}'"
+
+    def convert_attribute_to_matchers(attr: str, value: str) -> str:
+        # Split around digits
+        parts = re.split(r"(\d+)", value)
+        text_parts = [p for p in parts if not p.isdigit() and p]
+
+        if not text_parts:
+            return f"@{attr}='{value}'"  # fallback
+
+        if len(text_parts) == 1 and len(parts) == 1:
+            # entire string, no digits
+            return f"{to_starts_with(attr, value)} and {to_ends_with(attr, value)}"
+
+        matchers = []
+        for i, part in enumerate(parts):
+            if part.isdigit() or not part.strip():
+                continue
+
+            if i == 0:
+                matchers.append(to_starts_with(attr, part))
+            elif i == len(parts) - 1:
+                matchers.append(to_ends_with(attr, part))
+            else:
+                matchers.append(to_contains(attr, part))
+
+        return " and ".join(matchers)
+
+    def replace_bracket_content(match: re.Match) -> str:
+        content = match.group(1)
+
+        def attr_replacer(attr_match: re.Match) -> str:
+            attr, _, val = attr_match.groups()
+            return convert_attribute_to_matchers(attr, val)
+
+        updated = attr_value_pattern.sub(attr_replacer, content)
+        return f"[{updated}]"
+
+    return re.sub(r"\[([^\[\]]+)\]", replace_bracket_content, xpath)

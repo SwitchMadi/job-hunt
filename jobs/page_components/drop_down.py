@@ -18,6 +18,8 @@ from utilities.selenium import (
     get_element_xpath,
     minify_html_for_gpt_prompt,
     simulate_empty_area_click,
+    generalize_xpath_attributes,
+    element_exists,
 )
 
 
@@ -63,6 +65,15 @@ class DropDown(PageComponent):
         while (option is None) or is_element_visible(self.options_container_x_path):
             simulate_empty_area_click()
             self.dropdown_button.proceed()
+
+            if not element_exists(self.options_container_x_path):
+                logger.warning(
+                    f"Element with dropdown container XPath {self.options_container_x_path} not found at url "
+                    f"{self.parent_application_page.url}. Retrying with generalized XPath..."
+                )
+                self.options_container_x_path = generalize_xpath_attributes(
+                    self.options_container_x_path
+                )
 
             if not self.options_xpath_pattern:
                 self.options_xpath_pattern, options = self.get_dropdown_options(

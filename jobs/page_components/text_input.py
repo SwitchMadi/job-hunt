@@ -3,7 +3,12 @@ from selenium.webdriver.common.by import By
 
 from jobs import ApplicationField
 from jobs.page_components import PageComponent, logger, get_page_component_class_name
-from utilities.selenium import get_selenium_driver, clear_text_field
+from utilities.selenium import (
+    get_selenium_driver,
+    clear_text_field,
+    generalize_xpath_attributes,
+    is_element_visible,
+)
 
 
 driver = get_selenium_driver()
@@ -39,6 +44,20 @@ class TextInput(PageComponent):
         global driver
 
         try:
+            if not is_element_visible(self.x_path):
+                logger.warn(
+                    f"Element with XPath {self.x_path} not found at url {self.parent_application_page.url}. Retrying "
+                    f"with generalized XPath..."
+                )
+                self.x_path = generalize_xpath_attributes(self.x_path)
+
+                if not is_element_visible(self.x_path):
+                    logger.warning(
+                        f"Element not visible in class TextInput's proceed method.\nTextInput instance - {vars(self)}"
+                    )
+                    self.is_component_functional = False
+                    return
+
             if not self.answer:
                 return
 
@@ -70,8 +89,7 @@ class TextInput(PageComponent):
             self.is_component_functional = True
         except Exception as e:
             logger.exception(
-                f"Unexpected error occurred in class TextInput's proceed method.\n{e}\n"
-                f"TextInput instance - {vars(self)}"
+                f"Unexpected error occurred in class TextInput's proceed method.\nTextInput instance - {vars(self)}"
             )
             raise e
 
