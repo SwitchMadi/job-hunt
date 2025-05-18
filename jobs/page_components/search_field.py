@@ -59,7 +59,7 @@ class SearchField(PageComponent):
             time.sleep(2)  # Allow API calls to trigger
         except ElementNotInteractableException:
             clear_text_field(x_path)
-            simulate_empty_area_click(field_title)
+            simulate_empty_area_click()
             return False
         except Exception as e:
             if not retry:
@@ -112,7 +112,7 @@ class SearchField(PageComponent):
                     break
 
         clear_text_field(x_path)
-        simulate_empty_area_click(field_title)
+        simulate_empty_area_click()
 
         return is_search_field
 

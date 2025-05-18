@@ -317,7 +317,7 @@ class ApplicationField:
                     simulate_empty_area_click()
                     return "dropdown", container_x_path
 
-            simulate_empty_area_click(field_title)
+            simulate_empty_area_click()
 
             return "text_box", None
 

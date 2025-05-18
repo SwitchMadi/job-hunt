@@ -430,46 +430,24 @@ def get_xpath_by_text(text):
     return xpath
 
 
-def simulate_empty_area_click(text_to_click=None):
+def simulate_empty_area_click():
     global driver
 
     js_script = """
     const eventOpts = { bubbles: true, cancelable: true, view: window };
-    const body = document.body;
-
-    body.dispatchEvent(new MouseEvent('mousedown', eventOpts));
-    body.dispatchEvent(new MouseEvent('mouseup', eventOpts));
-    body.dispatchEvent(new MouseEvent('click', eventOpts));
+    const dummyDiv = document.createElement('div');
+    dummyDiv.style.position = 'absolute';
+    dummyDiv.style.top = '0';
+    dummyDiv.style.left = '0';
+    dummyDiv.style.width = '1px';
+    dummyDiv.style.height = '1px';
+    document.body.appendChild(dummyDiv);
+    dummyDiv.dispatchEvent(new MouseEvent('mousedown', eventOpts));
+    dummyDiv.dispatchEvent(new MouseEvent('mouseup', eventOpts));
+    dummyDiv.dispatchEvent(new MouseEvent('click', eventOpts));
+    document.body.removeChild(dummyDiv);
     """
-
     driver.execute_script(js_script)
-
-    # Clicking address bar and then pressing escape to close any dropdown
-    action = ActionChains(driver)
-    current_os = platform.system()
-
-    if current_os == "Darwin":  # macOS
-        action.key_down(Keys.COMMAND).send_keys("l").key_up(Keys.COMMAND).perform()
-    else:  # Windows and Linux
-        action.key_down(Keys.ALT).send_keys("d").key_up(Keys.ALT).perform()
-
-    action.send_keys(Keys.ESCAPE).perform()
-
-    body = driver.find_element(By.TAG_NAME, "body")
-    ActionChains(driver).move_to_element(body).click().perform()
-
-    # if text_to_click is set, then click the text to simulate empty area click
-    if text_to_click:
-        text_x_path = get_xpath_by_text(text_to_click)
-        if text_x_path:
-            element = driver.find_element(By.XPATH, text_x_path)
-            driver.execute_script(
-                "arguments[0].scrollIntoView({block: 'center'});", element
-            )
-            try:
-                element.click()
-            except ElementNotInteractableException:
-                pass
 
     return
 

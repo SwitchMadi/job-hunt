@@ -72,7 +72,7 @@ class DateField(PageComponent):
             else:
                 self.is_component_functional = True
 
-            simulate_empty_area_click(text_to_click=self.title)
+            simulate_empty_area_click()
         except Exception as e:
             logger.exception(
                 f"Unexpected error occurred in class DateField's proceed method.\n{e}\n"
@@ -92,7 +92,7 @@ class DateField(PageComponent):
             date_picker_x_path = self._identify_calendar_button()
         else:
             date_picker_x_path = self.x_path
-            simulate_empty_area_click(text_to_click=self.title)
+            simulate_empty_area_click()
 
         if date_picker_x_path:
             self._select_date(date_picker_x_path)
