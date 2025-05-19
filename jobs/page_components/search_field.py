@@ -6,6 +6,7 @@ from jobs import ApplicationField
 from jobs.page_components import PageComponent, get_page_component_class_name
 from jobs.page_components.drop_down import DropDown
 from jobs.page_components.button import Button
+from jobs.page_components.text_input import TextInput
 from utilities.selenium import (
     find_clickable_parent_xpath,
     get_selenium_driver,
@@ -48,14 +49,12 @@ class SearchField(PageComponent):
         start_network_observer()
 
         try:
-            element = driver.find_element(By.XPATH, x_path)
-            driver.execute_script(
-                "arguments[0].scrollIntoView({block: 'center'});", element
-            )
-            clear_text_field(x_path)
-
             special_key = "special_key"
-            element.send_keys(special_key)
+            element = TextInput(
+                x_path=x_path, category="search_field", parent_application_page=None
+            )
+            element.answer = special_key
+            element.proceed()
             time.sleep(2)  # Allow API calls to trigger
         except ElementNotInteractableException:
             clear_text_field(x_path)
@@ -94,7 +93,7 @@ class SearchField(PageComponent):
             if not is_tracking_domain(request["url"]):
                 # Check decoded query params
                 for key, value in request.get("decodedQueryParams", {}).items():
-                    if special_key == value:
+                    if special_key in value:
                         is_search_field = True
                         break
 
@@ -125,12 +124,16 @@ class SearchField(PageComponent):
                 else:
                     input_key = "a"
 
-                element = driver.find_element(By.XPATH, self.x_path)
-                clear_text_field(self.x_path)
+                element = TextInput(
+                    x_path=self.x_path,
+                    category="search_field",
+                    parent_application_page=None,
+                )
+                element.answer = input_key
 
                 if not self.options_container_x_path:
                     start_dom_mutation_observer()
-                    element.send_keys(input_key)
+                    element.proceed()
                     time.sleep(2)
                     observed_elements = get_observed_elements()
 
@@ -152,7 +155,7 @@ class SearchField(PageComponent):
                         )
 
                 else:
-                    element.send_keys(input_key)
+                    element.proceed()
                     time.sleep(2)
 
                 if not self.options_xpath_pattern:

@@ -1,3 +1,6 @@
+import time
+
+from selenium.common import ElementNotInteractableException
 from selenium.webdriver import Keys
 from selenium.webdriver.common.by import By
 
@@ -62,14 +65,49 @@ class TextInput(PageComponent):
                 return
 
             element = driver.find_element(By.XPATH, self.x_path)
-            if self.category == "otp_textbox":
+
+            driver.execute_script(
+                """
+                const element = arguments[0];
+                const rect = element.getBoundingClientRect();
+                const elementTop = rect.top + window.pageYOffset;
+                const viewportHeight = window.innerHeight;
+                const offsetToCenter = elementTop - (viewportHeight / 2) + (rect.height / 2) + 100;
+                window.scrollTo({top: offsetToCenter, behavior: 'smooth'});
+            """,
+                element,
+            )
+            time.sleep(1)
+
+            try:
                 element.click()
+            except ElementNotInteractableException:
+                logger.warn(
+                    f"Element not interactable in class TextInput's proceed method.\n"
+                    f"TextInput instance - {vars(self)}"
+                )
+                pass
+
+            if self.category == "otp_textbox":
                 for otp_digit in str(self.answer):
                     active_element = driver.switch_to.active_element
                     active_element.send_keys(f"{otp_digit}")
             else:
                 clear_text_field(self.x_path)
-                element.send_keys(self.answer)
+                try:
+                    element.send_keys(self.answer)
+                except ElementNotInteractableException:
+                    logger.warn(
+                        f"Element not interactable in class TextInput's proceed method.\n"
+                        f"TextInput instance - {vars(self)}"
+                    )
+                    pass
+
+                # Force check and set value if needed
+                actual_value = element.get_attribute("value")
+                if actual_value.strip().lower() != str(self.answer).strip().lower():
+                    active_element = driver.switch_to.active_element
+                    active_element.send_keys(self.answer)
 
                 # Force check and set value if needed
                 actual_value = element.get_attribute("value")

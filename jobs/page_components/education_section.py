@@ -259,12 +259,16 @@ class EducationSection(PageComponent):
             f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
             f"Current page has UI elements to add candidate's education qualification. It has either or both of the "
             f"following elements on the current page -\n"
-            f"1. Fields to start adding education qualification details like college, degree etc.\n"
+            f"1. Strictly interactive fields to start adding education qualification details like college, degree etc. "
+            f"This maybe possible that fields strictly related to education qualification are not present on the page, "
+            f"in that case don't return any field details. Don't confuse yourself between personal and education "
+            f"qualification fields.\n"
             f"2. A button to start adding new education qualification.\n\n"
             f"{observed_elements_prompt}"
             f"Carefully analyse whole HTML and find out whether only one of the above two elements are present on the "
             f"page OR both are present. STRICTLY IGNORE all fields which are not related to candidate's education "
-            f"qualification section. Extract details of the elements present."
+            f"qualification section. STRICTLY ignore fields which are not interactive in nature, give only interactive "
+            f"education qualification fields."
         )
 
         class FieldCategory(Enum):
@@ -296,9 +300,14 @@ class EducationSection(PageComponent):
             add_education_x_path: Optional[str] = Field(
                 ..., description="XPath of button to add new education qualification"
             )
+            education_fields_present: bool = Field(
+                ...,
+                description="Whether INTERACTIVE fields strictly related to education qualification are already present on the page"
+                " or not.",
+            )
             education_fields: Optional[List[EducationFieldInfo]] = Field(
                 ...,
-                description="Fields to start adding education qualification details like college, degree etc.",
+                description="Fields to add education qualification details like college, degree etc.",
             )
 
         fields_found, fields = get_gpt_response(
@@ -309,7 +318,7 @@ class EducationSection(PageComponent):
         if fields_found:
             curr_node = None
 
-            if fields.education_fields:
+            if fields.education_fields_present and fields.education_fields:
                 education_fields = []
                 for field in fields.education_fields:
                     application_field = ApplicationField(
@@ -321,14 +330,16 @@ class EducationSection(PageComponent):
                     application_field_component = (
                         application_field.get_field_component()
                     )
-                    education_fields.append(application_field_component)
+                    if application_field_component:
+                        education_fields.append(application_field_component)
 
-                curr_node = Education(
-                    education_fields=education_fields,
-                    education_no=self.identified_educations_count + 1,
-                    parent_application_page=self.parent_application_page,
-                )
-                self._update_nodes(curr_node)
+                if education_fields:
+                    curr_node = Education(
+                        education_fields=education_fields,
+                        education_no=self.identified_educations_count + 1,
+                        parent_application_page=self.parent_application_page,
+                    )
+                    self._update_nodes(curr_node)
 
             if fields.add_education_x_path:
                 add_education_button = Button(
