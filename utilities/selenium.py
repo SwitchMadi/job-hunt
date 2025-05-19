@@ -300,7 +300,11 @@ def get_observed_elements(timeout=10, poll_frequency=0.5):
                   );
                 }
             
-                return window.__observedElements.filter(isValid);
+                const validElements = window.__observedElements.filter(isValid);
+                
+                return validElements.filter(
+                    el => !validElements.some(other => other !== el && other.contains(el))
+                );
               })();
             """
             )
