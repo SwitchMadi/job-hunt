@@ -22,6 +22,32 @@ driver = get_selenium_driver()
 driver.set_page_load_timeout(15)
 
 
+class DateInputMethod(BaseModel):
+    has_calendar_button: bool = Field(
+        ...,
+        description="Whether there is a button present to open calendar widget"
+    )
+    has_separate_components: bool = Field(
+        ...,
+        description="Whether date field has separate elements for date components like month, year etc."
+    )
+    calendar_button_xpath: Optional[str] = Field(
+        None,
+        description="XPath of button that opens calendar widget. Only provide if has_calendar_button is True"
+    )
+    month_xpath: Optional[str] = Field(
+        None,
+        description="XPath of month input element. Only provide if has_separate_components is True"
+    )
+    year_xpath: Optional[str] = Field(
+        None,
+        description="XPath of year input element. Only provide if has_separate_components is True"
+    )
+    day_xpath: Optional[str] = Field(
+        None,
+        description="XPath of day input element. Only provide if has_separate_components is True"
+    )
+
 class DateField(PageComponent):
     def __init__(
         self,
@@ -43,6 +69,7 @@ class DateField(PageComponent):
         self.persist_question = persist_question
 
         self._answer = None
+        self._input_method = None
         self.is_component_functional = False
 
         self.next = None
@@ -80,6 +107,79 @@ class DateField(PageComponent):
             )
 
         return
+
+    def _identify_input_method(self, retry=False, prev_xpaths=None):
+        """Identifies input methods and xpaths of interactive elements for date field"""
+        global driver
+        
+        user_prompt = (
+            f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title}."
+            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
+            f"I need to enter date in following date field -\n"
+            f"Field title - {self.title}\n"
+            f"Field category - {self.category}\n"
+            f"Please analyze the HTML to identify how date can be entered and return following info -\n"
+            f"1. Whether there is a calendar widget button present\n"
+            f"2. If date components (month, day, year) have separate input elements\n"
+            f"3. XPath of calendar button if present\n"
+            f"4. XPaths of separate date component elements if present\n"
+        )
+
+        if retry and prev_xpaths:
+            prev_xpaths_str = "\n".join([f"{k}: {v}" for k,v in prev_xpaths.items() if v])
+            user_prompt += (
+                f"\nIn previous try you gave following XPaths but they couldn't be found on the page. "
+                f"Please provide correct XPaths:\n{prev_xpaths_str}"
+            )
+
+        input_method_found, input_method = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=DateInputMethod
+        )
+
+        if input_method_found:
+            # Validate calendar button xpath if provided
+            if input_method.has_calendar_button and input_method.calendar_button_xpath:
+                if not element_exists(input_method.calendar_button_xpath):
+                    if not retry:
+                        return self._identify_input_method(
+                            retry=True,
+                            prev_xpaths={"Calendar Button": input_method.calendar_button_xpath}
+                        )
+                    else:
+                        input_method.has_calendar_button = False
+                        input_method.calendar_button_xpath = None
+
+            # Validate separate component xpaths if provided
+            if input_method.has_separate_components:
+                invalid_xpaths = {}
+                for component, xpath in [
+                    ("Month", input_method.month_xpath),
+                    ("Year", input_method.year_xpath),
+                    ("Day", input_method.day_xpath)
+                ]:
+                    if xpath and not element_exists(xpath):
+                        invalid_xpaths[component] = xpath
+
+                if invalid_xpaths and not retry:
+                    return self._identify_input_method(retry=True, prev_xpaths=invalid_xpaths)
+                elif invalid_xpaths:
+                    input_method.has_separate_components = False
+                    input_method.month_xpath = None
+                    input_method.year_xpath = None
+                    input_method.day_xpath = None
+
+            self._input_method = input_method
+            return input_method
+
+        elif not retry:
+            return self._identify_input_method(retry=True)
+        else:
+            raise Exception(
+                f"Couldn't identify date input method for {self.parent_application_page.parent_job.title}. "
+                f"URL - {self.parent_application_page.url}"
+            )
 
     def _identify_date_format(self):
         date_field = driver.find_element(By.XPATH, self.x_path)

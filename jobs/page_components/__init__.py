@@ -71,7 +71,7 @@ class ApplicationField:
         self.format = None
         self.options = []
 
-    def _identify(self, retry=False, prev_x_path=None):
+    def _identify_x_path(self, retry=False, prev_x_path=None):
         global driver
         user_prompt = (
             f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title}."
@@ -167,7 +167,7 @@ class ApplicationField:
         if application_field_found:
             if not element_exists(application_field.x_path):
                 if not retry:
-                    return self._identify(
+                    return self._identify_x_path(
                         retry=True, prev_x_path=application_field.x_path
                     )
                 else:
@@ -192,7 +192,7 @@ class ApplicationField:
                     for option in application_field.options
                 ]
         elif not retry:
-            self._identify(retry=True)
+            self._identify_x_path(retry=True)
         else:
             raise Exception(
                 f"Couldn't extract following application field {self.category} for "
@@ -200,7 +200,7 @@ class ApplicationField:
             )
 
     def get_field_component(self):
-        self._identify()
+        self._identify_x_path()
 
         if self.x_path:
             self.html_type, container_x_path = (
