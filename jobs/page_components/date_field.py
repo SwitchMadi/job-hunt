@@ -22,32 +22,6 @@ driver = get_selenium_driver()
 driver.set_page_load_timeout(15)
 
 
-class DateInputMethod(BaseModel):
-    has_calendar_button: bool = Field(
-        ...,
-        description="Whether there is a button present to open calendar widget"
-    )
-    has_separate_components: bool = Field(
-        ...,
-        description="Whether date field has separate elements for date components like month, year etc."
-    )
-    calendar_button_xpath: Optional[str] = Field(
-        None,
-        description="XPath of button that opens calendar widget. Only provide if has_calendar_button is True"
-    )
-    month_xpath: Optional[str] = Field(
-        None,
-        description="XPath of month input element. Only provide if has_separate_components is True"
-    )
-    year_xpath: Optional[str] = Field(
-        None,
-        description="XPath of year input element. Only provide if has_separate_components is True"
-    )
-    day_xpath: Optional[str] = Field(
-        None,
-        description="XPath of day input element. Only provide if has_separate_components is True"
-    )
-
 class DateField(PageComponent):
     def __init__(
         self,
@@ -120,9 +94,10 @@ class DateField(PageComponent):
             f"Field category - {self.category}\n"
             f"Please analyze the HTML to identify how date can be entered and return following info -\n"
             f"1. Whether there is a calendar widget button present\n"
-            f"2. If date components (month, day, year) have separate input elements\n"
+            f"2. If date components (month, day, year) have separate interactive input elements\n"
             f"3. XPath of calendar button if present\n"
-            f"4. XPaths of separate date component elements if present\n"
+            f"4. XPaths of separate date component interactive input elements if present\n"
+            f"5. XPath of date input element if separate components are not present\n"
         )
 
         if retry and prev_xpaths:
@@ -130,6 +105,36 @@ class DateField(PageComponent):
             user_prompt += (
                 f"\nIn previous try you gave following XPaths but they couldn't be found on the page. "
                 f"Please provide correct XPaths:\n{prev_xpaths_str}"
+            )
+        
+        class DateInputMethod(BaseModel):
+            has_calendar_button: bool = Field(
+                ...,
+                description="Whether there is a button present to open calendar widget"
+            )
+            has_separate_components: bool = Field(
+                ...,
+                description="Whether date field has separate interactive elements for date components like day, month, year etc."
+            )
+            calendar_button_xpath: Optional[str] = Field(
+                None,
+                description="XPath of button that opens calendar widget. Only provide if has_calendar_button is True"
+            )
+            month_xpath: Optional[str] = Field(
+                None,
+                description="XPath of interactive month input element. Only provide if has_separate_components is True"
+            )
+            year_xpath: Optional[str] = Field(
+                None,
+                description="XPath of interactive year input element. Only provide if has_separate_components is True"
+            )
+            day_xpath: Optional[str] = Field(
+                None,
+                description="XPath of interactive day input element. Only provide if has_separate_components is True"
+            )
+            date_xpath: Optional[str] = Field(
+                None,
+                description="XPath of date input element. Only provide if has_separate_components is False"
             )
 
         input_method_found, input_method = get_gpt_response(
@@ -145,19 +150,21 @@ class DateField(PageComponent):
                     if not retry:
                         return self._identify_input_method(
                             retry=True,
-                            prev_xpaths={"Calendar Button": input_method.calendar_button_xpath}
+                            prev_xpaths={"calendar_button_xpath": input_method.calendar_button_xpath}
                         )
                     else:
-                        input_method.has_calendar_button = False
-                        input_method.calendar_button_xpath = None
+                        raise Exception(
+                            f"Couldn't identify calendar button for {self.parent_application_page.parent_job.title}. "
+                            f"URL - {self.parent_application_page.url}"
+                        )
 
             # Validate separate component xpaths if provided
             if input_method.has_separate_components:
                 invalid_xpaths = {}
                 for component, xpath in [
-                    ("Month", input_method.month_xpath),
-                    ("Year", input_method.year_xpath),
-                    ("Day", input_method.day_xpath)
+                    ("month_xpath", input_method.month_xpath),
+                    ("year_xpath", input_method.year_xpath),
+                    ("day_xpath", input_method.day_xpath)
                 ]:
                     if xpath and not element_exists(xpath):
                         invalid_xpaths[component] = xpath
@@ -165,10 +172,22 @@ class DateField(PageComponent):
                 if invalid_xpaths and not retry:
                     return self._identify_input_method(retry=True, prev_xpaths=invalid_xpaths)
                 elif invalid_xpaths:
-                    input_method.has_separate_components = False
-                    input_method.month_xpath = None
-                    input_method.year_xpath = None
-                    input_method.day_xpath = None
+                    raise Exception(
+                        f"Couldn't identify separate date components for {self.parent_application_page.parent_job.title}. "
+                        f"URL - {self.parent_application_page.url}"
+                    )
+            else:
+                if input_method.date_xpath and not element_exists(input_method.date_xpath):
+                    if not retry:
+                        return self._identify_input_method(
+                            retry=True,
+                            prev_xpaths={"date_xpath": input_method.date_xpath}
+                        )
+                    else:
+                        raise Exception(
+                            f"Couldn't identify date input element for {self.parent_application_page.parent_job.title}. "
+                            f"URL - {self.parent_application_page.url}"
+                        )
 
             self._input_method = input_method
             return input_method
