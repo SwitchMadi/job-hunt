@@ -59,13 +59,13 @@ class PageComponent(ABC):
 
 
 class ApplicationField:
-    def __init__(self, parent_application_page, title, question, category):
+    def __init__(self, parent_application_page, title, question, category, x_path=None):
         self.parent_application_page = parent_application_page
         self.title = title
         self.question = question
         self.category = category
+        self.x_path = x_path
 
-        self.x_path = None
         self.field_type = None
         self.html_type = None
         self.format = None
@@ -200,7 +200,8 @@ class ApplicationField:
             )
 
     def get_field_component(self):
-        self._identify_x_path()
+        if not self.x_path:
+            self._identify_x_path()
 
         if self.x_path:
             self.html_type, container_x_path = (
