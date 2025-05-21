@@ -357,75 +357,94 @@ class ApplicationField:
             return user.city
         elif field_category == "state":
             return user.state
-        elif field_category.startswith("job_title"):
-            experience_no = int(field_category.split("__")[-1])
-            work_info = user.parsed_resume.get("work_experience", [])
-            if experience_no < len(work_info):
-                work_info = work_info[experience_no - 1]
-                return work_info.get("job_title")
-
-        elif field_category.startswith("company_name"):
-            experience_no = int(field_category.split("__")[-1])
-            work_info = user.parsed_resume.get("work_experience", [])
-            if experience_no < len(work_info):
-                work_info = work_info[experience_no - 1]
-                return work_info.get("company_name")
-
-        elif field_category.startswith("location"):
-            experience_no = int(field_category.split("__")[-1])
-            work_info = user.parsed_resume.get("work_experience", [])
-            if experience_no < len(work_info):
-                work_info = work_info[experience_no - 1]
-                return work_info.get("location")
-
-        elif field_category.startswith("start_date"):
-            experience_no = int(field_category.split("__")[-1])
-            work_info = user.parsed_resume.get("work_experience", [])
-            if experience_no < len(work_info):
-                work_info = work_info[experience_no - 1]
-                return work_info.get("start_date")
-
-        elif field_category.startswith("end_date"):
-            experience_no = int(field_category.split("__")[-1])
-            work_info = user.parsed_resume.get("work_experience", [])
-            if experience_no < len(work_info):
-                work_info = work_info[experience_no - 1]
-                return work_info.get("end_date")
-
-        elif field_category.startswith("responsibilities"):
-            experience_no = int(field_category.split("__")[-1])
-            work_info = user.parsed_resume.get("work_experience", [])
-            if experience_no < len(work_info):
-                work_info = work_info[experience_no - 1]
-                return work_info.get("responsibilities")
-
-        elif field_category.startswith("achievements"):
-            experience_no = int(field_category.split("__")[-1])
-            work_info = user.parsed_resume.get("work_experience", [])
-            if experience_no < len(work_info):
-                work_info = work_info[experience_no - 1]
-                return work_info.get("achievements")
-
-        elif field_category.startswith("experience_related_url"):
-            experience_no = int(field_category.split("__")[-1])
-            work_info = user.parsed_resume.get("work_experience", [])
-            if experience_no < len(work_info):
-                work_info = work_info[experience_no - 1]
-                return work_info.get("experience_related_url")
-
-        elif field_category.startswith("industry"):
-            experience_no = int(field_category.split("__")[-1])
-            work_info = user.parsed_resume.get("work_experience", [])
-            if experience_no < len(work_info):
-                work_info = work_info[experience_no - 1]
-                return work_info.get("industry")
-
-        elif field_category.startswith("employment_type"):
-            experience_no = int(field_category.split("__")[-1])
-            work_info = user.parsed_resume.get("work_experience", [])
-            if experience_no < len(work_info):
-                work_info = work_info[experience_no - 1]
-                return work_info.get("employment_type")
+        elif "_job_title__" in field_category:
+            entry_no = int(field_category.split("__")[-1])
+            info = user.parsed_resume.get("work_experience", [])
+            if entry_no < len(info):
+                info = info[entry_no - 1]
+                return info.get("job_title")
+        elif "_company_name__" in field_category:
+            entry_no = int(field_category.split("__")[-1])
+            info = user.parsed_resume.get("work_experience", [])
+            if entry_no < len(info):
+                info = info[entry_no - 1]
+                return info.get("company_name")
+        elif "_location__" in field_category:
+            entry_no = int(field_category.split("__")[-1])
+            category = field_category.split("__")[0]
+            info = user.parsed_resume.get(category, [])
+            if entry_no < len(info):
+                info = info[entry_no - 1]
+                return info.get("location")
+        elif "_start_date__" in field_category:
+            entry_no = int(field_category.split("__")[-1])
+            category = field_category.split("__")[0]
+            info = user.parsed_resume.get(category, [])
+            if entry_no < len(info):
+                info = info[entry_no - 1]
+                return info.get("start_date")
+        elif "_end_date__" in field_category:
+            entry_no = int(field_category.split("__")[-1])
+            category = field_category.split("__")[0]
+            info = user.parsed_resume.get(category, [])
+            if entry_no < len(info):
+                info = info[entry_no - 1]
+                return info.get("end_date")
+        elif "_responsibilities__" in field_category:
+            entry_no = int(field_category.split("__")[-1])
+            info = user.parsed_resume.get("work_experience", [])
+            if entry_no < len(info):
+                info = info[entry_no - 1]
+                return info.get("responsibilities")
+        elif "_achievements__" in field_category:
+            entry_no = int(field_category.split("__")[-1])
+            info = user.parsed_resume.get("work_experience", [])
+            if entry_no < len(info):
+                info = info[entry_no - 1]
+                return info.get("achievements")
+        elif "_experience_related_url__" in field_category:
+            entry_no = int(field_category.split("__")[-1])
+            info = user.parsed_resume.get("work_experience", [])
+            if entry_no < len(info):
+                info = info[entry_no - 1]
+                return info.get("experience_related_url")
+        elif "_industry__" in field_category:
+            entry_no = int(field_category.split("__")[-1])
+            info = user.parsed_resume.get("work_experience", [])
+            if entry_no < len(info):
+                info = info[entry_no - 1]
+                return info.get("industry")
+        elif "_employment_type__" in field_category:
+            entry_no = int(field_category.split("__")[-1])
+            info = user.parsed_resume.get("work_experience", [])
+            if entry_no < len(info):
+                info = info[entry_no - 1]
+                return info.get("employment_type")
+        elif "_degree__" in field_category:
+            entry_no = int(field_category.split("__")[-1])
+            info = user.parsed_resume.get("education", [])
+            if entry_no < len(info):
+                info = info[entry_no - 1]
+                return info.get("degree")
+        elif "_details__" in field_category:
+            entry_no = int(field_category.split("__")[-1])
+            category = field_category.split("__")[0]
+            info = user.parsed_resume.get(category, [])
+            if entry_no < len(info):
+                info = info[entry_no - 1]
+                return info.get("details")
+        elif "_institution__" in field_category:
+            entry_no = int(field_category.split("__")[-1])
+            info = user.parsed_resume.get("education", [])
+            if entry_no < len(info):
+                info = info[entry_no - 1]
+                return info.get("institution")
+        elif "_field_of_study__" in field_category:
+            entry_no = int(field_category.split("__")[-1])
+            info = user.parsed_resume.get("education", [])
+            if entry_no < len(info):
+                info = info[entry_no - 1]
+                return info.get("field_of_study")
 
         return None
 
@@ -656,6 +675,8 @@ class ApplicationField:
                 f"Following is context having user resume data using which you have to find answer -\n"
                 f"{parsed_resume}\n"
             )
+        else:
+            user_prompt += f"Closest answer to the question is {closest_answer}.\n"
 
         user_prompt += "Give me correct answer for the question."
 

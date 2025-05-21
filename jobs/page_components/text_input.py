@@ -88,10 +88,13 @@ class TextInput(PageComponent):
                 )
                 pass
 
-            if self.category == "otp_textbox":
-                for otp_digit in str(self.answer):
+            if self.category in ["otp_textbox", "date_field"]:
+                if self.category == "date_field":
+                    clear_text_field(self.x_path)
+
+                for letter in str(self.answer):
                     active_element = driver.switch_to.active_element
-                    active_element.send_keys(f"{otp_digit}")
+                    active_element.send_keys(f"{letter}")
             else:
                 clear_text_field(self.x_path)
                 try:

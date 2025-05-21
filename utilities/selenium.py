@@ -453,6 +453,8 @@ def simulate_empty_area_click():
     """
     driver.execute_script(js_script)
 
+    ActionChains(driver).send_keys(Keys.ESCAPE).perform()
+
     return
 
 
@@ -907,6 +909,13 @@ def minify_html_for_gpt_prompt(html_content):
         "li",
         "ul",
         "svg",
+        "table",
+        "tr",
+        "td",
+        "th",
+        "thead",
+        "tbody",
+        "tfoot",
     ]
 
     # Remove all children from each SVG tag so that only the tag remains with its attributes

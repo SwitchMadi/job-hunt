@@ -415,7 +415,7 @@ class Education(PageComponent):
             )
 
             category_backup = field.category
-            field.category = f"{category_backup}__{self.education_no}"
+            field.category = f"education__{category_backup}__{self.education_no}"
 
             field.proceed()
 

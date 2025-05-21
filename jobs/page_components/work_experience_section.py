@@ -412,7 +412,7 @@ class WorkExperience(PageComponent):
             )
 
             category_backup = field.category
-            field.category = f"{category_backup}__{self.experience_no}"
+            field.category = f"work_experience__{category_backup}__{self.experience_no}"
 
             field.proceed()
 
