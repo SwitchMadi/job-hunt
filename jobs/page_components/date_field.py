@@ -31,12 +31,14 @@ class DateField(PageComponent):
         question,
         category,
         parent_application_page,
+        persist_context_fileds=True,
     ):
         global driver
         self.title = title
         self.question = question
         self.category = category
         self.parent_application_page = parent_application_page
+        self.persist_context_fileds = persist_context_fileds
 
         self._answer = None
         self.input_method_identified = False
@@ -181,8 +183,8 @@ class DateField(PageComponent):
                 field = ApplicationField(
                     parent_application_page=self.parent_application_page,
                     title=f"{self.title} - {component_type.title()}",
-                    question=self.question,
-                    category=component_type,
+                    question=f"{self.question}\nFinal question for us to answer is - What is {component_type} part of the date in question here?",
+                    category=f"{self.category} - {component_type.title()}",
                     x_path=component["xpath"],
                 )
                 field.html_type = component["html_type"]
@@ -235,7 +237,7 @@ class DateField(PageComponent):
             )
 
         # Proceed with filling the date field
-        if self.date_format:
+        if self.date_format and components.get("date"):
             date_field = TextInput(
                 x_path=self.components["date"]["xpath"],
                 category="date_field",
@@ -254,12 +256,11 @@ class DateField(PageComponent):
                     if isinstance(component, DropDown):
                         component.answer = self.answer
 
-                    component.question = self.question
-                    component.category = f"{self.category} - {component_type.title()}"
                     component.proceed()
 
-                    component.question = None
-                    component.category = None
+                    if not self.persist_context_fileds:
+                        component.question = None
+                        component.category = None
 
         return
 
@@ -449,7 +450,7 @@ class DateField(PageComponent):
             "class": self.__class__.__name__,
             "title": self.title,
             "date_format": self.date_format,
-            "category": self.category,
+            "category": self.category if self.persist_context_fileds else None,
             "components": {
                 k: v.to_dict() if isinstance(v, PageComponent) else v
                 for k, v in self.components.items()
@@ -459,7 +460,8 @@ class DateField(PageComponent):
             "has_separate_components": self.has_separate_components,
             "input_method_identified": self.input_method_identified,
             "input_method_details_identified": self.input_method_details_identified,
-            "question": self.question,
+            "question": self.question if self.persist_context_fileds else None,
+            "persist_context_fileds": self.persist_context_fileds,
             "next": self.next.to_dict() if self.next else None,
         }
         return output
@@ -472,6 +474,7 @@ class DateField(PageComponent):
             date_format=input_dict["date_format"],
             category=input_dict["category"],
             parent_application_page=parent_application_page,
+            persist_context_fileds=input_dict.get("persist_context_fileds", True),
         )
 
         # Restore component info and state
