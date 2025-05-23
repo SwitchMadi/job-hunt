@@ -253,7 +253,14 @@ class DateField(PageComponent):
                 ("year", self.components.get("year")),
             ]:
                 if component and isinstance(component, PageComponent):
-                    if isinstance(component, DropDown):
+                    if self.date_format:
+                        date_component = self._get_date_component_in_format(
+                            date=self.answer,
+                            date_format=self.date_format,
+                            date_component=component_type,
+                        )
+                        component.answer = date_component
+                    elif isinstance(component, DropDown):
                         component.answer = self.answer
 
                     component.proceed()
@@ -444,6 +451,31 @@ class DateField(PageComponent):
                 f"Couldn't identify date input method for {self.parent_application_page.parent_job.title}. "
                 f"URL - {self.parent_application_page.url}"
             )
+
+    def _get_date_component_in_format(self, date, date_format, date_component):
+        user_prompt = (
+            f"I have following date -\n{date}\n"
+            f"Consider following date format -\n{date_format}\n"
+            f"Please extract just the {date_component} part of the date in the date format {date_format}. "
+            f"Strictly follow the date format and return only the {date_component} part."
+        )
+        class DateComponentFormat(BaseModel):
+            date_component: str = Field(
+                ...,
+                description="Extracted date component in the specified format",
+            )
+        date_component_found, date_component_data = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=DateComponentFormat,
+        )
+        if date_component_found:
+            return date_component_data.date_component
+        else:
+            raise Exception(
+                f"Couldn't extract {date_component} component from date {date} in {date_format} format."
+            )
+
 
     def to_dict(self):
         output = {
