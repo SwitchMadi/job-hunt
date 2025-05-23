@@ -31,14 +31,14 @@ class DateField(PageComponent):
         question,
         category,
         parent_application_page,
-        persist_context_fileds=True,
+        persist_context_fields=True,
     ):
         global driver
         self.title = title
         self.question = question
         self.category = category
         self.parent_application_page = parent_application_page
-        self.persist_context_fileds = persist_context_fileds
+        self.persist_context_fields = persist_context_fields
 
         self._answer = None
         self.input_method_identified = False
@@ -77,10 +77,9 @@ class DateField(PageComponent):
         # Clean up any existing open widgets
         simulate_empty_area_click()
 
-        click_xpath = (
-            self.components.get("calendar", {}).get("xpath")
-            or self.components["date"]["xpath"]
-        )
+        click_xpath = self.components.get("calendar", {}).get(
+            "xpath"
+        ) or self.components.get("date", {}).get("xpath")
 
         start_dom_mutation_observer()
         button = Button(
@@ -148,7 +147,9 @@ class DateField(PageComponent):
                 date_button.proceed()
 
                 # Get format from field value after selecting 27th
-                field = driver.find_element(By.XPATH, self.components["date"]["xpath"])
+                field = driver.find_element(
+                    By.XPATH, self.components.get("date", {}).get("xpath")
+                )
                 if field_value := field.get_attribute("value"):
                     simulate_empty_area_click()
                     self.date_format = field_value
@@ -183,7 +184,8 @@ class DateField(PageComponent):
                 field = ApplicationField(
                     parent_application_page=self.parent_application_page,
                     title=f"{self.title} - {component_type.title()}",
-                    question=f"{self.question}\nFinal question for us to answer is - What is {component_type} part of the date in question here?",
+                    question=f"{self.question}\nFinal question for us to answer is - What is {component_type} part of "
+                    f"the date in question here?",
                     category=f"{self.category} - {component_type.title()}",
                     x_path=component["xpath"],
                 )
@@ -237,9 +239,9 @@ class DateField(PageComponent):
             )
 
         # Proceed with filling the date field
-        if self.date_format and components.get("date"):
+        if self.date_format and self.components.get("date"):
             date_field = TextInput(
-                x_path=self.components["date"]["xpath"],
+                x_path=self.components.get("date", {}).get("xpath"),
                 category="date_field",
                 parent_application_page=self.parent_application_page,
             )
@@ -265,7 +267,7 @@ class DateField(PageComponent):
 
                     component.proceed()
 
-                    if not self.persist_context_fileds:
+                    if not self.persist_context_fields:
                         component.question = None
                         component.category = None
 
@@ -312,7 +314,8 @@ class DateField(PageComponent):
             )
             html_type: FieldHtmlType = Field(
                 ...,
-                description="HTML type of the interactive input element (textBox, checkBox, radioButton, dropdown, button)",
+                description="HTML type of the interactive input element (textBox, checkBox, radioButton, dropdown, "
+                "button)",
             )
 
         class DateInputMethod(BaseModel):
@@ -326,7 +329,8 @@ class DateField(PageComponent):
             )
             calendar_button_xpath: Optional[str] = Field(
                 None,
-                description="XPath of interactive button that opens calendar widget. Only provide if has_calendar_button is True",
+                description="XPath of interactive button that opens calendar widget. Only provide if "
+                "has_calendar_button is True",
             )
             date_format: Optional[str] = Field(
                 None,
@@ -389,7 +393,8 @@ class DateField(PageComponent):
                     )
                 elif invalid_xpaths:
                     raise Exception(
-                        f"Couldn't identify separate date components for {self.parent_application_page.parent_job.title}. "
+                        f"Couldn't identify separate date components for "
+                        f"{self.parent_application_page.parent_job.title}. "
                         f"URL - {self.parent_application_page.url}"
                     )
             elif input_data.date_field.xpath and not element_exists(
@@ -459,11 +464,13 @@ class DateField(PageComponent):
             f"Please extract just the {date_component} part of the date in the date format {date_format}. "
             f"Strictly follow the date format and return only the {date_component} part."
         )
+
         class DateComponentFormat(BaseModel):
             date_component: str = Field(
                 ...,
                 description="Extracted date component in the specified format",
             )
+
         date_component_found, date_component_data = get_gpt_response(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
@@ -476,13 +483,12 @@ class DateField(PageComponent):
                 f"Couldn't extract {date_component} component from date {date} in {date_format} format."
             )
 
-
     def to_dict(self):
         output = {
             "class": self.__class__.__name__,
             "title": self.title,
             "date_format": self.date_format,
-            "category": self.category if self.persist_context_fileds else None,
+            "category": self.category if self.persist_context_fields else None,
             "components": {
                 k: v.to_dict() if isinstance(v, PageComponent) else v
                 for k, v in self.components.items()
@@ -492,8 +498,8 @@ class DateField(PageComponent):
             "has_separate_components": self.has_separate_components,
             "input_method_identified": self.input_method_identified,
             "input_method_details_identified": self.input_method_details_identified,
-            "question": self.question if self.persist_context_fileds else None,
-            "persist_context_fileds": self.persist_context_fileds,
+            "question": self.question if self.persist_context_fields else None,
+            "persist_context_fileds": self.persist_context_fields,
             "next": self.next.to_dict() if self.next else None,
         }
         return output
@@ -506,7 +512,7 @@ class DateField(PageComponent):
             date_format=input_dict["date_format"],
             category=input_dict["category"],
             parent_application_page=parent_application_page,
-            persist_context_fileds=input_dict.get("persist_context_fileds", True),
+            persist_context_fields=input_dict.get("persist_context_fileds", True),
         )
 
         # Restore component info and state
