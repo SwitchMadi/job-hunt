@@ -17,6 +17,8 @@ from utilities.selenium import (
     minify_html_for_gpt_prompt,
     is_stale,
     find_clickable_parent_xpath,
+    is_element_visible,
+    get_element_xpath,
 )
 from utilities.logging import get_logger
 from utilities import pascal_to_snake_casing
@@ -463,21 +465,21 @@ class ApplicationField:
         global driver
 
         class ContainerValidation(BaseModel):
-            is_container: bool = Field(
+            is_options_container_present: bool = Field(
                 ...,
-                description=f"Whether any of the observed elements is an options container strictly for the field title"
-                f" {field_title} and nothing else",
+                description=f"Whether any of the observed elements is an options / search suggestions container "
+                f"strictly for the field title {field_title} and nothing else",
             )
-            container_xpath: str | None = Field(
+            options_container_xpath: str | None = Field(
                 default=None,
-                description="XPath of the observed element that contains the options. Should be returned only if "
-                "is_container is True.",
+                description="XPath of the observed element that contains the options / search suggestions. Should be "
+                "returned only if is_container is True.",
             )
 
         observed_elements_html = "\n".join(
             f"{i+1}. Element {i+1} - {minify_html_for_gpt_prompt(el.get_attribute('outerHTML'))}"
             for i, el in enumerate(observed_elements)
-            if not is_stale(el)
+            if not is_stale(el) and is_element_visible(get_element_xpath(el))
         )
 
         if not observed_elements_html.strip():
@@ -488,24 +490,22 @@ class ApplicationField:
             "dropdown": (
                 f"1. Element appears to be a dropdown or list container strictly for the field title {field_title} and "
                 f"nothing else\n"
-                "2. Element has a container-like structure that could hold selectable items\n"
-                "3. May contain interactive elements or items that can be selected\n"
-                "4. Often has container, popup, or list-related attributes or styles\n"
+                "2. Element has a container-like structure that holds selectable items. Contains only selectable items "
+                "(all children look alike, like a menu of choices), and nothing else.\n"
+                "3. Often has container or list-related attributes or styles. "
+                "(e.g. <ul>/<li> or ARIA role='listbox'/role='option' etc.)\n"
             ),
             "search_field": (
                 f"1. Element appears to be a suggestions or results container strictly for the field title "
                 f"{field_title} and nothing else\n"
-                "2. May contain selectable items or suggestions\n"
-                "3. Often has attributes or styles related to suggestions/results display\n"
+                "2. Element has a container-like structure that holds selectable items. Contains only selectable items "
+                "(all children look alike, like a menu of choices), and nothing else.\n"
+                "3. Often has attributes or styles related to suggestions/results display. "
+                "(e.g. <ul>/<li> or ARIA role='listbox'/role='option' etc.)\n"
             ),
         }
 
-        validation_prompt = type_specific_prompts.get(
-            html_type,
-            "1. Element has container-like characteristics\n"
-            "2. Contains selectable or interactive items\n"
-            "3. Has relevant styling that suggests it holds options",
-        )
+        validation_prompt = type_specific_prompts[html_type]
 
         user_prompt = (
             f"Following HTML page is job application webpage for {job_title}. "
@@ -513,10 +513,13 @@ class ApplicationField:
             f"There is a field with title {field_title} at XPath {field_x_path}.\n"
             f"When this field was clicked or typed in, javascript mutation observer observed that following elements "
             f"were added or modified in the DOM -\n{observed_elements_html}\n"
-            f"1. Determine if any of the observed elements appears to be an options container strictly for the field "
-            f"title {field_title} and nothing else. Consider:\n"
+            f"A. Determine if any of the observed elements appears to be an options / search suggestions container "
+            f"strictly for the field title {field_title} and nothing else. Consider:\n"
             f"{validation_prompt}\n"
-            f"2. If it is a container, identify which element number (1, 2, etc.) contains the options."
+            f"B. If it is an options / search suggestions container, identify which element number (1, 2, etc.) "
+            f"contains the options / search suggestions.\n"
+            f"If there is no strong signals then return false for is_options_container_present. Strictly ignore weak "
+            f"signals."
         )
 
         if retry and prev_xpath:
@@ -533,11 +536,14 @@ class ApplicationField:
         )
 
         if validation_found:
-            if validation.is_container:
-                if validation.container_xpath and element_exists(
-                    validation.container_xpath
+            if validation.is_options_container_present:
+                if validation.options_container_xpath and element_exists(
+                    validation.options_container_xpath
                 ):
-                    return validation.is_container, validation.container_xpath
+                    return (
+                        validation.is_options_container_present,
+                        validation.options_container_xpath,
+                    )
                 elif not retry:
                     return cls.identify_options_container(
                         field_title=field_title,
@@ -546,7 +552,7 @@ class ApplicationField:
                         html_type=html_type,
                         job_title=job_title,
                         retry=True,
-                        prev_xpath=validation.container_xpath,
+                        prev_xpath=validation.options_container_xpath,
                     )
 
         return False, None

@@ -11,6 +11,7 @@ from selenium.common.exceptions import (
     ElementClickInterceptedException,
     ElementNotInteractableException,
     NoSuchElementException,
+    JavascriptException,
 )
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
@@ -198,6 +199,20 @@ def is_element_visible(x_path):
                 and element_size["width"] > 0
                 and element_size["height"] > 0
             ):
+                return True
+        return False
+    except (InvalidSelectorException, NoSuchElementException):
+        return False
+
+
+def element_has_area(x_path):
+    global driver
+
+    try:
+        elements = driver.find_elements(By.XPATH, x_path)
+        for element in elements:
+            element_size = element.size
+            if element_size["width"] > 0 and element_size["height"] > 0:
                 return True
         return False
     except (InvalidSelectorException, NoSuchElementException):
@@ -437,21 +452,54 @@ def get_xpath_by_text(text):
 def simulate_empty_area_click():
     global driver
 
-    js_script = """
-    const eventOpts = { bubbles: true, cancelable: true, view: window };
+    # Step 1: Inject temporary element
+    js_add_element = """
     const dummyDiv = document.createElement('div');
+    dummyDiv.setAttribute('id', 'temp-dummy-click-area');
+
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+
     dummyDiv.style.position = 'absolute';
-    dummyDiv.style.top = '0';
-    dummyDiv.style.left = '0';
-    dummyDiv.style.width = '1px';
-    dummyDiv.style.height = '1px';
+    dummyDiv.style.left = (scrollX + 10) + 'px';
+    dummyDiv.style.top = (scrollY + 10) + 'px';
+    dummyDiv.style.width = '10px';
+    dummyDiv.style.height = '10px';
+    dummyDiv.style.backgroundColor = 'transparent';
+    dummyDiv.style.zIndex = '999999';
+    dummyDiv.style.cursor = 'pointer';
+
     document.body.appendChild(dummyDiv);
-    dummyDiv.dispatchEvent(new MouseEvent('mousedown', eventOpts));
-    dummyDiv.dispatchEvent(new MouseEvent('mouseup', eventOpts));
-    dummyDiv.dispatchEvent(new MouseEvent('click', eventOpts));
-    document.body.removeChild(dummyDiv);
     """
-    driver.execute_script(js_script)
+    driver.execute_script(js_add_element)
+
+    # Step 2: Fallback JS click (just in case)
+    js_click = """
+    const div = document.getElementById('temp-dummy-click-area');
+    if (div) {
+        const rect = div.getBoundingClientRect();
+        const eventOpts = { bubbles: true, cancelable: true, clientX: rect.left + 5, clientY: rect.top + 5, view: window };
+        div.dispatchEvent(new MouseEvent('mousedown', eventOpts));
+        div.dispatchEvent(new MouseEvent('mouseup', eventOpts));
+        div.dispatchEvent(new MouseEvent('click', eventOpts));
+    }
+    """
+    driver.execute_script(js_click)
+
+    # Step 3: Selenium ActionChains click (true browser interaction)
+    try:
+        temp_elem = driver.find_element(By.ID, "temp-dummy-click-area")
+        ActionChains(driver).move_to_element(temp_elem).click().perform()
+    except Exception as e:
+        print("ActionChains click failed:", e)
+
+    # Step 4: Cleanup
+    time.sleep(0.1)  # slight delay to let DOM process focus change
+    js_remove = """
+    const div = document.getElementById('temp-dummy-click-area');
+    if (div) div.remove();
+    """
+    driver.execute_script(js_remove)
 
     ActionChains(driver).send_keys(Keys.ESCAPE).perform()
 
@@ -665,6 +713,9 @@ def clear_text_field(x_path):
 
     input_field = driver.find_element(By.XPATH, x_path)
 
+    if not input_field.get_attribute("value"):
+        return
+
     # Scroll the element into view
     driver.execute_script(
         "arguments[0].scrollIntoView({block: 'center', inline: 'center'});", input_field
@@ -677,14 +728,54 @@ def clear_text_field(x_path):
         # Fallback: use JS to focus
         driver.execute_script("arguments[0].focus();", input_field)
         time.sleep(0.5)
+    except Exception:
+        actions = ActionChains(driver)
+        actions.move_to_element(input_field).click().perform()
+
+    try:
+        driver.execute_script(
+            """
+        const el = arguments[0];
+
+        // Store prototype setter for value
+        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+
+        // Use native setter to set the value
+        nativeInputValueSetter.call(el, '');
+
+        // Dispatch events to simulate real user input
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+    """,
+            input_field,
+        )
+
+        if not input_field.get_attribute("value"):
+            return
+    except JavascriptException:
+        pass
 
     try:
         # Select all text (Ctrl+A) and delete
         input_field.send_keys(Keys.CONTROL + "a")
         input_field.send_keys(Keys.DELETE)
         time.sleep(0.5)
-    except ElementNotInteractableException:
+
+        if not input_field.get_attribute("value"):
+            return
+    except (
+        ElementClickInterceptedException,
+        ElementNotInteractableException,
+        StaleElementReferenceException,
+    ):
         pass
+
+    if is_stale(input_field):
+        simulate_empty_area_click()
+        try:
+            input_field = driver.find_element(By.XPATH, x_path)
+        except NoSuchElementException:
+            return
 
     # Directly set the value to empty and dispatch an input event
     driver.execute_script("arguments[0].value = '';", input_field)

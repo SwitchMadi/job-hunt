@@ -100,8 +100,8 @@ class DateField(PageComponent):
                     for i, el in enumerate(observed_elements)
                     if not is_stale(el)
                 )
-                + f"\nIf these elements contain a calendar widget, find XPath of date 27, which is currently visible on"
-                f" observed calendar element that can be clicked."
+                + f"\nIf these observed elements contain a calendar widget, then find XPath of date 27, which is "
+                f"currently visible on the observed calendar that can be clicked."
             )
 
             class DateInfo(BaseModel):
@@ -116,8 +116,9 @@ class DateField(PageComponent):
 
             if retry and prev_xpath:
                 user_prompt += (
-                    f"\nPrevious attempt to find date 27 with xpath '{prev_xpath}' failed. "
-                    f"Please provide correct xpath for date 27 currently visible on the observed calendar element."
+                    f"\n\nIn previous try you gave following XPath for the container but the element couldn't be found "
+                    f"using that. So, find correct XPath for the 27th date.\n"
+                    f"Previous XPath - {prev_xpath}\n"
                 )
 
             date_info_found, date_info = get_gpt_response(
@@ -150,7 +151,8 @@ class DateField(PageComponent):
                 field = driver.find_element(
                     By.XPATH, self.components.get("date", {}).get("xpath")
                 )
-                if field_value := field.get_attribute("value"):
+                field_value = field.get_attribute("value")
+                if field_value:
                     simulate_empty_area_click()
                     self.date_format = field_value
                     self.input_method_details_identified = True
@@ -183,10 +185,10 @@ class DateField(PageComponent):
             if component:  # Only process if component exists
                 field = ApplicationField(
                     parent_application_page=self.parent_application_page,
-                    title=f"{self.title} - {component_type.title()}",
+                    title=f"{self.title} - {component_type}",
                     question=f"{self.question}\nFinal question for us to answer is - What is {component_type} part of "
                     f"the date in question here?",
-                    category=f"{self.category} - {component_type.title()}",
+                    category=f"{self.category} - {component_type}",
                     x_path=component["xpath"],
                 )
                 field.html_type = component["html_type"]
@@ -424,22 +426,23 @@ class DateField(PageComponent):
                 if input_data.month_component:
                     self.components["month"] = {
                         "xpath": input_data.month_component.xpath,
-                        "html_type": input_data.month_component.html_type,
+                        "html_type": input_data.month_component.html_type.value,
                     }
                 if input_data.day_component:
                     self.components["day"] = {
                         "xpath": input_data.day_component.xpath,
-                        "html_type": input_data.day_component.html_type,
+                        "html_type": input_data.day_component.html_type.value,
                     }
                 if input_data.year_component:
                     self.components["year"] = {
                         "xpath": input_data.year_component.xpath,
-                        "html_type": input_data.year_component.html_type,
+                        "html_type": input_data.year_component.html_type.value,
                     }
-            elif input_data.date_field:
+
+            if input_data.date_field:
                 self.components["date"] = {
                     "xpath": input_data.date_field.xpath,
-                    "html_type": input_data.date_field.html_type,
+                    "html_type": input_data.date_field.html_type.value,
                 }
 
             # Get date format from GPT response
@@ -457,7 +460,8 @@ class DateField(PageComponent):
                 f"URL - {self.parent_application_page.url}"
             )
 
-    def _get_date_component_in_format(self, date, date_format, date_component):
+    @staticmethod
+    def _get_date_component_in_format(date, date_format, date_component):
         user_prompt = (
             f"I have following date -\n{date}\n"
             f"Consider following date format -\n{date_format}\n"

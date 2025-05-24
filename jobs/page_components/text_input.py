@@ -1,8 +1,12 @@
 import time
 
-from selenium.common import ElementNotInteractableException
+from selenium.common import (
+    ElementNotInteractableException,
+    ElementClickInterceptedException,
+)
 from selenium.webdriver import Keys
 from selenium.webdriver.common.by import By
+from selenium.webdriver import ActionChains
 
 from jobs import ApplicationField
 from jobs.page_components import PageComponent, logger, get_page_component_class_name
@@ -10,7 +14,7 @@ from utilities.selenium import (
     get_selenium_driver,
     clear_text_field,
     generalize_xpath_attributes,
-    is_element_visible,
+    element_has_area,
 )
 
 
@@ -47,16 +51,18 @@ class TextInput(PageComponent):
         global driver
 
         try:
-            if not is_element_visible(self.x_path):
+            if not element_has_area(self.x_path):
                 logger.warn(
-                    f"Element with XPath {self.x_path} not found at url {self.parent_application_page.url}. Retrying "
-                    f"with generalized XPath..."
+                    f"Element with XPath {self.x_path} not found. "
+                    f"URL - {self.parent_application_page.url if self.parent_application_page else None} "
+                    f"Retrying with generalized XPath..."
                 )
                 self.x_path = generalize_xpath_attributes(self.x_path)
 
-                if not is_element_visible(self.x_path):
+                if not element_has_area(self.x_path):
                     logger.warning(
-                        f"Element not visible in class TextInput's proceed method.\nTextInput instance - {vars(self)}"
+                        f"Element has zero dimension in class TextInput's proceed method.\nTextInput instance - "
+                        f"{vars(self)}"
                     )
                     self.is_component_functional = False
                     return
@@ -79,26 +85,29 @@ class TextInput(PageComponent):
             )
             time.sleep(1)
 
+            if self.category != "otp_textbox":
+                clear_text_field(self.x_path)
+
             try:
                 element.click()
-            except ElementNotInteractableException:
+            except (ElementNotInteractableException, ElementClickInterceptedException):
+                driver.execute_script("arguments[0].click();", element)
+            except Exception:
                 logger.warn(
-                    f"Element not interactable in class TextInput's proceed method.\n"
+                    f"Element not clickable in class TextInput's proceed method.\n"
                     f"TextInput instance - {vars(self)}"
                 )
-                pass
+                actions = ActionChains(driver)
+                actions.move_to_element(element).click().perform()
 
             if self.category in ["otp_textbox", "date_field"]:
-                if self.category == "date_field":
-                    clear_text_field(self.x_path)
-
                 for letter in str(self.answer):
                     active_element = driver.switch_to.active_element
                     active_element.send_keys(f"{letter}")
             else:
-                clear_text_field(self.x_path)
                 try:
                     element.send_keys(self.answer)
+
                 except ElementNotInteractableException:
                     logger.warn(
                         f"Element not interactable in class TextInput's proceed method.\n"
@@ -107,13 +116,15 @@ class TextInput(PageComponent):
                     pass
 
                 # Force check and set value if needed
-                actual_value = element.get_attribute("value")
-                if actual_value.strip().lower() != str(self.answer).strip().lower():
+                actual_value = element.get_attribute("value") or ""
+                if (
+                    actual_value.strip().lower() != str(self.answer).strip().lower()
+                ) and not self.category.endswith(("- month", "- day", "- year")):
                     active_element = driver.switch_to.active_element
                     active_element.send_keys(self.answer)
 
                 # Force check and set value if needed
-                actual_value = element.get_attribute("value")
+                actual_value = element.get_attribute("value") or ""
                 if actual_value.strip().lower() != str(self.answer).strip().lower():
                     # Force set using JavaScript if value doesn't match
                     driver.execute_script(

@@ -73,8 +73,9 @@ class Button(PageComponent):
         try:
             if not is_element_visible(self.x_path):
                 logger.warning(
-                    f"Element with XPath {self.x_path} not found at url {self.parent_application_page.url}. Retrying "
-                    f"with generalized XPath..."
+                    f"Element with XPath {self.x_path} not found. "
+                    f"URL - {self.parent_application_page.url if self.parent_application_page else None} "
+                    f"Retrying with generalized XPath..."
                 )
                 self.x_path = generalize_xpath_attributes(self.x_path)
 

@@ -1,5 +1,4 @@
 import time
-from selenium.webdriver.common.by import By
 from selenium.common import ElementNotInteractableException
 
 from jobs import ApplicationField
