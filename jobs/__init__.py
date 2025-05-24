@@ -727,13 +727,6 @@ class ApplicationPage:
                 "extracting all the application fields."
             )
 
-        user_prompt = (
-            f"Following HTML page is job application webpage for {self.parent_job.title} at a company called "
-            f"{self.parent_job.company}.\n"
-            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
-            f"{prompt_part}"
-        )
-
         class FieldCategory(Enum):
             first_name = "first_name"
             middle_name = "middle_name"
@@ -798,18 +791,91 @@ class ApplicationPage:
         class JobFields(BaseModel):
             job_fields: list[ApplicationFieldInfo]
 
-        job_fields_found, job_fields = get_gpt_response(
-            constants.gpt["system_prompts"]["application_step_identification"],
-            user_prompt,
-            response_format=JobFields,
-        )
-        if job_fields_found:
-            return job_fields.job_fields
-        else:
+        # Helper function to get fields using GPT with consistent prompt structure
+        def _get_fields_from_gpt(prompt_part_text):
+            user_prompt_text = (
+                f"Following HTML page is job application webpage for {self.parent_job.title} at a company called "
+                f"{self.parent_job.company}.\n"
+                f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
+                f"{prompt_part_text}"
+            )
+
+            job_fields_found, job_fields = get_gpt_response(
+                constants.gpt["system_prompts"]["application_step_identification"],
+                user_prompt_text,
+                response_format=JobFields,
+            )
+            if job_fields_found:
+                return job_fields.job_fields
+            else:
+                return []
+
+        # Initial GPT call to identify fields
+        initial_fields = _get_fields_from_gpt(prompt_part)
+
+        if not initial_fields:
             logger.error(
                 f"Couldn't extract job fields for {self.parent_job.title}. URL - {self.url}"
             )
             return []
+
+        # If we found 10 or more fields, there might be missed fields, so try a refetch
+        # Skip refetch for error-only identification as it's meant for specific error fields
+        if len(initial_fields) > 10 and not identify_only_errors:
+            logger.info(
+                f"Found {len(initial_fields)} fields, attempting refetch to catch any missed fields "
+                f"for {self.parent_job.title}. URL - {self.url}"
+            )
+
+            # Create a summary of previously found fields for the refetch prompt
+            found_fields_summary = []
+            for field in initial_fields:
+                found_fields_summary.append(
+                    f"- {field.field_title} ({field.field_category.value})"
+                )
+
+            # Keep the same start but modify the analysis part for refetch
+            refetch_prompt_part = (
+                "The webpage has job application related fields. I have already identified the following fields:\n"
+                f"{chr(10).join(found_fields_summary)}\n\n"
+                "Analyse the whole HTML very carefully again to identify any ADDITIONAL application fields "
+                "that might have been missed in the previous analysis. Only return fields that are NOT already "
+                "listed above. If no additional fields are found, return an empty list."
+            )
+
+            refetch_fields = _get_fields_from_gpt(refetch_prompt_part)
+
+            if refetch_fields:
+                logger.info(
+                    f"Found {len(refetch_fields)} additional fields in refetch for {self.parent_job.title}. "
+                    f"URL - {self.url}"
+                )
+
+                # Combine initial and refetch fields
+                combined_fields = initial_fields + refetch_fields
+
+                # Deduplicate based on field_title (case-insensitive) to avoid duplicates
+                seen_titles = set()
+                deduplicated_fields = []
+
+                for field in combined_fields:
+                    field_title_lower = field.field_title.lower().strip()
+                    if field_title_lower not in seen_titles:
+                        seen_titles.add(field_title_lower)
+                        deduplicated_fields.append(field)
+
+                logger.info(
+                    f"After deduplication: {len(deduplicated_fields)} total fields for {self.parent_job.title}. "
+                    f"URL - {self.url}"
+                )
+
+                return deduplicated_fields
+            else:
+                logger.info(
+                    f"No additional fields found in refetch for {self.parent_job.title}. URL - {self.url}"
+                )
+
+        return initial_fields
 
     def _act_on_job_fields(self, job_fields):
         for job_field in job_fields:
