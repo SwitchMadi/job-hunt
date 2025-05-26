@@ -118,7 +118,7 @@ class ApplicationField:
         class FieldType(Enum):
             addButton = "add_button"
             upload = "upload"
-            date = "date"
+            date_field = "date_field"
             expand = "expand"
             collapse = "collapse"
             text_field = "text_field"
@@ -206,6 +206,16 @@ class ApplicationField:
             self._identify_x_path()
 
         if self.x_path:
+            if self.field_type == "date_field":
+                from jobs.page_components.date_field import DateField
+
+                return DateField(
+                    title=self.title,
+                    question=self.question,
+                    category=self.category,
+                    parent_application_page=self.parent_application_page,
+                )
+
             self.html_type, container_x_path = (
                 ApplicationField.revalidate_component_type(
                     x_path=self.x_path,
@@ -269,10 +279,12 @@ class ApplicationField:
                     options=self.options,
                     parent_application_page=self.parent_application_page,
                 )
+            return None
         else:
             logger.warn(
                 f"Working Xpath couldn't be extracted.\nInstance - {vars(self)}"
             )
+            return None
 
     @classmethod
     def revalidate_component_type(
@@ -517,15 +529,15 @@ class ApplicationField:
             f"strictly for the field title {field_title} and nothing else. Consider:\n"
             f"{validation_prompt}\n"
             f"B. If it is an options / search suggestions container, identify which element number (1, 2, etc.) "
-            f"contains the options / search suggestions.\n"
-            f"If there is no strong signals then return false for is_options_container_present. Strictly ignore weak "
-            f"signals."
+            f"contains the options / search suggestions. While identifying the container, very carefully look "
+            f"for presence of options / search suggestions like elements inside the container.\n"
+            f"If there is no strong signal then return false for is_options_container_present."
         )
 
         if retry and prev_xpath:
             user_prompt += (
                 f"\n\nIn previous try you gave following XPath for the container but the element "
-                f"couldn't be found using that. So, find correct XPath for the container.\n"
+                f"couldn't be found / isn't visible using the XPath. So, find correct XPath for the container.\n"
                 f"Previous XPath - {prev_xpath}\n"
             )
 
@@ -537,7 +549,7 @@ class ApplicationField:
 
         if validation_found:
             if validation.is_options_container_present:
-                if validation.options_container_xpath and element_exists(
+                if validation.options_container_xpath and is_element_visible(
                     validation.options_container_xpath
                 ):
                     return (
@@ -637,6 +649,13 @@ class ApplicationField:
                         ...,
                         description="Correct option based on input",
                     )
+                    # add boolean field to the class FieldAnswer to indicate if answer is found with great confidence. Add in this if block only
+                    is_answer_found_with_great_confidence: bool = Field(
+                        ...,
+                        description="Indicates if the answer is found with great confidence. "
+                        "If true then answer is correct and should be used. If false then answer is not "
+                        "confident enough and should not be used.",
+                    )
 
         elif answer_type == "text":
             user_prompt += (
@@ -695,13 +714,16 @@ class ApplicationField:
             if (answer_type == "text") or (
                 (answer_type == "enum") and len(options) > 250
             ):
-                return field_answer.answer
+                return field_answer.answer, True
             elif multiple_correct:
-                return [answer.value for answer in field_answer.answers]
+                return [answer.value for answer in field_answer.answers], True
             else:
-                return field_answer.answer.value
+                return (
+                    field_answer.answer.value,
+                    field_answer.is_answer_found_with_great_confidence,
+                )
         else:
             logger.error(
                 f"Couldn't extract field answer for {job_title}. URL - {job_url}"
             )
-            return None
+            return None, False

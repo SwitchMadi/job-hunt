@@ -267,6 +267,13 @@ class DateField(PageComponent):
                     elif isinstance(component, DropDown):
                         component.answer = self.answer
 
+                    if not self.persist_context_fields:
+                        component.question = (
+                            f"{self.question}\nFinal question for us to answer is - What is "
+                            f"{component_type} part of the date in question here?"
+                        )
+                        component.category = f"{self.category} - {component_type}"
+
                     component.proceed()
 
                     if not self.persist_context_fields:
@@ -492,7 +499,7 @@ class DateField(PageComponent):
             "class": self.__class__.__name__,
             "title": self.title,
             "date_format": self.date_format,
-            "category": self.category if self.persist_context_fields else None,
+            "category": self.category,
             "components": {
                 k: v.to_dict() if isinstance(v, PageComponent) else v
                 for k, v in self.components.items()
@@ -502,8 +509,8 @@ class DateField(PageComponent):
             "has_separate_components": self.has_separate_components,
             "input_method_identified": self.input_method_identified,
             "input_method_details_identified": self.input_method_details_identified,
-            "question": self.question if self.persist_context_fields else None,
-            "persist_context_fileds": self.persist_context_fields,
+            "question": self.question,
+            "persist_context_fields": self.persist_context_fields,
             "next": self.next.to_dict() if self.next else None,
         }
         return output
@@ -516,7 +523,7 @@ class DateField(PageComponent):
             date_format=input_dict["date_format"],
             category=input_dict["category"],
             parent_application_page=parent_application_page,
-            persist_context_fields=input_dict.get("persist_context_fileds", True),
+            persist_context_fields=input_dict.get("persist_context_fields", True),
         )
 
         # Restore component info and state
@@ -565,7 +572,7 @@ class DateField(PageComponent):
         )
 
         if self.date_format or answer is None:
-            answer = ApplicationField.extract_field_answer(
+            answer, _ = ApplicationField.extract_field_answer(
                 job_title=self.parent_application_page.parent_job.title,
                 job_url=self.parent_application_page.url,
                 company_name=self.parent_application_page.parent_job.company,

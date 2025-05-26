@@ -1,5 +1,6 @@
 import time
 from selenium.common import ElementNotInteractableException
+from pydantic import BaseModel, Field
 
 from jobs import ApplicationField
 from jobs.page_components import PageComponent, get_page_component_class_name
@@ -18,6 +19,8 @@ from utilities.selenium import (
     is_element_visible,
     clear_text_field,
 )
+from utilities.gpt import get_gpt_response
+from utilities import constants
 
 
 driver = get_selenium_driver()
@@ -35,6 +38,7 @@ class SearchField(PageComponent):
 
         self.options_container_x_path = None
         self._answer = None
+        self._search_phrases = []
 
         self.is_component_functional = False
 
@@ -116,13 +120,7 @@ class SearchField(PageComponent):
 
     def proceed(self, retry=False):
         try:
-            input_count = min(2, len(self.answer.split(" ")))
-            while input_count >= 0:
-                if input_count > 0:
-                    input_key = " ".join(self.answer.split(" ")[:input_count])
-                else:
-                    input_key = "a"
-
+            for input_key in self.search_phrases:
                 element = TextInput(
                     x_path=self.x_path,
                     category="search_field",
@@ -145,14 +143,10 @@ class SearchField(PageComponent):
                             job_title=self.parent_application_page.parent_job.title,
                         )
                     )
-                    self.options_container_x_path = container_x_path
                     if not is_container_present or not container_x_path:
-                        raise Exception(
-                            f"Couldn't find options container for {self.category} "
-                            f"for {self.parent_application_page.parent_job.title}. "
-                            f"URL - {self.parent_application_page.url}"
-                        )
+                        continue
 
+                    self.options_container_x_path = container_x_path
                 else:
                     element.proceed()
                     time.sleep(2)
@@ -167,6 +161,7 @@ class SearchField(PageComponent):
                     )
                 else:
                     options = DropDown.build_options_list(self.options_xpath_pattern)
+
                 if options:
                     closest_option = (
                         self.answer
@@ -179,44 +174,57 @@ class SearchField(PageComponent):
                     )
 
                     if closest_option is None:
-                        closest_option = ApplicationField.extract_field_answer(
-                            job_title=self.parent_application_page.parent_job.title,
-                            job_url=self.parent_application_page.url,
-                            company_name=self.parent_application_page.parent_job.company,
-                            field_title=self.title,
-                            question=self.question,
-                            answer_type="enum",
-                            options=[option["text"] for option in options],
-                            closest_answer=self.answer,
+                        closest_option, is_selected_option_correct = (
+                            ApplicationField.extract_field_answer(
+                                job_title=self.parent_application_page.parent_job.title,
+                                job_url=self.parent_application_page.url,
+                                company_name=self.parent_application_page.parent_job.company,
+                                field_title=self.title,
+                                question=self.question,
+                                answer_type="enum",
+                                options=[option["text"] for option in options],
+                                closest_answer=self.answer,
+                            )
                         )
+
+                        if not is_selected_option_correct:
+                            continue
 
                     option = [
                         option for option in options if option["text"] == closest_option
                     ][0]
-                    # Get the clickable parent xpath for this option
-                    clickable_xpath = find_clickable_parent_xpath(
-                        option["x_path"], option["text"]
-                    )
 
                     # Create a Button instance for the clickable element
                     option_button = Button(
-                        x_path=clickable_xpath,
+                        x_path=option["x_path"],
                         button_type="search_option",
                         parent_application_page=self.parent_application_page,
                     )
                     option_button.proceed()
-                    break
-                else:
-                    input_count -= 1
 
-            if is_element_visible(self.options_container_x_path):
+                    if is_element_visible(self.options_container_x_path):
+                        # Get the clickable parent xpath for this option
+                        clickable_xpath = find_clickable_parent_xpath(
+                            option["x_path"], option["text"]
+                        )
+                        option_button.x_path = clickable_xpath
+                        option_button.proceed()
+
+                    if not is_element_visible(self.options_container_x_path):
+                        self.is_component_functional = True
+                        return
+                    else:
+                        break
+
+            if not self.options_container_x_path or is_element_visible(
+                self.options_container_x_path
+            ):
                 raise Exception(
                     f"Couldn't proceed on following search field {self.category} for "
                     f"{self.parent_application_page.parent_job.title}. "
                     f"URL - {self.parent_application_page.url}"
                 )
 
-            self.is_component_functional = True
             return
         except Exception as e:
             if not retry:
@@ -234,7 +242,7 @@ class SearchField(PageComponent):
             user=self.parent_application_page.parent_job.user,
         )
         if not answer:
-            answer = ApplicationField.extract_field_answer(
+            answer, _ = ApplicationField.extract_field_answer(
                 job_title=self.parent_application_page.parent_job.title,
                 job_url=self.parent_application_page.url,
                 company_name=self.parent_application_page.parent_job.company,
@@ -246,6 +254,54 @@ class SearchField(PageComponent):
 
         self._answer = answer
         return self._answer
+
+    @property
+    def search_phrases(self):
+        if self._search_phrases:
+            return self._search_phrases
+
+        class SearchPhrase(BaseModel):
+            search_phrase: str = Field(
+                ..., description="The search phrase to be used in the search field."
+            )
+
+        class SearchPhrases(BaseModel):
+            search_phrases: list[SearchPhrase]
+
+        user_prompt = (
+            f"I have to answer following question in a search dropdown field type input -\n"
+            f"{self.question}\n"
+            f"Field title is - {self.title}\n"
+            f"My answer is - {self.answer}\n"
+            f"Now it may happen that my exact answer will not result in any search result when searched "
+            f"exactly. So I have to try different phrases to find most relevant search result. There may be "
+            f"different names or phrases of my answer ({self.answer}) so consider those as well. Now give me"
+            f" a list of different phrases to search one by one to find most relevant search result. "
+            f"Consider other possible names or phrases for my answer and order the list from most relevant "
+            f"phrase and precise phrase to search, to less narrowed search but still relevant phrase. "
+            f"Keep in mind that most search dropdown may have implemented ONLY EXACT SEARCH (no fuzzy search) so "
+            f"substrings, different order & combinations of words & commas should be tried for such search dropdowns "
+            f"to increase getting relevant search results, rather than unnecessary noise in phrases which is more "
+            f"ideal for fuzzy searches. Give 20 phrases in order asked earlier."
+        )
+
+        search_phrases_found, search_phrases = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=SearchPhrases,
+        )
+        if search_phrases_found:
+            self._search_phrases = [
+                phrase.search_phrase for phrase in search_phrases.search_phrases
+            ]
+        else:
+            answer_parts = self.answer.split(" ")
+            self._search_phrases = [
+                " ".join(answer_parts[: len(answer_parts) - i])
+                for i in range(len(answer_parts))
+            ]
+
+        return self._search_phrases
 
     def to_dict(self):
         return {

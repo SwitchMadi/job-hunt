@@ -105,7 +105,7 @@ class DropDown(PageComponent):
             )
 
             if answer is None:
-                answer = ApplicationField.extract_field_answer(
+                answer, _ = ApplicationField.extract_field_answer(
                     job_title=self.parent_application_page.parent_job.title,
                     job_url=self.parent_application_page.url,
                     company_name=self.parent_application_page.parent_job.company,

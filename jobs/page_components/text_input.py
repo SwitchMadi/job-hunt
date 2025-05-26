@@ -1,12 +1,5 @@
-import time
-
-from selenium.common import (
-    ElementNotInteractableException,
-    ElementClickInterceptedException,
-)
+from selenium.common import ElementNotInteractableException
 from selenium.webdriver import Keys
-from selenium.webdriver.common.by import By
-from selenium.webdriver import ActionChains
 
 from jobs import ApplicationField
 from jobs.page_components import PageComponent, logger, get_page_component_class_name
@@ -15,6 +8,7 @@ from utilities.selenium import (
     clear_text_field,
     generalize_xpath_attributes,
     element_has_area,
+    get_active_element_after_click,
 )
 
 
@@ -70,35 +64,12 @@ class TextInput(PageComponent):
             if not self.answer:
                 return
 
-            element = driver.find_element(By.XPATH, self.x_path)
-
-            driver.execute_script(
-                """
-                const element = arguments[0];
-                const rect = element.getBoundingClientRect();
-                const elementTop = rect.top + window.pageYOffset;
-                const viewportHeight = window.innerHeight;
-                const offsetToCenter = elementTop - (viewportHeight / 2) + (rect.height / 2) + 100;
-                window.scrollTo({top: offsetToCenter, behavior: 'smooth'});
-            """,
-                element,
-            )
-            time.sleep(1)
-
-            if self.category != "otp_textbox":
+            if (self.category != "otp_textbox") and not self.category.endswith(
+                ("- month", "- day", "- year")
+            ):
                 clear_text_field(self.x_path)
 
-            try:
-                element.click()
-            except (ElementNotInteractableException, ElementClickInterceptedException):
-                driver.execute_script("arguments[0].click();", element)
-            except Exception:
-                logger.warn(
-                    f"Element not clickable in class TextInput's proceed method.\n"
-                    f"TextInput instance - {vars(self)}"
-                )
-                actions = ActionChains(driver)
-                actions.move_to_element(element).click().perform()
+            element = get_active_element_after_click(self.x_path)
 
             if self.category in ["otp_textbox", "date_field"]:
                 for letter in str(self.answer):
@@ -116,7 +87,7 @@ class TextInput(PageComponent):
                     pass
 
                 # Force check and set value if needed
-                actual_value = element.get_attribute("value") or ""
+                actual_value = element.get_attribute("value") or element.text or ""
                 if (
                     actual_value.strip().lower() != str(self.answer).strip().lower()
                 ) and not self.category.endswith(("- month", "- day", "- year")):
@@ -124,7 +95,7 @@ class TextInput(PageComponent):
                     active_element.send_keys(self.answer)
 
                 # Force check and set value if needed
-                actual_value = element.get_attribute("value") or ""
+                actual_value = element.get_attribute("value") or element.text or ""
                 if actual_value.strip().lower() != str(self.answer).strip().lower():
                     # Force set using JavaScript if value doesn't match
                     driver.execute_script(
@@ -193,7 +164,7 @@ class TextInput(PageComponent):
             user=self.parent_application_page.parent_job.user,
         )
         if not answer:
-            answer = ApplicationField.extract_field_answer(
+            answer, _ = ApplicationField.extract_field_answer(
                 job_title=self.parent_application_page.parent_job.title,
                 job_url=self.parent_application_page.url,
                 company_name=self.parent_application_page.parent_job.company,

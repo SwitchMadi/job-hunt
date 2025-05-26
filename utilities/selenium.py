@@ -704,33 +704,18 @@ def get_observed_network_calls():
     return driver.execute_script("return window.capturedRequests || [];")
 
 
-def clear_text_field(x_path):
+def clear_text_field(x_path, skip_all_sections=False):
     """
     Clears the input field using keyboard shortcuts to ensure any custom handlers are triggered.
     """
 
     global driver
 
-    input_field = driver.find_element(By.XPATH, x_path)
+    input_field = get_active_element_after_click(x_path)
 
-    if not input_field.get_attribute("value"):
+    value = input_field.get_attribute("value") or input_field.text or ""
+    if not value:
         return
-
-    # Scroll the element into view
-    driver.execute_script(
-        "arguments[0].scrollIntoView({block: 'center', inline: 'center'});", input_field
-    )
-
-    try:
-        input_field.click()  # Ensure the field is focused
-        time.sleep(0.5)
-    except (ElementClickInterceptedException, ElementNotInteractableException):
-        # Fallback: use JS to focus
-        driver.execute_script("arguments[0].focus();", input_field)
-        time.sleep(0.5)
-    except Exception:
-        actions = ActionChains(driver)
-        actions.move_to_element(input_field).click().perform()
 
     try:
         driver.execute_script(
@@ -750,38 +735,76 @@ def clear_text_field(x_path):
             input_field,
         )
 
-        if not input_field.get_attribute("value"):
+        value = input_field.get_attribute("value") or input_field.text or ""
+        if not value:
             return
     except JavascriptException:
         pass
 
-    try:
-        # Select all text (Ctrl+A) and delete
-        input_field.send_keys(Keys.CONTROL + "a")
-        input_field.send_keys(Keys.DELETE)
-        time.sleep(0.5)
+    if not skip_all_sections:
+        try:
+            # Select all text (Ctrl+A) and delete
+            input_field.send_keys(Keys.CONTROL + "a")
+            driver.switch_to.active_element.send_keys(Keys.DELETE)
+            time.sleep(0.5)
 
-        if not input_field.get_attribute("value"):
-            return
-    except (
-        ElementClickInterceptedException,
-        ElementNotInteractableException,
-        StaleElementReferenceException,
-    ):
-        pass
+            value = input_field.get_attribute("value") or input_field.text or ""
+            if not value:
+                return
+        except (
+            ElementClickInterceptedException,
+            ElementNotInteractableException,
+            StaleElementReferenceException,
+        ):
+            pass
 
     if is_stale(input_field):
-        simulate_empty_area_click()
-        try:
-            input_field = driver.find_element(By.XPATH, x_path)
-        except NoSuchElementException:
-            return
+        input_field = get_active_element_after_click(x_path)
 
     # Directly set the value to empty and dispatch an input event
     driver.execute_script("arguments[0].value = '';", input_field)
     time.sleep(0.5)
 
     return
+
+
+def get_active_element_after_click(x_path):
+    """
+    Clicks on the element at the given XPath and returns the active element.
+    This is useful for ensuring that the correct element is focused after a click.
+    """
+
+    global driver
+
+    simulate_empty_area_click()
+
+    element = driver.find_element(By.XPATH, x_path)
+    driver.execute_script(
+        """
+        const element = arguments[0];
+        const rect = element.getBoundingClientRect();
+        const elementTop = rect.top + window.pageYOffset;
+        const viewportHeight = window.innerHeight;
+        const offsetToCenter = elementTop - (viewportHeight / 2) + (rect.height / 2) + 100;
+        window.scrollTo({top: offsetToCenter, behavior: 'smooth'});
+    """,
+        element,
+    )
+    time.sleep(0.5)
+
+    try:
+        element.click()  # Ensure the field is focused
+    except (ElementClickInterceptedException, ElementNotInteractableException):
+        # Fallback: use JS to focus
+        driver.execute_script("arguments[0].click();", element)
+    except Exception:
+        actions = ActionChains(driver)
+        actions.move_to_element(element).click().perform()
+
+    time.sleep(0.5)
+
+    # Return the active element
+    return driver.switch_to.active_element
 
 
 def simulate_typing(xpath, text):
@@ -977,7 +1000,13 @@ def minify_html_for_gpt_prompt(html_content):
     # Remove any element that appears to have zero width or height.
     for tag in soup.find_all(True):
         if has_zero_dimension(tag):
-            tag.decompose()
+            try:
+                tag_xpath = generate_xpath(tag)
+                tag_element = driver.find_element(By.XPATH, tag_xpath)
+                if not has_visible_descendant(tag_element):
+                    tag.decompose()
+            except Exception:
+                pass
 
     # Remove comments
     for comment in soup.findAll(text=lambda text: isinstance(text, Comment)):
@@ -1175,3 +1204,47 @@ def generalize_xpath_attributes(xpath: str) -> str:
         return f"[{updated}]"
 
     return re.sub(r"\[([^\[\]]+)\]", replace_bracket_content, xpath)
+
+
+def has_visible_descendant(element):
+    global driver
+
+    return driver.execute_script(
+        """
+        const el = arguments[0];
+        function hasVisibleDescendant(element) {
+            if (!element || !element.children) return false;
+
+            for (const child of element.children) {
+                const style = window.getComputedStyle(child);
+                const isVisible = (
+                    style.display !== "none" &&
+                    style.visibility !== "hidden" &&
+                    child.offsetWidth > 0 &&
+                    child.offsetHeight > 0
+                );
+
+                if (isVisible || hasVisibleDescendant(child)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+        return hasVisibleDescendant(el);
+    """,
+        element,
+    )
+
+
+def generate_xpath(tag):
+    """
+    Generate an XPath expression for a BeautifulSoup tag.
+    """
+    path = []
+    while tag and tag.name != "[document]":
+        siblings = tag.find_previous_siblings(tag.name)
+        index = len(siblings) + 1
+        path.insert(0, f"{tag.name}[{index}]")
+        tag = tag.parent
+    return "/" + "/".join(path)

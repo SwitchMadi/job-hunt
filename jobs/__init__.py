@@ -218,7 +218,10 @@ class ApplicationPage:
 
         return False
 
-    def component_x_path_exists(self, x_path):
+    def component_x_path_exists(self, x_path, skip_check=True):
+        if skip_check:
+            return False
+
         cur_application_step = self.head_step
         while cur_application_step:
             # if identified_fields exists as attribute then loop over it to check for existing xpath match

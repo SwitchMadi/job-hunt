@@ -321,15 +321,27 @@ class EducationSection(PageComponent):
             if fields.education_fields_present and fields.education_fields:
                 education_fields = []
                 for field in fields.education_fields:
-                    application_field = ApplicationField(
-                        parent_application_page=self.parent_application_page,
-                        title=field.field_title,
-                        question=field.field_question,
-                        category=field.field_category.value,
-                    )
-                    application_field_component = (
-                        application_field.get_field_component()
-                    )
+                    if field.field_category.value in ["start_date", "end_date"]:
+                        from jobs.page_components.date_field import DateField
+
+                        application_field_component = DateField(
+                            title=field.field_title,
+                            question=field.field_question,
+                            category=field.field_category.value,
+                            parent_application_page=self.parent_application_page,
+                            persist_context_fields=False,
+                        )
+                    else:
+                        application_field = ApplicationField(
+                            parent_application_page=self.parent_application_page,
+                            title=field.field_title,
+                            question=field.field_question,
+                            category=field.field_category.value,
+                        )
+                        application_field_component = (
+                            application_field.get_field_component()
+                        )
+
                     if application_field_component:
                         education_fields.append(application_field_component)
 
