@@ -1,6 +1,7 @@
 import time
 from selenium.common import ElementNotInteractableException
 from pydantic import BaseModel, Field
+import re
 
 from jobs import ApplicationField
 from jobs.page_components import PageComponent, get_page_component_class_name
@@ -255,10 +256,42 @@ class SearchField(PageComponent):
         self._answer = answer
         return self._answer
 
+    @staticmethod
+    def generate_sub_phrases(phrase):
+        stopwords = {'an', 'a', 'the', 'of', 'in', 'on', 'at', 'by', 'for', 'with'}
+        punctuation = {',', '.', '-', '–', '—'}
+
+        def is_noise(token):
+            return token.lower() in stopwords or token in punctuation
+
+        # Tokenize: keep words and punctuation as separate tokens
+        tokens = re.findall(r'\b\w+\b|[^\w\s]', phrase)
+
+        results = set()
+        for i in range(len(tokens)):
+            for j in range(i + 1, len(tokens) + 1):
+                sub = tokens[i:j]
+
+                # Strip noise from start
+                while sub and is_noise(sub[0]):
+                    sub = sub[1:]
+
+                # Strip noise from end
+                while sub and is_noise(sub[-1]):
+                    sub = sub[:-1]
+
+                if sub:
+                    results.add(" ".join(sub))
+
+        # Sort: longer phrases first, then alphabetically
+        return sorted(results, key=lambda x: (-len(x.split()), x.lower()))
+
     @property
     def search_phrases(self):
         if self._search_phrases:
             return self._search_phrases
+        
+        original_answer_phrases = self.generate_sub_phrases(self.answer)
 
         class SearchPhrase(BaseModel):
             search_phrase: str = Field(
@@ -291,15 +324,11 @@ class SearchField(PageComponent):
             response_format=SearchPhrases,
         )
         if search_phrases_found:
-            self._search_phrases = [
+            original_answer_phrases = original_answer_phrases + [
                 phrase.search_phrase for phrase in search_phrases.search_phrases
             ]
-        else:
-            answer_parts = self.answer.split(" ")
-            self._search_phrases = [
-                " ".join(answer_parts[: len(answer_parts) - i])
-                for i in range(len(answer_parts))
-            ]
+        
+        self._search_phrases = list(dict.fromkeys(original_answer_phrases))
 
         return self._search_phrases
 
