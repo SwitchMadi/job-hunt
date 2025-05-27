@@ -155,10 +155,12 @@ class EducationSection(PageComponent):
             f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title} at a "
             f"company called {self.parent_application_page.parent_job.company}.\n"
             f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
-            f"Current page has UI elements to add candidate's education qualification. It has either 1st or both of "
+            f"Current page has UI elements to add candidate's education qualification. It has either or all of "
             f"the following elements on the current page -\n"
             f"1. Empty fields to start adding education qualification details like college, degree etc.\n"
-            f"2. A button to start adding new eduction qualification.\n"
+            f"2. A button to save the current education qualification which would have been added via fields found in the element 1.\n"
+            f"3. A button to start adding new / another education qualification. Don't consufe yourself between button to save current"
+            f" education qualification and button start adding new / another education qualification.\n\n"
             f"I have already added {self.identified_educations_count} education qualifications and I am going to fill "
             f"in education qualification number {self.identified_educations_count + 1}. Give me XPath details about "
             f"education qualification section number {self.identified_educations_count + 1} only. There are following "
@@ -183,12 +185,15 @@ class EducationSection(PageComponent):
             )
 
         class EducationSectionFields(BaseModel):
-            add_education_x_path: Optional[str] = Field(
-                ..., description="XPath of button to add new education qualification"
-            )
             education_fields: List[EducationFieldInfo] = Field(
                 ...,
                 description="Fields to start adding education qualification details like college, degree etc.",
+            )
+            save_current_education_x_path: Optional[str] = Field(
+                ..., description="XPath of button to save the current education qualification"
+            )
+            add_another_education_x_path: Optional[str] = Field(
+                ..., description="XPath of button to add another education qualification"
             )
 
         fields_found, fields = get_gpt_response(
@@ -206,17 +211,25 @@ class EducationSection(PageComponent):
                     component.x_path = field.field_x_path
 
                     education_fields.append(component)
+                
+                if fields.save_current_education_x_path:
+                    save_current_education_button = Button(
+                        x_path=fields.save_current_education_x_path,
+                        button_type="save_current_education_qualification",
+                        parent_application_page=self.parent_application_page,
+                    )
 
                 curr_node = Education(
                     education_fields=education_fields,
+                    save_button=save_current_education_button if fields.save_current_education_x_path else None,
                     education_no=self.identified_educations_count + 1,
                     parent_application_page=self.parent_application_page,
                 )
                 self._update_nodes(curr_node)
 
-            if fields.add_education_x_path:
+            if fields.add_another_education_x_path:
                 add_education_qualification_button = Button(
-                    x_path=fields.add_education_x_path,
+                    x_path=fields.add_another_education_x_path,
                     button_type="add_another_education_qualification",
                     parent_application_page=self.parent_application_page,
                 )
@@ -257,13 +270,15 @@ class EducationSection(PageComponent):
             f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title} at a "
             f"company called {self.parent_application_page.parent_job.company}.\n"
             f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
-            f"Current page has UI elements to add candidate's education qualification. It has either or both of the "
+            f"Current page has UI elements to add candidate's education qualification. It has either or all of the "
             f"following elements on the current page -\n"
             f"1. Strictly interactive fields to start adding education qualification details like college, degree etc. "
             f"This maybe possible that fields strictly related to education qualification are not present on the page, "
             f"in that case don't return any field details. Don't confuse yourself between personal and education "
             f"qualification fields.\n"
-            f"2. A button to start adding new education qualification.\n\n"
+            f"2. A button to save the current education qualification which would have been added via fields found in the element 1.\n"
+            f"3. A button to start adding new / another education qualification. Don't consufe yourself between button to save current"
+            f" education qualification and button start adding new / another education qualification.\n\n"
             f"{observed_elements_prompt}"
             f"Carefully analyse whole HTML and find out whether only one of the above two elements are present on the "
             f"page OR both are present. STRICTLY IGNORE all fields which are not related to candidate's education "
@@ -297,9 +312,6 @@ class EducationSection(PageComponent):
             )
 
         class EducationSectionFields(BaseModel):
-            add_education_x_path: Optional[str] = Field(
-                ..., description="XPath of button to add new education qualification"
-            )
             education_fields_present: bool = Field(
                 ...,
                 description="Whether INTERACTIVE fields strictly related to education qualification are already present on the page"
@@ -308,6 +320,12 @@ class EducationSection(PageComponent):
             education_fields: Optional[List[EducationFieldInfo]] = Field(
                 ...,
                 description="Fields to add education qualification details like college, degree etc.",
+            )
+            save_current_education_x_path: Optional[str] = Field(
+                ..., description="XPath of button to save the current education qualification"
+            )
+            add_new_education_x_path: Optional[str] = Field(
+                ..., description="XPath of button to add new / another education qualification"
             )
 
         fields_found, fields = get_gpt_response(
@@ -345,24 +363,32 @@ class EducationSection(PageComponent):
                     if application_field_component:
                         education_fields.append(application_field_component)
 
+                if fields.save_current_education_x_path:
+                    save_current_education_button = Button(
+                        x_path=fields.save_current_education_x_path,
+                        button_type="save_current_education_qualification",
+                        parent_application_page=self.parent_application_page,
+                    )
+
                 if education_fields:
                     curr_node = Education(
                         education_fields=education_fields,
+                        save_button=save_current_education_button if fields.save_current_education_x_path else None,
                         education_no=self.identified_educations_count + 1,
                         parent_application_page=self.parent_application_page,
                     )
                     self._update_nodes(curr_node)
 
-            if fields.add_education_x_path:
-                add_education_button = Button(
-                    x_path=fields.add_education_x_path,
+            if fields.add_new_education_x_path:
+                add_new_education_x_path = Button(
+                    x_path=fields.add_new_education_x_path,
                     button_type="add_another_education_qualification",
                     parent_application_page=self.parent_application_page,
                 )
-                self._update_nodes(add_education_button)
+                self._update_nodes(add_new_education_x_path)
 
                 if not curr_node:
-                    curr_node = add_education_button
+                    curr_node = add_new_education_x_path
 
             if curr_node:
                 return curr_node
@@ -407,8 +433,9 @@ class EducationSection(PageComponent):
 
 
 class Education(PageComponent):
-    def __init__(self, education_fields, education_no, parent_application_page):
+    def __init__(self, education_fields, save_button, education_no, parent_application_page):
         self.education_fields = education_fields
+        self.save_button = save_button
         self.education_no = education_no
         self.parent_application_page = parent_application_page
 
@@ -433,11 +460,15 @@ class Education(PageComponent):
 
             field.question = question_backup
             field.category = category_backup
+        
+        if self.save_button:
+            self.save_button.proceed()
 
     def to_dict(self):
         return {
             "class": self.__class__.__name__,
             "education_fields": [field.to_dict() for field in self.education_fields],
+            "save_button": self.save_button.to_dict() if self.save_button else None,
             "education_no": self.education_no,
             "next": self.next.to_dict() if self.next else None,
         }
@@ -451,9 +482,19 @@ class Education(PageComponent):
             )
             field = field_class.from_dict(field_input_dict, parent_application_page)
             fields.append(field)
+        
+        save_button = None
+        if input_dict["save_button"]:
+            button_class = get_page_component_class_name(
+                class_name=input_dict["save_button"]["class"]
+            )
+            save_button = button_class.from_dict(
+                input_dict["save_button"], parent_application_page
+            )
 
         instance = cls(
             education_fields=fields,
+            save_button=save_button,
             education_no=input_dict["education_no"],
             parent_application_page=parent_application_page,
         )
