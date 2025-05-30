@@ -984,13 +984,11 @@ class ApplicationPage:
         application_field_component.proceed()
         self._update_steps(application_field_component)
 
-    @retry()
     def _identify_work_experience_section(self):
         work_experience_section = WorkExperienceSection(parent_application_page=self)
         work_experience_section.proceed()
         self._update_steps(work_experience_section)
 
-    @retry()
     def _identify_education_section(self):
         education_section = EducationSection(parent_application_page=self)
         education_section.proceed()

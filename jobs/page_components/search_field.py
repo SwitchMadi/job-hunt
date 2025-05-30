@@ -258,14 +258,14 @@ class SearchField(PageComponent):
 
     @staticmethod
     def generate_sub_phrases(phrase):
-        stopwords = {'an', 'a', 'the', 'of', 'in', 'on', 'at', 'by', 'for', 'with'}
-        punctuation = {',', '.', '-', '–', '—'}
+        stopwords = {"an", "a", "the", "of", "in", "on", "at", "by", "for", "with"}
+        punctuation = {",", ".", "-", "–", "—"}
 
         def is_noise(token):
             return token.lower() in stopwords or token in punctuation
 
         # Tokenize: keep words and punctuation as separate tokens
-        tokens = re.findall(r'\b\w+\b|[^\w\s]', phrase)
+        tokens = re.findall(r"\b\w+\b|[^\w\s]", phrase)
 
         results = set()
         for i in range(len(tokens)):
@@ -290,7 +290,7 @@ class SearchField(PageComponent):
     def search_phrases(self):
         if self._search_phrases:
             return self._search_phrases
-        
+
         original_answer_phrases = self.generate_sub_phrases(self.answer)
 
         class SearchPhrase(BaseModel):
@@ -327,7 +327,7 @@ class SearchField(PageComponent):
             original_answer_phrases = original_answer_phrases + [
                 phrase.search_phrase for phrase in search_phrases.search_phrases
             ]
-        
+
         self._search_phrases = list(dict.fromkeys(original_answer_phrases))
 
         return self._search_phrases

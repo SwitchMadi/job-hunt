@@ -137,11 +137,17 @@ class ApplicationField:
             )
 
         class ApplicationFieldInfo(BaseModel):
-            x_path: str = Field(
+            x_path: Optional[str] = Field(
                 ...,
                 description="XPath of the application field which can be used in selenium chrome driver to search the "
                 "application field. Don't use HTML hierarchy to construct XPath. XPath of the first field "
                 "if there are many.",
+            )
+            is_field_match_confident: bool = Field(
+                ...,
+                description="Very carefully assess whether the extracted x_path element matches with the given title and category with great"
+                " confidence or not. If true then field is correct and should be used. If false then extracted field info "
+                "is not reliable enough and should not be used. Be very strict for assessing the confidence.",
             )
             field_type: FieldType = Field(
                 ...,
@@ -167,6 +173,13 @@ class ApplicationField:
             response_format=ApplicationFieldInfo,
         )
         if application_field_found:
+            if not application_field.is_field_match_confident:
+                logger.warn(
+                    f"Field match is not confident for {self.title} & {self.category} in "
+                    f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+                )
+                return None
+
             if not element_exists(application_field.x_path):
                 if not retry:
                     return self._identify_x_path(
@@ -279,6 +292,7 @@ class ApplicationField:
                     options=self.options,
                     parent_application_page=self.parent_application_page,
                 )
+
             return None
         else:
             logger.warn(
@@ -727,3 +741,40 @@ class ApplicationField:
                 f"Couldn't extract field answer for {job_title}. URL - {job_url}"
             )
             return None, False
+
+    @classmethod
+    def extract_correct_x_path(cls, prev_x_path, prompt, job_title, job_url):
+        global driver
+
+        user_prompt = (
+            f"Following HTML page is job application webpage for {job_title}. "
+            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
+            f"In my another GPT call you gave following x_path for a field but when I tried to find the element using "
+            f"that x_path, it couldn't be found. So, find correct x_path for the same field. After finding correct "
+            f"x_path, try to assess yourself if the x_path is correct or not. If it is not correct then try again to "
+            f"find the correct x_path.\n"
+            f"Previous x_path - {prev_x_path}\n"
+            f"{prompt}\n"
+        )
+
+        class CorrectXPath(BaseModel):
+            possible_x_paths: List[str] = Field(
+                ...,
+                description="5 Possible correct XPaths of the element which can be used in selenium chrome driver to "
+                "search the element.",
+            )
+
+        correct_x_path_found, correct_x_path = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=CorrectXPath,
+        )
+        if correct_x_path_found:
+            for x_path in correct_x_path.possible_x_paths:
+                if element_exists(x_path):
+                    return x_path
+
+        logger.error(
+            f"Correct x_path couldn't be found for {job_title}. URL - {job_url}"
+        )
+        return None
