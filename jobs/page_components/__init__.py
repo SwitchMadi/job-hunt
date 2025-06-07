@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from selenium.webdriver.common.by import By
+import re
 from pydantic import BaseModel, Field
 from enum import Enum
 from typing import Optional, List
@@ -21,7 +21,7 @@ from utilities.selenium import (
     get_element_xpath,
 )
 from utilities.logging import get_logger
-from utilities import pascal_to_snake_casing
+from utilities import pascal_to_snake_casing, retry
 from utilities import constants
 from utilities.gpt import get_gpt_response
 
@@ -180,8 +180,14 @@ class ApplicationField:
                 )
                 return None
 
-            if not element_exists(application_field.x_path):
+            if (
+                application_field.field_type.value != "date_field"
+            ) and not element_exists(application_field.x_path):
                 if not retry:
+                    logger.warn(
+                        f"Element with x_path {application_field.x_path} doesn't exist for "
+                        f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+                    )
                     return self._identify_x_path(
                         retry=True, prev_x_path=application_field.x_path
                     )
@@ -218,17 +224,17 @@ class ApplicationField:
         if not self.x_path:
             self._identify_x_path()
 
+        if self.field_type == "date_field":
+            from jobs.page_components.date_field import DateField
+
+            return DateField(
+                title=self.title,
+                question=self.question,
+                category=self.category,
+                parent_application_page=self.parent_application_page,
+            )
+
         if self.x_path:
-            if self.field_type == "date_field":
-                from jobs.page_components.date_field import DateField
-
-                return DateField(
-                    title=self.title,
-                    question=self.question,
-                    category=self.category,
-                    parent_application_page=self.parent_application_page,
-                )
-
             self.html_type, container_x_path = (
                 ApplicationField.revalidate_component_type(
                     x_path=self.x_path,
@@ -311,7 +317,7 @@ class ApplicationField:
             if is_search_field:
                 return "search_field", None
 
-            simulate_empty_area_click()
+            simulate_empty_area_click(text_to_click=field_title)
 
             start_dom_mutation_observer()
 
@@ -385,89 +391,97 @@ class ApplicationField:
             return user.city
         elif field_category == "state":
             return user.state
-        elif "_job_title__" in field_category:
+        elif "_job_title__" in field_category and re.search(r"\d$", field_category):
             entry_no = int(field_category.split("__")[-1])
             info = user.parsed_resume.get("work_experience", [])
             if entry_no < len(info):
                 info = info[entry_no - 1]
                 return info.get("job_title")
-        elif "_company_name__" in field_category:
+        elif "_company_name__" in field_category and re.search(r"\d$", field_category):
             entry_no = int(field_category.split("__")[-1])
             info = user.parsed_resume.get("work_experience", [])
             if entry_no < len(info):
                 info = info[entry_no - 1]
                 return info.get("company_name")
-        elif "_location__" in field_category:
+        elif "_location__" in field_category and re.search(r"\d$", field_category):
             entry_no = int(field_category.split("__")[-1])
             category = field_category.split("__")[0]
             info = user.parsed_resume.get(category, [])
             if entry_no < len(info):
                 info = info[entry_no - 1]
                 return info.get("location")
-        elif "_start_date__" in field_category:
+        elif "_start_date__" in field_category and re.search(r"\d$", field_category):
             entry_no = int(field_category.split("__")[-1])
             category = field_category.split("__")[0]
             info = user.parsed_resume.get(category, [])
             if entry_no < len(info):
                 info = info[entry_no - 1]
                 return info.get("start_date")
-        elif "_end_date__" in field_category:
+        elif "_end_date__" in field_category and re.search(r"\d$", field_category):
             entry_no = int(field_category.split("__")[-1])
             category = field_category.split("__")[0]
             info = user.parsed_resume.get(category, [])
             if entry_no < len(info):
                 info = info[entry_no - 1]
                 return info.get("end_date")
-        elif "_responsibilities__" in field_category:
+        elif "_responsibilities__" in field_category and re.search(
+            r"\d$", field_category
+        ):
             entry_no = int(field_category.split("__")[-1])
             info = user.parsed_resume.get("work_experience", [])
             if entry_no < len(info):
                 info = info[entry_no - 1]
                 return info.get("responsibilities")
-        elif "_achievements__" in field_category:
+        elif "_achievements__" in field_category and re.search(r"\d$", field_category):
             entry_no = int(field_category.split("__")[-1])
             info = user.parsed_resume.get("work_experience", [])
             if entry_no < len(info):
                 info = info[entry_no - 1]
                 return info.get("achievements")
-        elif "_experience_related_url__" in field_category:
+        elif "_experience_related_url__" in field_category and re.search(
+            r"\d$", field_category
+        ):
             entry_no = int(field_category.split("__")[-1])
             info = user.parsed_resume.get("work_experience", [])
             if entry_no < len(info):
                 info = info[entry_no - 1]
                 return info.get("experience_related_url")
-        elif "_industry__" in field_category:
+        elif "_industry__" in field_category and re.search(r"\d$", field_category):
             entry_no = int(field_category.split("__")[-1])
             info = user.parsed_resume.get("work_experience", [])
             if entry_no < len(info):
                 info = info[entry_no - 1]
                 return info.get("industry")
-        elif "_employment_type__" in field_category:
+        elif "_employment_type__" in field_category and re.search(
+            r"\d$", field_category
+        ):
             entry_no = int(field_category.split("__")[-1])
             info = user.parsed_resume.get("work_experience", [])
             if entry_no < len(info):
                 info = info[entry_no - 1]
                 return info.get("employment_type")
-        elif "_degree__" in field_category:
+        elif "_degree__" in field_category and re.search(r"\d$", field_category):
             entry_no = int(field_category.split("__")[-1])
             info = user.parsed_resume.get("education", [])
             if entry_no < len(info):
                 info = info[entry_no - 1]
                 return info.get("degree")
-        elif "_details__" in field_category:
+        elif "_details__" in field_category and re.search(r"\d$", field_category):
             entry_no = int(field_category.split("__")[-1])
             category = field_category.split("__")[0]
             info = user.parsed_resume.get(category, [])
             if entry_no < len(info):
                 info = info[entry_no - 1]
                 return info.get("details")
-        elif "_institution__" in field_category:
+        elif "_institution__" in field_category and re.search(r"\d$", field_category):
             entry_no = int(field_category.split("__")[-1])
             info = user.parsed_resume.get("education", [])
             if entry_no < len(info):
                 info = info[entry_no - 1]
                 return info.get("institution")
-        elif "_field_of_study__" in field_category:
+        elif "_field_of_study__" in field_category and re.search(
+            r"\d$", field_category
+        ):
             entry_no = int(field_category.split("__")[-1])
             info = user.parsed_resume.get("education", [])
             if entry_no < len(info):
@@ -760,8 +774,9 @@ class ApplicationField:
         class CorrectXPath(BaseModel):
             possible_x_paths: List[str] = Field(
                 ...,
-                description="5 Possible correct XPaths of the element which can be used in selenium chrome driver to "
-                "search the element.",
+                description="10 Possible correct XPaths of the element which can be used in selenium chrome driver to "
+                "search the element. Try to give short & simple XPaths which point to desired element. Avoid long "
+                "ancestor chains, multiple contains(@class,…) filters, or deep nesting because long XPaths can be brittle.",
             )
 
         correct_x_path_found, correct_x_path = get_gpt_response(

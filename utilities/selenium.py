@@ -449,7 +449,7 @@ def get_xpath_by_text(text):
     return xpath
 
 
-def simulate_empty_area_click():
+def simulate_empty_area_click(text_to_click=None):
     global driver
 
     # Step 1: Inject temporary element
@@ -502,6 +502,20 @@ def simulate_empty_area_click():
     driver.execute_script(js_remove)
 
     ActionChains(driver).send_keys(Keys.ESCAPE).perform()
+
+    if text_to_click:
+        # If text is provided, click on the element with that text to bring back focus
+        try:
+            xpath = get_xpath_by_text(text_to_click)
+            if type(xpath) is not str:
+                logging.warning(
+                    f"XPath for text '{text_to_click}' is not a string: {xpath}"
+                )
+                return
+            element = driver.find_element(By.XPATH, xpath)
+            element.click()
+        except (NoSuchElementException, InvalidSelectorException):
+            logging.warning(f"Element with text '{text_to_click}' not found.")
 
     return
 

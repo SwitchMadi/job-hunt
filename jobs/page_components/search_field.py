@@ -130,6 +130,7 @@ class SearchField(PageComponent):
                 element.answer = input_key
 
                 if not self.options_container_x_path:
+                    simulate_empty_area_click(text_to_click=self.title)
                     start_dom_mutation_observer()
                     element.proceed()
                     time.sleep(2)

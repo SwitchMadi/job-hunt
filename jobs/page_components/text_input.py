@@ -44,6 +44,7 @@ class TextInput(PageComponent):
     def proceed(self, retry=False):
         global driver
 
+        answer_input_successful = False
         try:
             if not element_has_area(self.x_path):
                 logger.warn(
@@ -59,10 +60,10 @@ class TextInput(PageComponent):
                         f"{vars(self)}"
                     )
                     self.is_component_functional = False
-                    return
+                    return answer_input_successful
 
             if not self.answer:
-                return
+                return answer_input_successful
 
             if (self.category != "otp_textbox") and not self.category.endswith(
                 ("- month", "- day", "- year")
@@ -75,10 +76,10 @@ class TextInput(PageComponent):
                 for letter in str(self.answer):
                     active_element = driver.switch_to.active_element
                     active_element.send_keys(f"{letter}")
+                answer_input_successful = True
             else:
                 try:
                     element.send_keys(self.answer)
-
                 except ElementNotInteractableException:
                     logger.warn(
                         f"Element not interactable in class TextInput's proceed method.\n"
@@ -88,23 +89,30 @@ class TextInput(PageComponent):
 
                 # Force check and set value if needed
                 actual_value = element.get_attribute("value") or element.text or ""
-                if (
-                    actual_value.strip().lower() != str(self.answer).strip().lower()
-                ) and not self.category.endswith(("- month", "- day", "- year")):
+                answer_input_successful = (
+                    actual_value.strip().lower() == str(self.answer).strip().lower()
+                )
+                if not answer_input_successful and not self.category.endswith(
+                    ("- month", "- day", "- year")
+                ):
                     active_element = driver.switch_to.active_element
                     active_element.send_keys(self.answer)
 
-                # Force check and set value if needed
-                actual_value = element.get_attribute("value") or element.text or ""
-                if actual_value.strip().lower() != str(self.answer).strip().lower():
-                    # Force set using JavaScript if value doesn't match
-                    driver.execute_script(
-                        "arguments[0].value = arguments[1]; "
-                        "arguments[0].dispatchEvent(new Event('input', { bubbles: true })); "
-                        "arguments[0].dispatchEvent(new Event('change', { bubbles: true }));",
-                        element,
-                        str(self.answer),
+                if not answer_input_successful:
+                    # Force check and set value if needed
+                    actual_value = element.get_attribute("value") or element.text or ""
+                    answer_input_successful = (
+                        actual_value.strip().lower() == str(self.answer).strip().lower()
                     )
+                    if not answer_input_successful:
+                        # Force set using JavaScript if value doesn't match
+                        driver.execute_script(
+                            "arguments[0].value = arguments[1]; "
+                            "arguments[0].dispatchEvent(new Event('input', { bubbles: true })); "
+                            "arguments[0].dispatchEvent(new Event('change', { bubbles: true }));",
+                            element,
+                            str(self.answer),
+                        )
 
             if self.hit_enter:
                 element.send_keys(Keys.RETURN)
@@ -116,7 +124,7 @@ class TextInput(PageComponent):
             )
             raise e
 
-        return
+        return answer_input_successful
 
     def to_dict(self):
         return {

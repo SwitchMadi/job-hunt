@@ -221,8 +221,7 @@ class EducationSection(PageComponent):
                     description="Identify the text of the button that finalizes or saves the current education "
                     "qualification input. This button is typically labeled with terms like 'Done', 'Save', "
                     "'Complete', 'Confirm' etc. Think of similar texts which can be used to suggestion "
-                    "finalization of education qualification input. It can also be a symbol like + etc. It "
-                    "should only be considered if interactive_education_fields_visible is true. Focus on "
+                    "finalization of education qualification input. It can also be a symbol like + etc. Focus on "
                     "buttons whose action logically concludes the process of entering education details. "
                     "It may or may not be present.",
                 )
@@ -231,8 +230,7 @@ class EducationSection(PageComponent):
                     description="Identify the XPath of the button that finalizes or saves the current education "
                     "qualification input. This button is typically labeled with terms like 'Done', 'Save', "
                     "'Complete', 'Confirm' etc. Think of similar texts which can be used to suggestion "
-                    "finalization of education qualification input. It can also be a symbol like + etc. It "
-                    "should only be considered if interactive_education_fields_visible is true. Focus on "
+                    "finalization of education qualification input. It can also be a symbol like + etc. Focus on "
                     "buttons whose action logically concludes the process of entering education details. "
                     "It may or may not be present.",
                 )
@@ -249,8 +247,7 @@ class EducationSection(PageComponent):
                     description="Identify the text of the button that finalizes or saves the current education "
                     "qualification input. This button is typically labeled with terms like 'Done', 'Save', "
                     "'Complete', 'Confirm' etc. Think of similar texts which can be used to suggestion "
-                    "finalization of education qualification input. It can also be a symbol like + etc. It "
-                    "should only be considered if interactive_education_fields_visible is true. Focus on "
+                    "finalization of education qualification input. It can also be a symbol like + etc. Focus on "
                     "buttons whose action logically concludes the process of entering education details. "
                     "It may or may not be present.",
                 )
@@ -259,8 +256,7 @@ class EducationSection(PageComponent):
                     description="Identify the XPath of the button that finalizes or saves the current education "
                     "qualification input. This button is typically labeled with terms like 'Done', 'Save', "
                     "'Complete', 'Confirm' etc. Think of similar texts which can be used to suggestion "
-                    "finalization of education qualification input. It can also be a symbol like + etc. It "
-                    "should only be considered if interactive_education_fields_visible is true. Focus on "
+                    "finalization of education qualification input. It can also be a symbol like + etc. Focus on "
                     "buttons whose action logically concludes the process of entering education details. "
                     "It may or may not be present.",
                 )
@@ -284,7 +280,7 @@ class EducationSection(PageComponent):
 
                 if invalid_x_paths and not retry:
                     # retry if we have invalid x_paths
-                    return self._identify_education_fields(
+                    return self._extract_known_education_fields_info(
                         observed_elements=observed_elements,
                         retry=True,
                         prev_x_paths=invalid_x_paths,
@@ -403,219 +399,242 @@ class EducationSection(PageComponent):
         else:
             observed_elements_prompt = ""
 
-        user_prompt = (
-            f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title} at a "
-            f"company called {self.parent_application_page.parent_job.company}.\n"
-            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
-            f"Current page has UI elements to add candidate's education qualification. It has either first or both or "
-            f"none of the following elements on the current page -\n"
-            f"1. Strictly interactive fields to fill education qualification details like college, degree, major etc. "
-            f"This maybe possible that fields strictly related to education qualification are not present on the page, "
-            f"in that case don't return any field details. Don't confuse yourself between personal and education "
-            f"qualification fields. Ignore add new / another education button while evaluating this point.\n"
-            f"2. A button to mark complete filling in current education qualification info. If 1st point is not valid "
-            f"(meaning already fields to enter education qualification is not present) then this button will also not "
-            f"be present.\n\n"
-            f"{observed_elements_prompt}"
-            f"Carefully analyse the {'relevant observed element' if observed_elements_prompt else 'whole HTML'} and find out "
-            f"whether only first or all are present and visible.\n"
-            f"1. STRICTLY IGNORE all fields which are not related to candidate's education qualification section.\n"
-            f"{'2. STRICTLY answer all queries and extract all info only from relevant observed element and nothing else.' if observed_elements_prompt else ''}"
+        interactive_education_fields_visible = (
+            self._are_interactive_education_fields_visible(observed_elements_prompt)
         )
-
-        class FieldCategory(Enum):
-            degree = "degree"
-            field_of_study = "field_of_study"
-            institution = "institution"
-            location = "location"
-            start_date = "start_date"
-            end_date = "end_date"
-            other = "other"
-
-        class EducationFieldInfo(BaseModel):
-            field_title: str = Field(
-                ...,
-                description="Education field's exact title / question mentioned on the webpage, without any "
-                "modification.",
-            )
-            field_question: Optional[str] = Field(
-                ...,
-                description="If field title on its own is not self explanatory then modify it so that it makes sense as"
-                " a question.",
-            )
-            field_category: FieldCategory = Field(
-                ...,
-                description="Education qualification field category like college, degree etc.",
+        if interactive_education_fields_visible:
+            user_prompt = (
+                f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title} at a "
+                f"company called {self.parent_application_page.parent_job.company}.\n"
+                f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
+                f"Current page has UI elements to add candidate's education qualification. It has either first or both or "
+                f"none of the following elements on the current page -\n"
+                f"1. Strictly interactive fields to fill education qualification details like college, degree, major etc. "
+                f"This maybe possible that fields strictly related to education qualification are not present on the page, "
+                f"in that case don't return any field details. Don't confuse yourself between personal and education "
+                f"qualification fields. Ignore add new / another education button while evaluating this point.\n"
+                f"2. A button to mark complete filling in current education qualification info. If 1st point is not valid "
+                f"(meaning already fields to enter education qualification is not present) then this button will also not "
+                f"be present.\n\n"
+                f"{observed_elements_prompt}"
+                f"Carefully analyse the {'relevant observed element' if observed_elements_prompt else 'whole HTML'} and find out "
+                f"whether only first or all are present and visible.\n"
+                f"1. STRICTLY IGNORE all fields which are not related to candidate's education qualification section.\n"
+                f"{'2. STRICTLY answer all queries and extract all info only from relevant observed element and nothing else.' if observed_elements_prompt else ''}"
             )
 
-        if observed_elements_prompt:
+            class FieldCategory(Enum):
+                degree = "degree"
+                field_of_study = "field_of_study"
+                institution = "institution"
+                location = "location"
+                start_date = "start_date"
+                end_date = "end_date"
+                other = "other"
 
-            class EducationSectionFields(BaseModel):
-                observed_element_number: int = Field(
+            class EducationFieldInfo(BaseModel):
+                field_title: str = Field(
                     ...,
-                    description="Number of the observed element which is strictly having interactive education "
-                    "qualification fields.",
+                    description="Education field's exact title / question mentioned on the webpage, without any "
+                    "modification.",
                 )
-                interactive_education_fields_visible: bool = Field(
+                field_question: Optional[str] = Field(
                     ...,
-                    description="Determine whether interactive fields *specifically* related to education qualifications are currently "
-                    "**present and clearly visible** on the page.\n"
-                    "- **Strictly IGNORE** the presence of an any add Education qualification button.\n"
-                    "- Your assessment must be **based solely on the actual visibility of interactive input fields**, "
-                    "not on page instructions or labels.",
+                    description="If field title on its own is not self explanatory then modify it so that it makes sense as"
+                    " a question.",
                 )
-                education_fields: Optional[List[EducationFieldInfo]] = Field(
+                field_category: FieldCategory = Field(
                     ...,
-                    description="Strictly interactive & clearly visible fields to add education qualification details "
-                    "like college, degree etc.",
-                )
-                mark_complete_button_text: Optional[str] = Field(
-                    ...,
-                    description="Identify the text of the button that finalizes or saves the current education "
-                    "qualification input. This button is typically labeled with terms like 'Done', 'Save', "
-                    "'Complete', 'Confirm' etc. Think of similar texts which can be used to suggestion "
-                    "finalization of education qualification input. It can also be a symbol like + etc. It "
-                    "should only be considered if interactive_education_fields_visible is true. Focus on "
-                    "buttons whose action logically concludes the process of entering education details. "
-                    "It may or may not be present. Don't confuse yourself with button to finish / submit "
-                    "job application itself.",
-                )
-                mark_complete_button_x_path: Optional[str] = Field(
-                    ...,
-                    description="Identify the XPath of the button that finalizes or saves the current education "
-                    "qualification input. This button is typically labeled with terms like 'Done', 'Save', "
-                    "'Complete', 'Confirm' etc. Think of similar texts which can be used to suggestion "
-                    "finalization of education qualification input. It can also be a symbol like + etc. It "
-                    "should only be considered if interactive_education_fields_visible is true. Focus on "
-                    "buttons whose action logically concludes the process of entering education details. "
-                    "It may or may not be present. Don't confuse yourself with button to finish / submit "
-                    "job application itself.",
+                    description="Education qualification field category like college, degree etc.",
                 )
 
-        else:
+            if observed_elements_prompt:
 
-            class EducationSectionFields(BaseModel):
-                interactive_education_fields_visible: bool = Field(
-                    ...,
-                    description="Determine whether interactive fields *specifically* related to education qualifications are currently "
-                    "**present and clearly visible** on the page.\n"
-                    "- **Strictly IGNORE** the presence of any add education qualification button.\n"
-                    "- Your assessment must be **based solely on the actual visibility of interactive educational input fields**, "
-                    "not on page instructions or labels.",
-                )
-                proof_of_education_fields_present: Optional[str] = Field(
-                    None,
-                    description="If interactive and visible education fields are present then give proof of that.",
-                )
-                education_fields: Optional[List[EducationFieldInfo]] = Field(
-                    ...,
-                    description="Strictly interactive & clearly visible fields to add education qualification details "
-                    "like college, degree etc.",
-                )
-                mark_complete_button_text: Optional[str] = Field(
-                    ...,
-                    description="Identify the text of the button that finalizes or saves the current education "
-                    "qualification input. This button is typically labeled with terms like 'Done', 'Save', "
-                    "'Complete', 'Confirm' etc. Think of similar texts which can be used to suggestion "
-                    "finalization of education qualification input. It can also be a symbol like + etc. It "
-                    "should only be considered if interactive_education_fields_visible is true. Focus on "
-                    "buttons whose action logically concludes the process of entering education details. "
-                    "It may or may not be present. Don't confuse yourself with button to finish / submit "
-                    "job application itself.",
-                )
-                mark_complete_button_x_path: Optional[str] = Field(
-                    ...,
-                    description="Identify the XPath of the button that finalizes or saves the current education "
-                    "qualification input. This button is typically labeled with terms like 'Done', 'Save', "
-                    "'Complete', 'Confirm' etc. Think of similar texts which can be used to suggestion "
-                    "finalization of education qualification input. It can also be a symbol like + etc. It "
-                    "should only be considered if interactive_education_fields_visible is true. Focus on "
-                    "buttons whose action logically concludes the process of entering education details. "
-                    "It may or may not be present. Don't confuse yourself with button to finish / submit "
-                    "job application itself.",
-                )
-
-        fields_found, fields = get_gpt_response(
-            constants.gpt["system_prompts"]["application_step_identification"],
-            user_prompt,
-            response_format=EducationSectionFields,
-        )
-        if fields_found:
-            curr_node = None
-
-            if fields.interactive_education_fields_visible and fields.education_fields:
-                if fields.mark_complete_button_x_path and not element_exists(
-                    fields.mark_complete_button_x_path
-                ):
-                    prompt = (
-                        "The x_path that we are trying to extract is of mark complete button which is used to mark"
-                        " current education qualification as complete."
+                class EducationSectionFields(BaseModel):
+                    observed_element_number: int = Field(
+                        ...,
+                        description="Number of the observed element which is strictly having interactive education "
+                        "qualification fields.",
                     )
-                    fields.mark_complete_button_x_path = (
-                        ApplicationField.extract_correct_x_path(
-                            prev_x_path=fields.mark_complete_button_x_path,
-                            prompt=prompt,
-                            job_title=self.parent_application_page.parent_job.title,
-                            job_url=self.parent_application_page.url,
-                        )
+                    education_fields: Optional[List[EducationFieldInfo]] = Field(
+                        ...,
+                        description="Strictly interactive & clearly visible fields to add education qualification details "
+                        "like college, degree etc.",
                     )
-                    if not fields.mark_complete_button_x_path:
-                        raise Exception(
-                            "Couldn't extract valid x_path for mark complete button."
+                    mark_complete_button_text: Optional[str] = Field(
+                        ...,
+                        description="Identify the text of the button that finalizes or saves the current education "
+                        "qualification input. This button is typically labeled with terms like 'Done', 'Save', "
+                        "'Complete', 'Confirm' etc. Think of similar texts which can be used to suggestion "
+                        "finalization of education qualification input. It can also be a symbol like + etc. Focus on "
+                        "buttons whose action logically concludes the process of entering education details. "
+                        "It may or may not be present. Don't confuse yourself with button to finish / submit "
+                        "job application itself.",
+                    )
+                    mark_complete_button_x_path: Optional[str] = Field(
+                        ...,
+                        description="Identify the XPath of the button that finalizes or saves the current education "
+                        "qualification input. This button is typically labeled with terms like 'Done', 'Save', "
+                        "'Complete', 'Confirm' etc. Think of similar texts which can be used to suggestion "
+                        "finalization of education qualification input. It can also be a symbol like + etc. Focus on "
+                        "buttons whose action logically concludes the process of entering education details. "
+                        "It may or may not be present. Don't confuse yourself with button to finish / submit "
+                        "job application itself.",
+                    )
+
+            else:
+
+                class EducationSectionFields(BaseModel):
+                    proof_of_education_fields_present: Optional[str] = Field(
+                        None,
+                        description="If interactive and visible education fields are present then give proof of that.",
+                    )
+                    education_fields: Optional[List[EducationFieldInfo]] = Field(
+                        ...,
+                        description="Strictly interactive & clearly visible fields to add education qualification details "
+                        "like college, degree etc.",
+                    )
+                    mark_complete_button_text: Optional[str] = Field(
+                        ...,
+                        description="Identify the text of the button that finalizes or saves the current education "
+                        "qualification input. This button is typically labeled with terms like 'Done', 'Save', "
+                        "'Complete', 'Confirm' etc. Think of similar texts which can be used to suggestion "
+                        "finalization of education qualification input. It can also be a symbol like + etc. Focus on "
+                        "buttons whose action logically concludes the process of entering education details. "
+                        "It may or may not be present. Don't confuse yourself with button to finish / submit "
+                        "job application itself.",
+                    )
+                    mark_complete_button_x_path: Optional[str] = Field(
+                        ...,
+                        description="Identify the XPath of the button that finalizes or saves the current education "
+                        "qualification input. This button is typically labeled with terms like 'Done', 'Save', "
+                        "'Complete', 'Confirm' etc. Think of similar texts which can be used to suggestion "
+                        "finalization of education qualification input. It can also be a symbol like + etc. Focus on "
+                        "buttons whose action logically concludes the process of entering education details. "
+                        "It may or may not be present. Don't confuse yourself with button to finish / submit "
+                        "job application itself.",
+                    )
+
+            fields_found, fields = get_gpt_response(
+                constants.gpt["system_prompts"]["application_step_identification"],
+                user_prompt,
+                response_format=EducationSectionFields,
+            )
+            if fields_found:
+                curr_node = None
+
+                if fields.education_fields:
+                    if fields.mark_complete_button_x_path and not element_exists(
+                        fields.mark_complete_button_x_path
+                    ):
+                        prompt = (
+                            "The x_path that we are trying to extract is of mark complete button which is used to mark"
+                            " current education qualification as complete."
                         )
+                        fields.mark_complete_button_x_path = (
+                            ApplicationField.extract_correct_x_path(
+                                prev_x_path=fields.mark_complete_button_x_path,
+                                prompt=prompt,
+                                job_title=self.parent_application_page.parent_job.title,
+                                job_url=self.parent_application_page.url,
+                            )
+                        )
+                        if not fields.mark_complete_button_x_path:
+                            raise Exception(
+                                "Couldn't extract valid x_path for mark complete button."
+                            )
 
-                education_fields = []
-                for field in fields.education_fields:
-                    if field.field_category.value in ["start_date", "end_date"]:
-                        from jobs.page_components.date_field import DateField
+                    education_fields = []
+                    for field in fields.education_fields:
+                        if field.field_category.value in ["start_date", "end_date"]:
+                            from jobs.page_components.date_field import DateField
 
-                        application_field_component = DateField(
-                            title=field.field_title,
-                            question=field.field_question,
-                            category=field.field_category.value,
+                            application_field_component = DateField(
+                                title=field.field_title,
+                                question=field.field_question,
+                                category=field.field_category.value,
+                                parent_application_page=self.parent_application_page,
+                                persist_context_fields=False,
+                            )
+                        else:
+                            application_field = ApplicationField(
+                                parent_application_page=self.parent_application_page,
+                                title=field.field_title,
+                                question=field.field_question,
+                                category=field.field_category.value,
+                            )
+                            application_field_component = (
+                                application_field.get_field_component()
+                            )
+
+                        if application_field_component:
+                            education_fields.append(application_field_component)
+
+                    if education_fields and fields.mark_complete_button_x_path:
+                        mark_complete_education_button = Button(
+                            x_path=fields.mark_complete_button_x_path,
+                            button_type="mark_complete_current_education",
                             parent_application_page=self.parent_application_page,
-                            persist_context_fields=False,
                         )
                     else:
-                        application_field = ApplicationField(
+                        mark_complete_education_button = None
+
+                    if education_fields:
+                        curr_node = Education(
+                            education_fields=education_fields,
+                            save_button=mark_complete_education_button,
+                            education_no=self.identified_educations_count + 1,
                             parent_application_page=self.parent_application_page,
-                            title=field.field_title,
-                            question=field.field_question,
-                            category=field.field_category.value,
                         )
-                        application_field_component = (
-                            application_field.get_field_component()
-                        )
+                        self._update_nodes(curr_node)
 
-                    if application_field_component:
-                        education_fields.append(application_field_component)
-
-                if fields.mark_complete_button_x_path:
-                    mark_complete_education_button = Button(
-                        x_path=fields.mark_complete_button_x_path,
-                        button_type="mark_complete_current_education",
-                        parent_application_page=self.parent_application_page,
-                    )
-                else:
-                    mark_complete_education_button = None
-
-                if education_fields:
-                    curr_node = Education(
-                        education_fields=education_fields,
-                        save_button=mark_complete_education_button,
-                        education_no=self.identified_educations_count + 1,
-                        parent_application_page=self.parent_application_page,
-                    )
-                    self._update_nodes(curr_node)
-
-            if curr_node:
-                return curr_node
+                if curr_node:
+                    return curr_node
 
         logger.warn(
             f"Couldn't extract education fields for {self.parent_application_page.parent_job.title}. "
             f"URL - {self.parent_application_page.url}"
         )
         return None
+
+    @staticmethod
+    def _are_interactive_education_fields_visible(observed_elements_prompt):
+        global driver
+
+        user_prompt = (
+            f"Following HTML page is job application webpage for Quantitative Engineering - Associate - Global Banking & Markets at a "
+            f"company called Goldman Sachs.\n"
+            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
+            f"{observed_elements_prompt}"
+            f"Current page may have following UI elements -\n"
+            f"1. Strictly interactive fields to fill education qualification details like college, degree, major etc. "
+            f"This maybe possible that fields strictly related to education qualification are not present on the page, "
+            f"in that case don't return any field details. Don't confuse yourself between personal and education "
+            f"qualification fields. Ignore add new / another education button while evaluating this point.\n"
+            f"Carefully analyse the whole HTML and find out "
+            f"whether only first or all are present and visible.\n"
+            f"1. STRICTLY IGNORE all fields which are not related to candidate's education qualification section.\n"
+        )
+
+        class EducationSectionInfo(BaseModel):
+            interactive_education_fields_visible: bool = Field(
+                ...,
+                description="Determine whether interactive fields *strictly* related to education qualifications are currently "
+                "**present and clearly visible** on the page.\n"
+                "- **Strictly IGNORE** the presence of any add education qualification button.\n"
+                "- Your assessment must be **based solely on the actual visibility of interactive educational input fields**, "
+                "not on page instructions or labels.",
+            )
+
+        info_found, info = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=EducationSectionInfo,
+        )
+        if info_found:
+            return info.interactive_education_fields_visible
+        else:
+            return False
 
     def to_dict(self):
         return {

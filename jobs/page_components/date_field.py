@@ -15,6 +15,7 @@ from utilities.selenium import (
     minify_html_for_gpt_prompt,
     is_stale,
     element_exists,
+    get_element_xpath,
 )
 from utilities import constants
 from utilities.gpt import get_gpt_response
@@ -46,11 +47,11 @@ class DateField(PageComponent):
         self.has_calendar_button = False
         self.has_separate_components = False
         self.components = {
-            "calendar": None,  # Will store: {'xpath': str, 'html_type': str, 'class_name': str}
-            "month": None,
-            "day": None,
-            "year": None,
-            "date": None,
+            "calendar": {},  # Will store: {'xpath': str, 'html_type': str, 'class_name': str}
+            "month": {},
+            "day": {},
+            "year": {},
+            "date": {},
         }
         self.date_format = None
         self.is_component_functional = False
@@ -75,7 +76,7 @@ class DateField(PageComponent):
         - Always calls simulate_empty_area_click() for cleanup
         """
         # Clean up any existing open widgets
-        simulate_empty_area_click()
+        simulate_empty_area_click(text_to_click=self.title)
 
         click_xpath = self.components.get("calendar", {}).get(
             "xpath"
@@ -91,27 +92,35 @@ class DateField(PageComponent):
 
         observed_elements = get_observed_elements()
         if observed_elements:
+            observed_elements_prompt = "\n".join(
+                f"{i + 1}. Element {i + 1} - {minify_html_for_gpt_prompt(el.get_attribute('outerHTML'))}"
+                for i, el in enumerate(observed_elements)
+                if not is_stale(el)
+            )
+            if not observed_elements_prompt.strip():
+                logger.debug("No elements observed after clicking date field.")
+                self.has_calendar_button = False
+                simulate_empty_area_click()
+                return None
+
             user_prompt = (
                 f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title}."
                 f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
                 f"When date field was clicked, following elements were observed -\n"
-                + "\n".join(
-                    f"{i + 1}. Element {i + 1} - {minify_html_for_gpt_prompt(el.get_attribute('outerHTML'))}"
-                    for i, el in enumerate(observed_elements)
-                    if not is_stale(el)
-                )
-                + f"\nIf these observed elements contain a calendar widget, then find XPath of date 27, which is "
+                f"{observed_elements_prompt}"
+                f"\nIf these observed elements contain a calendar widget, then find XPath of date 27, which is "
                 f"currently visible on the observed calendar that can be clicked."
             )
 
             class DateInfo(BaseModel):
                 has_calendar: bool = Field(
                     ...,
-                    description="Whether elements contain a calendar widget",
+                    description="Whether any of the observed elements represents an open calendar widget. Answer it "
+                    "strictly from the observed elements. Multiple numeric dates must exist in the calendar widget for it to be considered a calendar.",
                 )
                 date_xpath: Optional[str] = Field(
                     None,
-                    description="XPath of clickable date 27 if calendar exists",
+                    description="XPath of clickable date 27, if calendar exists, visible on the observed calendar.",
                 )
 
             if retry and prev_xpath:
@@ -138,7 +147,7 @@ class DateField(PageComponent):
                         logger.debug(
                             f"Date 27 xpath not found after retry: {date_info.date_xpath}"
                         )
-                        return
+                        return None
 
                 date_button = Button(
                     x_path=date_info.date_xpath,
@@ -158,8 +167,14 @@ class DateField(PageComponent):
                     self.input_method_details_identified = True
                     logger.debug(f"Successfully extracted date format: {field_value}")
                     return True
+            elif date_info_found and not date_info.has_calendar:
+                logger.debug(
+                    "No calendar widget found in observed elements after clicking date field."
+                )
+                self.has_calendar_button = False
 
         simulate_empty_area_click()
+        return False
 
     def _handle_separate_components(self):
         """Handle separate month/day/year components.
@@ -185,7 +200,7 @@ class DateField(PageComponent):
             if component:  # Only process if component exists
                 field = ApplicationField(
                     parent_application_page=self.parent_application_page,
-                    title=f"{self.title} - {component_type}",
+                    title=self.title,
                     question=f"{self.question}\nFinal question for us to answer is - What is {component_type} part of "
                     f"the date in question here?",
                     category=f"{self.category} - {component_type}",
@@ -240,6 +255,7 @@ class DateField(PageComponent):
                 f"on {self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
             )
 
+        date_input_successful = False
         # Proceed with filling the date field
         if self.date_format and self.components.get("date"):
             date_field = TextInput(
@@ -248,8 +264,9 @@ class DateField(PageComponent):
                 parent_application_page=self.parent_application_page,
             )
             date_field.answer = self.answer
-            date_field.proceed()
-        elif self.has_separate_components:
+            date_input_successful = date_field.proceed()
+
+        if self.has_separate_components:
             # Process each component
             for component_type, component in [
                 ("month", self.components.get("month")),
@@ -264,8 +281,6 @@ class DateField(PageComponent):
                             date_component=component_type,
                         )
                         component.answer = date_component
-                    elif isinstance(component, DropDown):
-                        component.answer = self.answer
 
                     if not self.persist_context_fields:
                         component.question = (
@@ -282,7 +297,7 @@ class DateField(PageComponent):
 
         return
 
-    def _identify_input_method(self, retry=False, prev_xpaths=None):
+    def _identify_input_method(self, retry=False):
         """Identifies input methods and xpaths of interactive elements for date field"""
         global driver
 
@@ -292,22 +307,13 @@ class DateField(PageComponent):
             f"I need to enter date in following date field -\n"
             f"Field title - {self.title}\n"
             f"Field category - {self.category}\n"
-            f"Please analyze the HTML to identify how date can be entered and return following info -\n"
+            f"Please analyze the HTML to help identify how date can be entered and return following info -\n"
             f"1. Whether there is a calendar widget button present\n"
-            f"2. If date components (month, day, year) have separate interactive input elements\n"
+            f"2. If date components (month or day or year or all) have separate interactive input elements\n"
             f"3. XPath of calendar button if present\n"
             f"4. XPaths of separate date component interactive input elements if present\n"
             f"5. XPath of date input or date box (where selected date is / will be shown) element\n"
         )
-
-        if retry and prev_xpaths:
-            prev_xpaths_str = "\n".join(
-                [f"{k}: {v}" for k, v in prev_xpaths.items() if v]
-            )
-            user_prompt += (
-                f"\nIn previous try you gave following XPaths but they couldn't be found on the page. "
-                f"Please provide correct XPaths:\n{prev_xpaths_str}"
-            )
 
         class FieldHtmlType(Enum):
             textBox = "text_box"
@@ -319,7 +325,9 @@ class DateField(PageComponent):
         class DateComponent(BaseModel):
             xpath: str = Field(
                 ...,
-                description="XPath of the interactive input element to be used in selenium chrome driver",
+                description="Give me the simplest unique XPath to select this interactive input element for use in "
+                "Selenium ChromeDriver. Avoid long ancestor chains, multiple contains(@class,…) filters, or"
+                " deep nesting as that usually leads to brittle XPaths.",
             )
             html_type: FieldHtmlType = Field(
                 ...,
@@ -330,36 +338,47 @@ class DateField(PageComponent):
         class DateInputMethod(BaseModel):
             has_calendar_button: bool = Field(
                 ...,
-                description="Whether there is an interactive button present to open calendar widget",
+                description=f"Whether there is an interactive button present to open calendar widget for field "
+                f"{self.title}. Look for proofs where suggest that clicking this button opens a calendar widget.",
             )
             has_separate_components: bool = Field(
                 ...,
-                description="Whether date field has separate interactive input elements for date components",
+                description=f"Whether date field has separate interactive input elements for date components for field "
+                f"{self.title}",
             )
             calendar_button_xpath: Optional[str] = Field(
                 None,
-                description="XPath of interactive button that opens calendar widget. Only provide if "
-                "has_calendar_button is True",
+                description=f"XPath of interactive button that opens calendar widget for field {self.title}. Only "
+                f"provide if has_calendar_button is True",
             )
             date_format: Optional[str] = Field(
                 None,
-                description="Date format hint found in labels, placeholders or example values (e.g. MM/DD/YYYY)",
-            )
-            day_component: Optional[DateComponent] = Field(
-                None,
-                description="Interactive day input component if separate components exist",
+                description=f"Date format hint found in labels, placeholders or example values (e.g. MM/DD/YYYY) for "
+                f"field {self.title}. Provide this information only if you are confident about the format, "
+                f"otherwise return None.",
             )
             month_component: Optional[DateComponent] = Field(
                 None,
-                description="Interactive month input component if separate components exist",
+                description=f"Interactive month input component for field {self.title}. It may exist only if separate "
+                f"components exist. Don't assume that it's present because has_separate_components is True."
+                f" Look for solid proof of month field being present.",
             )
             year_component: Optional[DateComponent] = Field(
                 None,
-                description="Interactive year input component if separate components exist",
+                description=f"Interactive year input component for field {self.title}. It may exist only if separate "
+                f"components exist. Don't assume that it's present because has_separate_components is True."
+                f" Look for solid proof of year field being present.",
+            )
+            day_component: Optional[DateComponent] = Field(
+                None,
+                description=f"Interactive day input component for field {self.title}. It may exist only if separate "
+                f"components exist. Don't assume that it's present because has_separate_components is True."
+                f" Look for solid proof of day field being present.",
             )
             date_field: Optional[DateComponent] = Field(
                 None,
-                description="Single date input or date box (where selected date is / will be shown) element",
+                description=f"Single date input or date box (where selected date is / will be shown) element for field "
+                f"{self.title}.",
             )
 
         input_found, input_data = get_gpt_response(
@@ -372,14 +391,20 @@ class DateField(PageComponent):
             # Validate calendar button xpath if provided
             if input_data.has_calendar_button and input_data.calendar_button_xpath:
                 if not element_exists(input_data.calendar_button_xpath):
-                    if not retry:
-                        return self._identify_input_method(
-                            retry=True,
-                            prev_xpaths={
-                                "calendar_button": input_data.calendar_button_xpath
-                            },
+                    prompt = (
+                        f"The x_path that we are trying to extract is of a button to open calendar for a field "
+                        f"with title {self.title}."
+                    )
+                    input_data.calendar_button_xpath = (
+                        ApplicationField.extract_correct_x_path(
+                            prev_x_path=input_data.calendar_button_xpath,
+                            prompt=prompt,
+                            job_title=self.parent_application_page.parent_job.title,
+                            job_url=self.parent_application_page.url,
                         )
-                    else:
+                    )
+
+                    if not input_data.calendar_button_xpath:
                         raise Exception(
                             f"Couldn't identify calendar button for {self.parent_application_page.parent_job.title}. "
                             f"URL - {self.parent_application_page.url}"
@@ -387,33 +412,73 @@ class DateField(PageComponent):
 
             # Validate separate component xpaths if provided
             if input_data.has_separate_components:
-                invalid_xpaths = {}
                 for component, xpath in [
-                    ("month", input_data.month_component.xpath),
-                    ("year", input_data.year_component.xpath),
-                    ("day", input_data.day_component.xpath),
+                    (
+                        "month",
+                        (
+                            input_data.month_component.xpath
+                            if input_data.month_component
+                            else None
+                        ),
+                    ),
+                    (
+                        "year",
+                        (
+                            input_data.year_component.xpath
+                            if input_data.year_component
+                            else None
+                        ),
+                    ),
+                    (
+                        "day",
+                        (
+                            input_data.day_component.xpath
+                            if input_data.day_component
+                            else None
+                        ),
+                    ),
                 ]:
                     if xpath and not element_exists(xpath):
-                        invalid_xpaths[component] = xpath
+                        prompt = (
+                            f"The x_path that we are trying to extract is of {component} type interactive element for a"
+                            f" field with title {self.title}."
+                        )
+                        xpath = ApplicationField.extract_correct_x_path(
+                            prev_x_path=xpath,
+                            prompt=prompt,
+                            job_title=self.parent_application_page.parent_job.title,
+                            job_url=self.parent_application_page.url,
+                        )
 
-                if invalid_xpaths and not retry:
-                    return self._identify_input_method(
-                        retry=True, prev_xpaths=invalid_xpaths
-                    )
-                elif invalid_xpaths:
-                    raise Exception(
-                        f"Couldn't identify separate date components for "
-                        f"{self.parent_application_page.parent_job.title}. "
-                        f"URL - {self.parent_application_page.url}"
-                    )
+                        if not xpath:
+                            raise Exception(
+                                f"Couldn't identify separate date components for "
+                                f"{self.parent_application_page.parent_job.title}. "
+                                f"URL - {self.parent_application_page.url}"
+                            )
+
+                        if component == "month":
+                            input_data.month_component.xpath = xpath
+                        elif component == "year":
+                            input_data.year_component.xpath = xpath
+                        elif component == "day":
+                            input_data.day_component.xpath = xpath
+
             elif input_data.date_field.xpath and not element_exists(
                 input_data.date_field.xpath
             ):
-                if not retry:
-                    return self._identify_input_method(
-                        retry=True, prev_xpaths={"date": input_data.date_field.xpath}
-                    )
-                else:
+                prompt = (
+                    f"The x_path that we are trying to extract is of single date input or date box (where selected "
+                    f"date is / will be shown) element for a field with title {self.title}."
+                )
+                input_data.date_field.xpath = ApplicationField.extract_correct_x_path(
+                    prev_x_path=input_data.date_field.xpath,
+                    prompt=prompt,
+                    job_title=self.parent_application_page.parent_job.title,
+                    job_url=self.parent_application_page.url,
+                )
+
+                if not input_data.date_field.xpath:
                     raise Exception(
                         f"Couldn't identify date input element for {self.parent_application_page.parent_job.title}. "
                         f"URL - {self.parent_application_page.url}"
@@ -430,6 +495,7 @@ class DateField(PageComponent):
 
             if input_data.has_separate_components:
                 self.has_separate_components = True
+
                 if input_data.month_component:
                     self.components["month"] = {
                         "xpath": input_data.month_component.xpath,
@@ -445,6 +511,8 @@ class DateField(PageComponent):
                         "xpath": input_data.year_component.xpath,
                         "html_type": input_data.year_component.html_type.value,
                     }
+
+                self._remove_duplicate_separate_components()
 
             if input_data.date_field:
                 self.components["date"] = {
@@ -465,6 +533,97 @@ class DateField(PageComponent):
             raise Exception(
                 f"Couldn't identify date input method for {self.parent_application_page.parent_job.title}. "
                 f"URL - {self.parent_application_page.url}"
+            )
+
+    def _remove_duplicate_separate_components(
+        self,
+    ):
+        """Remove duplicate separate components from self.components."""
+
+        global driver
+
+        original_month_xpath = self.components.get("month", {}).get("xpath")
+        original_year_xpath = self.components.get("year", {}).get("xpath")
+        original_day_xpath = self.components.get("day", {}).get("xpath")
+
+        # Get the unique xpaths for month, year and day components
+        unique_month_xpath = (
+            get_element_xpath(driver.find_element(By.XPATH, original_month_xpath))
+            if original_month_xpath
+            else None
+        )
+        unique_year_xpath = (
+            get_element_xpath(driver.find_element(By.XPATH, original_year_xpath))
+            if original_year_xpath
+            else None
+        )
+        unique_day_xpath = (
+            get_element_xpath(driver.find_element(By.XPATH, original_day_xpath))
+            if original_day_xpath
+            else None
+        )
+
+        # check if any of the x_paths are same
+        if (
+            unique_month_xpath == unique_year_xpath
+            or unique_month_xpath == unique_day_xpath
+            or unique_year_xpath == unique_day_xpath
+        ):
+            pass
+        else:
+            return
+
+        # Prepare the user prompt for GPT
+        user_prompt = (
+            f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title}."
+            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
+            f"I have following x_paths for month, year and day components from an HTML -\n"
+            f"Month XPath: {original_month_xpath}\n"
+            f"Year XPath: {original_year_xpath}\n"
+            f"Day XPath: {original_day_xpath}\n"
+            f"I have found that 2 or more of these x_paths point to the same element in the HTML. Based on the mapping "
+            f"above and the x_paths themselves, I need your help to identify which components to keep and which seem to"
+            f" be incorrectly mapped."
+        )
+
+        class ComponentsXPathCorrectness(BaseModel):
+            is_month_xpath_correct: bool = Field(
+                ...,
+                description="Whether the month component XPath is correct and should be kept.",
+            )
+            is_year_xpath_correct: bool = Field(
+                ...,
+                description="Whether the year component XPath is correct and should be kept.",
+            )
+            is_day_xpath_correct: bool = Field(
+                ...,
+                description="Whether the day component XPath is correct and should be kept.",
+            )
+
+        components_found, components_data = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=ComponentsXPathCorrectness,
+        )
+        if components_found:
+            # Remove components based on GPT response
+            if not components_data.is_month_xpath_correct:
+                self.components.month = {}
+            if not components_data.is_year_xpath_correct:
+                self.components.year = {}
+            if not components_data.is_day_xpath_correct:
+                self.components.day = {}
+
+            logger.info(
+                "Removed following duplicate components based on GPT response:\n"
+                f"Month: {not components_data.is_month_xpath_correct}, "
+                f"Year: {not components_data.is_year_xpath_correct}, "
+                f"Day: {not components_data.is_day_xpath_correct}"
+            )
+        else:
+            raise Exception(
+                f"Couldn't identify which separate components to keep for date field {self.title} "
+                f"on {self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
             )
 
     @staticmethod
@@ -520,11 +679,11 @@ class DateField(PageComponent):
         instance = cls(
             title=input_dict["title"],
             question=input_dict.get("question"),
-            date_format=input_dict["date_format"],
             category=input_dict["category"],
             parent_application_page=parent_application_page,
             persist_context_fields=input_dict.get("persist_context_fields", True),
         )
+        instance.date_format = input_dict["date_format"]
 
         # Restore component info and state
         if input_dict.get("components"):
