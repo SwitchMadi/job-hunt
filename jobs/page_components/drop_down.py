@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.support.ui import Select
 
 from jobs.page_components import (
     PageComponent,
@@ -59,21 +60,29 @@ class DropDown(PageComponent):
     def proceed(self, retry=False):
         global driver
 
+        dropdown_element = driver.find_element(By.XPATH, self.x_path)
+        dropdown_type = ApplicationField.identify_options_container_type(
+            dropdown_element
+        )
+        if dropdown_type == "select-option":
+            self.options_container_x_path = None
+
         option = None
         max_tries = 3
         current_try = 1
         while (option is None) or is_element_visible(self.options_container_x_path):
-            simulate_empty_area_click()
-            self.dropdown_button.proceed()
+            if dropdown_type != "select-option":
+                simulate_empty_area_click()
+                self.dropdown_button.proceed()
 
-            if not element_exists(self.options_container_x_path):
-                logger.warning(
-                    f"Element with dropdown container XPath {self.options_container_x_path} not found at url "
-                    f"{self.parent_application_page.url}. Retrying with generalized XPath..."
-                )
-                self.options_container_x_path = generalize_xpath_attributes(
-                    self.options_container_x_path
-                )
+                if not element_exists(self.options_container_x_path):
+                    logger.warning(
+                        f"Element with dropdown container XPath {self.options_container_x_path} not found at url "
+                        f"{self.parent_application_page.url}. Retrying with generalized XPath..."
+                    )
+                    self.options_container_x_path = generalize_xpath_attributes(
+                        self.options_container_x_path
+                    )
 
             if not self.options_xpath_pattern:
                 self.options_xpath_pattern, options = self.get_dropdown_options(
@@ -81,10 +90,17 @@ class DropDown(PageComponent):
                     job_url=self.parent_application_page.url,
                     field_title=self.title,
                     question=self.question,
-                    options_container_x_path=self.options_container_x_path,
+                    options_container_x_path=(
+                        self.options_container_x_path
+                        if dropdown_type != "select-option"
+                        else self.x_path
+                    ),
+                    dropdown_type=dropdown_type,
                 )
             else:
-                options = self.build_options_list(self.options_xpath_pattern)
+                options = self.build_options_list(
+                    self.options_xpath_pattern, dropdown_type=dropdown_type
+                )
 
             if not options:
                 self.options_xpath_pattern = None
@@ -125,18 +141,24 @@ class DropDown(PageComponent):
                 )
                 return
 
-            # Get the clickable parent xpath for this option
-            clickable_xpath = find_clickable_parent_xpath(
-                option["x_path"], option["text"]
-            )
+            if dropdown_type == "select-option":
+                # Handle standard select dropdowns
+                select_element = driver.find_element(By.XPATH, self.x_path)
+                select = Select(select_element)
+                select.select_by_visible_text(option["text"])
+            else:
+                # Get the clickable parent xpath for this option
+                clickable_xpath = find_clickable_parent_xpath(
+                    option["x_path"], option["text"]
+                )
 
-            # Create a Button instance for the clickable element
-            option_button = Button(
-                x_path=clickable_xpath,
-                button_type="dropdown_option",
-                parent_application_page=self.parent_application_page,
-            )
-            option_button.proceed()
+                # Create a Button instance for the clickable element
+                option_button = Button(
+                    x_path=clickable_xpath,
+                    button_type="dropdown_option",
+                    parent_application_page=self.parent_application_page,
+                )
+                option_button.proceed()
 
         self.is_component_functional = True
         return
@@ -149,6 +171,7 @@ class DropDown(PageComponent):
         field_title,
         question,
         options_container_x_path,
+        dropdown_type=None,
     ):
         """Get dropdown options pattern and list from container"""
         xpath_pattern = cls.extract_options_xpath_pattern(
@@ -158,7 +181,7 @@ class DropDown(PageComponent):
             question=question,
             options_container_x_path=options_container_x_path,
         )
-        options = cls.build_options_list(xpath_pattern)
+        options = cls.build_options_list(xpath_pattern, dropdown_type=dropdown_type)
         return xpath_pattern, options
 
     @classmethod
@@ -169,9 +192,48 @@ class DropDown(PageComponent):
         field_title,
         options_container_x_path,
         question=None,
-        retry=False,
     ):
         """Extract XPath pattern to find all dropdown options"""
+        xpath_pattern = cls._extract_options_xpath_pattern_using_regex(
+            options_container_x_path
+        )
+        if xpath_pattern:
+            return xpath_pattern
+        else:
+            return cls._extract_options_xpath_pattern_using_llm(
+                job_title=job_title,
+                job_url=job_url,
+                field_title=field_title,
+                options_container_x_path=options_container_x_path,
+                question=question,
+            )
+
+    @staticmethod
+    def _extract_options_xpath_pattern_using_regex(options_container_x_path):
+        container_element = driver.find_element(By.XPATH, options_container_x_path)
+        dropdown_type = ApplicationField.identify_options_container_type(
+            container_element
+        )
+        if dropdown_type == "select-option":
+            return f"{options_container_x_path}//option"
+        elif dropdown_type in ["ul-li", "ol-li"]:
+            return f"{options_container_x_path}//li"
+        elif dropdown_type == "listbox-option":
+            return f"{options_container_x_path}//*[contains(@role, 'option')]"
+        elif dropdown_type == "menu-menuitem":
+            return f"{options_container_x_path}//*[contains(@role, 'menuitem')]"
+        else:
+            return None
+
+    @staticmethod
+    def _extract_options_xpath_pattern_using_llm(
+        job_title,
+        job_url,
+        field_title,
+        options_container_x_path,
+        question=None,
+        retry=False,
+    ):
         global driver
 
         options_container = driver.find_element(By.XPATH, options_container_x_path)
@@ -185,8 +247,7 @@ class DropDown(PageComponent):
             question_prompt = f"There is a dropdown/menu options on this page with title as following -\n{field_title}"
 
         user_prompt = (
-            f"Following HTML page is job application webpage for {job_title}."
-            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
+            f"I have HTML of job application webpage for {job_title}."
             f"{question_prompt}\n"
             f"I am using javascript mutation observer to observe DOM changes. When I clicked the dropdown/menu options"
             f", the observer observed that following element was added to the DOM -\n"
@@ -231,39 +292,46 @@ class DropDown(PageComponent):
             )
 
     @classmethod
-    def build_options_list(cls, xpath_pattern, max_scroll_attempts=50):
+    def build_options_list(
+        cls, xpath_pattern, dropdown_type=None, max_scroll_attempts=50
+    ):
         """
         Scrolls through a dropdown container and collects all visible option elements.
 
+        :param dropdown_type: Type of dropdown container (e.g., "select-option", "ul-li", "ol-li", etc.)
         :param xpath_pattern: XPath pattern for the dropdown options inside the container
         :param max_scroll_attempts: Safety limit to prevent infinite loops
         :return: List of all option WebElement objects
         """
         global driver
 
-        # Scroll the container by sending PAGE_DOWN or using JS scroll
-        last_count = 0
-        same_count_attempts = 0
         all_options = []
 
-        for _ in range(max_scroll_attempts):
-            options = driver.find_elements(By.XPATH, xpath_pattern)
-            if not options:
-                break
+        if dropdown_type == "select-option":
+            all_options = driver.find_elements(By.XPATH, xpath_pattern)
+        else:
+            # Scroll the container by sending PAGE_DOWN or using JS scroll
+            last_count = 0
+            same_count_attempts = 0
 
-            last_option = options[-1]
-            actions = ActionChains(driver)
-            actions.move_to_element(last_option).perform()
+            for _ in range(max_scroll_attempts):
+                options = driver.find_elements(By.XPATH, xpath_pattern)
+                if not options:
+                    break
 
-            if len(options) == last_count:
-                same_count_attempts += 1
-                if same_count_attempts >= 3:
-                    break  # No more new options
-            else:
-                same_count_attempts = 0
-                last_count = len(options)
+                last_option = options[-1]
+                actions = ActionChains(driver)
+                actions.move_to_element(last_option).perform()
 
-            all_options = options
+                if len(options) == last_count:
+                    same_count_attempts += 1
+                    if same_count_attempts >= 3:
+                        break  # No more new options
+                else:
+                    same_count_attempts = 0
+                    last_count = len(options)
+
+                all_options = options
 
         output_options = []
         option_texts = []

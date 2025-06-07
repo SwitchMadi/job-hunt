@@ -498,10 +498,114 @@ class ApplicationField:
         observed_elements,
         html_type,
         job_title,
+    ):
+        """Identify if any observed element is an options container and return its XPath"""
+        global driver
+
+        observed_elements = [
+            el
+            for el in observed_elements
+            if not is_stale(el) and is_element_visible(get_element_xpath(el))
+        ]
+
+        if not observed_elements:
+            logger.warn(
+                f"No observed elements found for field title {field_title} at XPath {field_x_path} "
+                f"for job title {job_title}. This might be because the field is not interactive or "
+                f"the page didn't load properly."
+            )
+            return False, None
+
+        options_container_elements = cls._identify_options_container_using_regex(
+            observed_elements
+        )
+
+        if not options_container_elements:
+            return False, None
+        elif len(options_container_elements) == 1:
+            container_x_path = get_element_xpath(
+                options_container_elements[0], xpath_type="relative"
+            )
+            return True, container_x_path
+        else:
+            logger.warn(
+                f"Multiple options container elements found for field title {field_title} at XPath {field_x_path} "
+                f"for job title {job_title}. Using LLM to identify the correct one."
+            )
+            return cls._identify_options_container_using_llm(
+                field_title=field_title,
+                field_x_path=field_x_path,
+                observed_elements=observed_elements,
+                html_type=html_type,
+                job_title=job_title,
+            )
+
+    @staticmethod
+    def _identify_options_container_using_regex(elements):
+        options_containers = []
+        for el in elements:
+            container_type = ApplicationField.identify_options_container_type(el)
+            if container_type:
+                options_containers.append(el)
+
+        return options_containers
+
+    @classmethod
+    def identify_options_container_type(cls, element):
+        """Identify the type of options container based on its HTML structure"""
+        try:
+            outer_html = element.get_attribute("outerHTML")
+        except Exception as e:
+            logger.warn(f"Error getting outerHTML for element {element}. Error: {e}")
+            return None
+
+        if re.search(
+            r"<select[^>]*>(?:\s*<option[^>]*>.*?</option>\s*)+</select>",
+            outer_html,
+            re.DOTALL | re.IGNORECASE,
+        ):
+            return "select-option"
+        elif re.search(
+            r"<ul[^>]*>(?:\s*<li[^>]*>.*?</li>\s*)+</ul>",
+            outer_html,
+            re.DOTALL | re.IGNORECASE,
+        ):
+            return "ul-li"
+        elif re.search(
+            r"<ol[^>]*>(?:\s*<li[^>]*>.*?</li>\s*)+</ol>",
+            outer_html,
+            re.DOTALL | re.IGNORECASE,
+        ):
+            return "ol-li"
+        elif re.search(
+            r'<(?P<outer_tag>\w+)[^>]*\srole=["\']listbox["\'][^>]*>'
+            r'(?:.*?<\w+[^>]*\srole=["\']option["\'][^>]*>.*?</\w+>)+'
+            r".*?</(?P=outer_tag)>",
+            outer_html,
+            re.DOTALL | re.IGNORECASE,
+        ):
+            return "listbox-option"
+        elif re.search(
+            r'<(?P<outer_tag>\w+)[^>]*\srole=["\']menu["\'][^>]*>'
+            r'(?:.*?<\w+[^>]*\srole=["\']menuitem["\'][^>]*>.*?</\w+>)+'
+            r".*?</(?P=outer_tag)>",
+            outer_html,
+            re.DOTALL | re.IGNORECASE,
+        ):
+            return "menu-menuitem"
+        else:
+            return None
+
+    @staticmethod
+    def _identify_options_container_using_llm(
+        field_title,
+        field_x_path,
+        observed_elements,
+        html_type,
+        job_title,
         retry=False,
         prev_xpath=None,
     ):
-        """Identify if any observed element is an options container and return its XPath"""
         global driver
 
         class ContainerValidation(BaseModel):
@@ -519,7 +623,6 @@ class ApplicationField:
         observed_elements_html = "\n".join(
             f"{i+1}. Element {i+1} - {minify_html_for_gpt_prompt(el.get_attribute('outerHTML'))}"
             for i, el in enumerate(observed_elements)
-            if not is_stale(el) and is_element_visible(get_element_xpath(el))
         )
 
         if not observed_elements_html.strip():
@@ -548,9 +651,8 @@ class ApplicationField:
         validation_prompt = type_specific_prompts[html_type]
 
         user_prompt = (
-            f"Following HTML page is job application webpage for {job_title}. "
-            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
-            f"There is a field with title {field_title} at XPath {field_x_path}.\n"
+            f"In am HTML of job application webpage for {job_title} "
+            f"there is a field with title {field_title} at XPath {field_x_path}.\n"
             f"When this field was clicked or typed in, javascript mutation observer observed that following elements "
             f"were added or modified in the DOM -\n{observed_elements_html}\n"
             f"A. Determine if any of the observed elements appears to be an options / search suggestions container "
@@ -585,7 +687,7 @@ class ApplicationField:
                         validation.options_container_xpath,
                     )
                 elif not retry:
-                    return cls.identify_options_container(
+                    return ApplicationField._identify_options_container_using_llm(
                         field_title=field_title,
                         field_x_path=field_x_path,
                         observed_elements=observed_elements,
