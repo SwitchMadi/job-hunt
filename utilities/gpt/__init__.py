@@ -11,6 +11,35 @@ dotenv.load_dotenv()
 logger = get_logger(name="gpt")
 client = OpenAI(api_key=os.getenv("OPENAI_KEY"))
 config = yaml.safe_load(open("config.yml"))
+# Global token usage tracking
+_cumulative_prompt_tokens = 0
+_cumulative_completion_tokens = 0
+_cumulative_total_tokens = 0
+
+
+def _update_token_usage(prompt_tokens, completion_tokens, total_tokens):
+    """Update cumulative token usage and log both individual and cumulative usage."""
+    global _cumulative_prompt_tokens, _cumulative_completion_tokens, _cumulative_total_tokens
+
+    _cumulative_prompt_tokens += prompt_tokens
+    _cumulative_completion_tokens += completion_tokens
+    _cumulative_total_tokens += total_tokens
+
+    # Log individual usage
+    logger.info(
+        f"Current OpenAI token usage - "
+        f"Input: {prompt_tokens}, "
+        f"Output: {completion_tokens}, "
+        f"Total: {total_tokens}"
+    )
+
+    # Log cumulative usage
+    logger.info(
+        f"Cumulative token usage since start - "
+        f"Input: {_cumulative_prompt_tokens}, "
+        f"Output: {_cumulative_completion_tokens}, "
+        f"Total: {_cumulative_total_tokens}"
+    )
 
 
 def get_gpt_response(
@@ -43,11 +72,10 @@ def get_gpt_response(
             resp = completion.choices[0].message
 
             # Log token usage
-            logger.info(
-                f"OpenAI token usage - "
-                f"Input: {completion.usage.prompt_tokens}, "
-                f"Output: {completion.usage.completion_tokens}, "
-                f"Total: {completion.usage.total_tokens}"
+            _update_token_usage(
+                completion.usage.prompt_tokens,
+                completion.usage.completion_tokens,
+                completion.usage.total_tokens,
             )
 
             if resp.refusal:
@@ -63,11 +91,10 @@ def get_gpt_response(
             resp = completion.choices[0].message.content
 
             # Log token usage
-            logger.info(
-                f"OpenAI token usage - "
-                f"Input: {completion.usage.prompt_tokens}, "
-                f"Output: {completion.usage.completion_tokens}, "
-                f"Total: {completion.usage.total_tokens}"
+            _update_token_usage(
+                completion.usage.prompt_tokens,
+                completion.usage.completion_tokens,
+                completion.usage.total_tokens,
             )
 
             logger.debug(f"GPT response - \n{resp}")
