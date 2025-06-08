@@ -2,6 +2,8 @@ from selenium.webdriver.common.by import By
 from pydantic import BaseModel, Field
 from typing import Optional
 from enum import Enum
+import re
+from selenium.common.exceptions import NoSuchElementException
 
 from jobs import ApplicationField, Button
 from jobs.page_components import PageComponent, logger, get_page_component_class_name
@@ -59,7 +61,7 @@ class DateField(PageComponent):
         self.next = None
         self.prev = None
 
-    def _handle_calendar_interaction(self, retry=False, prev_xpath=None):
+    def _handle_calendar_interaction(self):
         """Handle calendar widget or date field interaction.
 
         Steps:
@@ -82,6 +84,12 @@ class DateField(PageComponent):
             "xpath"
         ) or self.components.get("date", {}).get("xpath")
 
+        date_format = self._extract_date_format_from_input_type_tag(click_xpath)
+        if date_format:
+            self.date_format = date_format
+            self.input_method_details_identified = True
+            return True
+
         start_dom_mutation_observer()
         button = Button(
             x_path=click_xpath,
@@ -91,90 +99,202 @@ class DateField(PageComponent):
         button.proceed()
 
         observed_elements = get_observed_elements()
+        observed_elements = [el for el in observed_elements if not is_stale(el)]
         if observed_elements:
-            observed_elements_prompt = "\n".join(
-                f"{i + 1}. Element {i + 1} - {minify_html_for_gpt_prompt(el.get_attribute('outerHTML'))}"
-                for i, el in enumerate(observed_elements)
-                if not is_stale(el)
+            is_regex_op_successful = self._identify_calendar_using_regex(
+                observed_elements
             )
-            if not observed_elements_prompt.strip():
-                logger.debug("No elements observed after clicking date field.")
-                self.has_calendar_button = False
-                simulate_empty_area_click()
-                return None
+            if not is_regex_op_successful:
+                self._identify_calendar_using_llm(observed_elements)
 
-            user_prompt = (
-                f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title}."
-                f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
-                f"When date field was clicked, following elements were observed -\n"
-                f"{observed_elements_prompt}"
-                f"\nIf these observed elements contain a calendar widget, then find XPath of date 27, which is "
-                f"currently visible on the observed calendar that can be clicked."
+        if self.components.get("date", {}).get("xpath"):
+            # Get format from field value after selecting 27th or Jan month
+            field = driver.find_element(
+                By.XPATH, self.components.get("date", {}).get("xpath")
             )
+            field_value = field.get_attribute("value") or field.text
+            if field_value:
+                self.date_format = field_value.strip()
+                self.input_method_details_identified = True
+                logger.debug(f"Successfully extracted date format: {field_value}")
 
-            class DateInfo(BaseModel):
-                has_calendar: bool = Field(
-                    ...,
-                    description="Whether any of the observed elements represents an open calendar widget. Answer it "
-                    "strictly from the observed elements. Multiple numeric dates must exist in the calendar widget for it to be considered a calendar.",
-                )
-                date_xpath: Optional[str] = Field(
-                    None,
-                    description="XPath of clickable date 27, if calendar exists, visible on the observed calendar.",
-                )
+                simulate_empty_area_click(text_to_click=self.title)
+                return True
 
-            if retry and prev_xpath:
-                user_prompt += (
-                    f"\n\nIn previous try you gave following XPath for the container but the element couldn't be found "
-                    f"using that. So, find correct XPath for the 27th date.\n"
-                    f"Previous XPath - {prev_xpath}\n"
-                )
-
-            date_info_found, date_info = get_gpt_response(
-                constants.gpt["system_prompts"]["application_step_identification"],
-                user_prompt,
-                response_format=DateInfo,
-            )
-
-            if date_info_found and date_info.has_calendar and date_info.date_xpath:
-                if not element_exists(date_info.date_xpath):
-                    if not retry:
-                        return self._handle_calendar_interaction(
-                            retry=True, prev_xpath=date_info.date_xpath
-                        )
-                    else:
-                        simulate_empty_area_click()
-                        logger.debug(
-                            f"Date 27 xpath not found after retry: {date_info.date_xpath}"
-                        )
-                        return None
-
-                date_button = Button(
-                    x_path=date_info.date_xpath,
-                    button_type="date",
-                    parent_application_page=self.parent_application_page,
-                )
-                date_button.proceed()
-
-                # Get format from field value after selecting 27th
-                field = driver.find_element(
-                    By.XPATH, self.components.get("date", {}).get("xpath")
-                )
-                field_value = field.get_attribute("value")
-                if field_value:
-                    simulate_empty_area_click()
-                    self.date_format = field_value
-                    self.input_method_details_identified = True
-                    logger.debug(f"Successfully extracted date format: {field_value}")
-                    return True
-            elif date_info_found and not date_info.has_calendar:
-                logger.debug(
-                    "No calendar widget found in observed elements after clicking date field."
-                )
-                self.has_calendar_button = False
-
-        simulate_empty_area_click()
+        simulate_empty_area_click(text_to_click=self.title)
         return False
+
+    @staticmethod
+    def _identify_calendar_using_regex(observed_elements):
+        global driver
+
+        DAY_NUMBERS = {str(i) for i in range(1, 28)}
+        MONTH_NAMES = {
+            "Jan",
+            "Feb",
+            "Mar",
+            "Apr",
+            "May",
+            "Jun",
+            "Jul",
+            "Aug",
+            "Sep",
+            "Oct",
+            "Nov",
+            "Dec",
+        }
+
+        for el in observed_elements:
+            try:
+                outer_html = el.get_attribute("outerHTML")
+            except Exception:
+                continue
+
+            # Extract and tokenize text
+            text_content = re.sub(r"<.*?>", " ", outer_html)
+            words = set(re.findall(r"\b\w+\b", text_content))
+
+            # Case 1: All days 1–27 are found
+            if DAY_NUMBERS.issubset(words):
+                logger.debug("All days 1–27 detected")
+                try:
+                    el.find_element(By.XPATH, ".//*[text()='27']").click()
+                    logger.debug("Clicked on date 27.")
+                    return True
+                except NoSuchElementException:
+                    logger.debug("Date 27 found in text but not clickable.")
+                    return False
+
+            # Case 2: All month names found
+            lower_words = {
+                w[:3].capitalize() for w in words if w.isalpha() and len(w) >= 3
+            }
+            if MONTH_NAMES.issubset(lower_words):
+                logger.debug("All months Jan–Dec detected")
+                try:
+                    jan_el = el.find_element(
+                        By.XPATH,
+                        ".//*[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'jan')]",
+                    )
+                    jan_el.click()
+                    logger.debug("Clicked on Jan.")
+                except NoSuchElementException:
+                    logger.debug("Month 'Jan' not clickable.")
+                    return False
+
+                # After clicking Jan, recheck for days
+                if el.is_displayed():
+                    try:
+                        outer_html_after = el.get_attribute("outerHTML")
+                        text_after = re.sub(r"<.*?>", " ", outer_html_after)
+                        words_after = set(re.findall(r"\b\w+\b", text_after))
+                        if DAY_NUMBERS.issubset(words_after):
+                            el.find_element(By.XPATH, ".//*[text()='27']").click()
+                            logger.debug("Clicked on date 27 after month selection.")
+                            return True
+                        else:
+                            logger.debug("Days not detected after month selection.")
+                            return False
+                    except NoSuchElementException:
+                        logger.debug("Date 27 not clickable after month selection.")
+                        return False
+
+        logger.debug("No calendar widget identified.")
+        return True
+
+    def _identify_calendar_using_llm(
+        self, observed_elements, retry=False, prev_xpath=None
+    ):
+        observed_elements_prompt = "\n".join(
+            f"{i + 1}. Element {i + 1} - {minify_html_for_gpt_prompt(el.get_attribute('outerHTML'))}"
+            for i, el in enumerate(observed_elements)
+            if not is_stale(el)
+        )
+        if not observed_elements_prompt.strip():
+            logger.debug("No elements observed after clicking date field.")
+            self.has_calendar_button = False
+            simulate_empty_area_click()
+            return None
+
+        user_prompt = (
+            f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title}."
+            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
+            f"When date field was clicked, following elements were observed -\n"
+            f"{observed_elements_prompt}"
+            f"\nIf these observed elements contain a calendar widget, then find XPath of date 27, which is "
+            f"currently visible on the observed calendar that can be clicked."
+        )
+
+        class DateInfo(BaseModel):
+            has_calendar: bool = Field(
+                ...,
+                description="Whether any of the observed elements represents an open calendar widget. Answer it "
+                "strictly from the observed elements. Multiple numeric dates must exist in the calendar widget for it to be considered a calendar.",
+            )
+            date_xpath: Optional[str] = Field(
+                None,
+                description="XPath of clickable date 27, if calendar exists, visible on the observed calendar.",
+            )
+
+        if retry and prev_xpath:
+            user_prompt += (
+                f"\n\nIn previous try you gave following XPath for the container but the element couldn't be found "
+                f"using that. So, find correct XPath for the 27th date.\n"
+                f"Previous XPath - {prev_xpath}\n"
+            )
+
+        date_info_found, date_info = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=DateInfo,
+        )
+
+        if date_info_found and date_info.has_calendar and date_info.date_xpath:
+            if not element_exists(date_info.date_xpath):
+                if not retry:
+                    return self._identify_calendar_using_llm(
+                        observed_elements, retry=True, prev_xpath=date_info.date_xpath
+                    )
+                else:
+                    simulate_empty_area_click()
+                    logger.debug(
+                        f"Date 27 xpath not found after retry: {date_info.date_xpath}"
+                    )
+                    return None
+
+            date_button = Button(
+                x_path=date_info.date_xpath,
+                button_type="date",
+                parent_application_page=self.parent_application_page,
+            )
+            date_button.proceed()
+
+            return True
+        elif date_info_found and not date_info.has_calendar:
+            logger.debug(
+                "No calendar widget found in observed elements after clicking date field."
+            )
+            self.has_calendar_button = False
+
+        return False
+
+    @staticmethod
+    def _extract_date_format_from_input_type_tag(x_path):
+        global driver
+
+        element = driver.find_element(By.XPATH, x_path)
+        outer_html = element.get_attribute("outerHTML")
+        if re.search(
+            r'<input\b[^>]*\btype=["\']date["\'][^>]*>', outer_html, re.IGNORECASE
+        ):
+            script = """
+                    const date = new Date(arguments[0]);
+                    return date.toLocaleDateString(navigator.language);
+                """
+            date_format = driver.execute_script(script, "2025-01-27")
+            return date_format
+        else:
+            return None
 
     def _handle_separate_components(self):
         """Handle separate month/day/year components.
@@ -240,7 +360,7 @@ class DateField(PageComponent):
         if not self.input_method_details_identified:
             # Try calendar widget first
             if self.has_calendar_button or self.components.get("date"):
-                self._handle_calendar_interaction(retry=False)
+                self._handle_calendar_interaction()
 
             # If calendar didn't work and still not identified, try separate components
             if (
@@ -255,7 +375,6 @@ class DateField(PageComponent):
                 f"on {self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
             )
 
-        date_input_successful = False
         # Proceed with filling the date field
         if self.date_format and self.components.get("date"):
             date_field = TextInput(
@@ -264,7 +383,7 @@ class DateField(PageComponent):
                 parent_application_page=self.parent_application_page,
             )
             date_field.answer = self.answer
-            date_input_successful = date_field.proceed()
+            date_field.proceed()
 
         if self.has_separate_components:
             # Process each component
@@ -295,6 +414,7 @@ class DateField(PageComponent):
                         component.question = None
                         component.category = None
 
+        simulate_empty_area_click(self.title)
         return
 
     def _identify_input_method(self, retry=False):

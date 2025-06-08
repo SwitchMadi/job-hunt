@@ -119,6 +119,9 @@ class Button(PageComponent):
                     EC.element_to_be_clickable((By.XPATH, self.x_path))
                 )
                 element.click()
+            elif element.tag_name == "input":
+                actions = ActionChains(driver)
+                actions.move_to_element(element).click().perform()
             else:
                 # Use JavaScript to dispatch native events for more reliable clicking
                 driver.execute_script(

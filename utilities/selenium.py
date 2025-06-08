@@ -351,80 +351,84 @@ def get_element_xpath(element, xpath_type="full"):
     """Returns the full XPath of a Selenium WebElement using JavaScript."""
     global driver
 
-    if xpath_type == "full":
-        return driver.execute_script(
-            """
-            function getElementXPath(element) {
-                if (element.id !== '')
-                    return 'id("' + element.id + '")';
-                if (element === document.documentElement)
-                    return element.tagName.toLowerCase();
-    
-                var ix = 0;
-                var siblings = element.parentNode.childNodes;
-                for (var i = 0; i < siblings.length; i++) {
-                    var sibling = siblings[i];
-                    if (sibling === element)
-                        return getElementXPath(element.parentNode) + '/' + element.tagName.toLowerCase() + '[' + (ix + 1) + ']';
-                    if (sibling.nodeType === 1 && sibling.tagName === element.tagName)
-                        ix++;
+    try:
+        if xpath_type == "full":
+            return driver.execute_script(
+                """
+                function getElementXPath(element) {
+                    if (element.id !== '')
+                        return 'id("' + element.id + '")';
+                    if (element === document.documentElement)
+                        return element.tagName.toLowerCase();
+        
+                    var ix = 0;
+                    var siblings = element.parentNode.childNodes;
+                    for (var i = 0; i < siblings.length; i++) {
+                        var sibling = siblings[i];
+                        if (sibling === element)
+                            return getElementXPath(element.parentNode) + '/' + element.tagName.toLowerCase() + '[' + (ix + 1) + ']';
+                        if (sibling.nodeType === 1 && sibling.tagName === element.tagName)
+                            ix++;
+                    }
                 }
+                return getElementXPath(arguments[0]);
+                """,
+                element,
+            )
+        elif xpath_type == "relative":
+            return driver.execute_script(
+                """
+            function getElementXPath(elt) {
+                function isUnique(xpath) {
+                    return document.evaluate(xpath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null).snapshotLength === 1;
+                }
+    
+                function getIndex(elt) {
+                    var i = 1;
+                    var sib = elt.previousSibling;
+                    while (sib) {
+                        if (sib.nodeType === 1 && sib.tagName === elt.tagName) i++;
+                        sib = sib.previousSibling;
+                    }
+                    return i;
+                }
+    
+                function getPath(elt) {
+                    if (elt == document.body || elt == document.documentElement) return null;
+    
+                    var segments = [];
+                    while (elt && elt.nodeType === 1 && elt !== document.body && elt !== document.documentElement) {
+                        var tag = elt.tagName.toLowerCase();
+    
+                        // Prefer id if it's unique
+                        if (elt.id) {
+                            var xpath = '//' + tag + '[@id="' + elt.id + '"]';
+                            if (isUnique(xpath)) return xpath;
+                        }
+    
+                        var index = getIndex(elt);
+                        segments.unshift(tag + '[' + index + ']');
+    
+                        var testXpath = '//' + segments.join('/');
+                        if (isUnique(testXpath)) return testXpath;
+    
+                        elt = elt.parentNode;
+                    }
+                    return '/' + segments.join('/');
+                }
+    
+                return getPath(arguments[0]);
             }
+    
             return getElementXPath(arguments[0]);
             """,
-            element,
-        )
-    elif xpath_type == "relative":
-        return driver.execute_script(
-            """
-        function getElementXPath(elt) {
-            function isUnique(xpath) {
-                return document.evaluate(xpath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null).snapshotLength === 1;
-            }
-
-            function getIndex(elt) {
-                var i = 1;
-                var sib = elt.previousSibling;
-                while (sib) {
-                    if (sib.nodeType === 1 && sib.tagName === elt.tagName) i++;
-                    sib = sib.previousSibling;
-                }
-                return i;
-            }
-
-            function getPath(elt) {
-                if (elt == document.body || elt == document.documentElement) return null;
-
-                var segments = [];
-                while (elt && elt.nodeType === 1 && elt !== document.body && elt !== document.documentElement) {
-                    var tag = elt.tagName.toLowerCase();
-
-                    // Prefer id if it's unique
-                    if (elt.id) {
-                        var xpath = '//' + tag + '[@id="' + elt.id + '"]';
-                        if (isUnique(xpath)) return xpath;
-                    }
-
-                    var index = getIndex(elt);
-                    segments.unshift(tag + '[' + index + ']');
-
-                    var testXpath = '//' + segments.join('/');
-                    if (isUnique(testXpath)) return testXpath;
-
-                    elt = elt.parentNode;
-                }
-                return '/' + segments.join('/');
-            }
-
-            return getPath(arguments[0]);
-        }
-
-        return getElementXPath(arguments[0]);
-        """,
-            element,
-        )
-    else:
-        raise ValueError("Invalid xpath_type. Use 'full' or 'relative'.")
+                element,
+            )
+        else:
+            raise ValueError("Invalid xpath_type. Use 'full' or 'relative'.")
+    except StaleElementReferenceException:
+        logging.warning("Element is stale, cannot retrieve XPath.")
+        return None
 
 
 def take_element_screenshot(x_path, padding=40):
