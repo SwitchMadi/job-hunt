@@ -1431,7 +1431,7 @@ def find_first_interactive_descendant_excluding(base_el, exclude_el):
     return None
 
 
-def find_input_block_for_title(title, max_levels: int = 6):
+def find_input_block_for_title(title, max_levels: int = 4):
     """
     Traverse up the DOM from the title element (found by text) to find a parent
     that has an interactive input element either:
@@ -1440,7 +1440,6 @@ def find_input_block_for_title(title, max_levels: int = 6):
     - or in a common ancestor outside the title's own subtree
     """
     global driver
-    from selenium.webdriver.common.by import By
 
     title_xpath = get_xpath_by_text(title)
     if not title_xpath:
@@ -1453,29 +1452,23 @@ def find_input_block_for_title(title, max_levels: int = 6):
         return title_element
 
     # 2. Check if any siblings are interactive
-    try:
-        parent = title_element.find_element(By.XPATH, "..")
-        siblings = parent.find_elements(By.XPATH, "./*")
-        for sib in siblings:
-            if sib.id != title_element.id and is_interactive_element(sib):
-                return parent
-    except Exception:
-        pass
+    parent = title_element.find_element(By.XPATH, "..")
+    siblings = parent.find_elements(By.XPATH, "./*")
+    for sib in siblings:
+        if sib.id != title_element.id and is_interactive_element(sib):
+            return parent
 
     # 3. Traverse upwards and search other descendant interactive inputs
     current = title_element
     for _ in range(max_levels):
-        try:
-            parent = current.find_element(By.XPATH, "..")
-        except Exception:
-            break
+        parent = current.find_element(By.XPATH, "..")
 
         interactive_input = find_first_interactive_descendant_excluding(
             parent, title_element
         )
         if interactive_input:
-            return parent
+            return True, parent
 
         current = parent
 
-    return None
+    return False, current

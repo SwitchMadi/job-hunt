@@ -19,6 +19,7 @@ from utilities.selenium import (
     find_clickable_parent_xpath,
     is_element_visible,
     get_element_xpath,
+    find_input_block_for_title,
 )
 from utilities.logging import get_logger
 from utilities import pascal_to_snake_casing, retry
@@ -75,9 +76,27 @@ class ApplicationField:
 
     def _identify_x_path(self, retry=False, prev_x_path=None):
         global driver
+
+        user_input_element = None
+        try:
+            element_identified, user_input_element = find_input_block_for_title(self.title)
+            if not element_identified:
+                logger.warn(
+                    f"Input block for title {self.title} not identified in job "
+                    f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+                )
+            minified_html = minify_html_for_gpt_prompt(user_input_element.get_attribute("outerHTML"))
+        except Exception as e:
+            logger.warn(
+                f"Error while finding input block for title {self.title} in job "
+                f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}. "
+                f"Error: {e.msg if hasattr(e, 'msg') else str(e)}"
+            )
+            minified_html = minify_html_for_gpt_prompt(driver.page_source)
+
         user_prompt = (
-            f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title}."
-            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
+            f"Following HTML is of job application webpage for {self.parent_application_page.parent_job.title}."
+            f"HTML: {minified_html}\n"
             f"The webpage has following application field for applying to the job -\n"
             f"Field title - {self.title}\n"
             f"Field category - {self.category}\n"
@@ -85,16 +104,17 @@ class ApplicationField:
             f"field for above given field title and category.\n"
             f"Please keep in mind following -\n"
             f"1. Get XPath of the application field which is interactive in nature. Don't get XPath of the field which"
-            f" is not interactive.\n"
+            f" is not interactive. \n"
             f"2. Sometimes under one field title there can be multiple fields as in same vicinity or under same parent."
             f" In that case, get XPath of the field which is most relevant to the field title & category.\n"
             f"3. XPath should be of one interactive element only. Don't get XPath for element which has multiple "
-            f"interactive elements in it and the element is not interactive itself."
+            f"interactive elements in it and the element is not interactive itself.\n"
+            f"{'4. Since given HTML is not of full page so make sure that if XPath is being provided, it will most porbably be unique in whole page.' if user_input_element else ''}"
         )
 
         if self.category in ["phone_country_code", "phone_number_without_country_code"]:
             user_prompt += (
-                f"\n4. Put extra effort to understand HTML hierarchy and don't confuse yourself between country code "
+                f"\nAdditionally Put extra effort to understand HTML hierarchy and don't confuse yourself between country code "
                 f"field and phone number field. They may be different fields or same field. If they seem to be "
                 f"different fields then very carefully return XPath of the interactive element for {self.category} "
                 f"field. Focus on HTML hierarchy, elements grouping and different attributes of the elements, "
