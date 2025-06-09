@@ -149,7 +149,36 @@ class EducationSection(PageComponent):
                 for i, el in enumerate(observed_elements)
                 if not is_stale(el)
             )
-            observed_elements_prompt = (
+            observed_elements_html = observed_elements_html.strip()
+        else:
+            observed_elements_html = ""
+
+        if not observed_elements_html:
+            user_prompt = (
+                f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title} at a "
+                f"company called {self.parent_application_page.parent_job.company}.\n"
+                f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
+                f"Current page has UI elements to add candidate's education qualification. It has either or all of "
+                f"the following elements on the current page -\n"
+                f"1. Empty fields to start adding education qualification details like college, degree etc.\n"
+                f"2. A button to mark complete filling in current education qualification info. If 1st point is not valid "
+                f"(meaning already fields to enter education qualification is not present) then this button will also not "
+                f"be present.\n\n"
+                f"I have already added {self.identified_educations_count} education qualifications and I am going to fill "
+                f"in education qualification number {self.identified_educations_count + 1}. Give me XPath details about "
+                f"education qualification section number {self.identified_educations_count + 1} only. There are following "
+                f"fields to fill in -\n"
+                f"{field_details_prompt}\n\n"
+                f"Carefully analyse whole HTML and give XPath of the above fields along with mark complete current education "
+                f"qualification button if there is any.\n"
+                f"1. STRICTLY IGNORE all fields which are not related to candidate's "
+                f"education qualification section and not belonging to education qualification section number "
+                f"{self.identified_educations_count + 1}."
+            )
+        else:
+            user_prompt = (
+                f"There is a job application webpage for {self.parent_application_page.parent_job.title} at a "
+                f"company called {self.parent_application_page.parent_job.company}.\n"
                 "I clicked a button to add education qualification details. I am using javascript mutation observer to "
                 "observe DOM changes. When I clicked the button, the observer observed that following "
                 "elements were added or modified in the DOM -\n"
@@ -157,33 +186,23 @@ class EducationSection(PageComponent):
                 f"Out of these observed elements, assess which observed element is strictly having interactive "
                 f"education qualification fields and then you MUST make all the decisions based on that observed "
                 f"element only which is strictly having the interactive education qualification fields."
+                f"The relevant observed element has either or all of "
+                f"the following elements on the current page -\n"
+                f"1. Empty fields to start adding education qualification details like college, degree etc.\n"
+                f"2. A button to mark complete filling in current education qualification info. If 1st point is not valid "
+                f"(meaning already fields to enter education qualification is not present) then this button will also not "
+                f"be present.\n\n"
+                f"I have already added {self.identified_educations_count} education qualifications and I am going to fill "
+                f"in education qualification number {self.identified_educations_count + 1}. There are following "
+                f"fields to fill in -\n"
+                f"{field_details_prompt}\n\n"
+                f"Carefully analyse whole HTML and give XPath of the above fields along with mark complete current education "
+                f"qualification button if there is any.\n"
+                f"1. STRICTLY IGNORE all fields which are not related to candidate's "
+                f"education qualification section and not belonging to education qualification section number "
+                f"{self.identified_educations_count + 1}."
+                f"2. STRICTLY answer all queries and extract all info only from relevant observed element and nothing else."
             )
-        else:
-            observed_elements_prompt = ""
-
-        user_prompt = (
-            f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title} at a "
-            f"company called {self.parent_application_page.parent_job.company}.\n"
-            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
-            f"Current page has UI elements to add candidate's education qualification. It has either or all of "
-            f"the following elements on the current page -\n"
-            f"1. Empty fields to start adding education qualification details like college, degree etc.\n"
-            f"2. A button to mark complete filling in current education qualification info. If 1st point is not valid "
-            f"(meaning already fields to enter education qualification is not present) then this button will also not "
-            f"be present.\n\n"
-            f"I have already added {self.identified_educations_count} education qualifications and I am going to fill "
-            f"in education qualification number {self.identified_educations_count + 1}. Give me XPath details about "
-            f"education qualification section number {self.identified_educations_count + 1} only. There are following "
-            f"fields to fill in -\n"
-            f"{field_details_prompt}\n\n"
-            f"{observed_elements_prompt}"
-            f"Carefully analyse whole HTML and give XPath of the above fields along with mark complete current education "
-            f"qualification button if there is any.\n"
-            f"1. STRICTLY IGNORE all fields which are not related to candidate's "
-            f"education qualification section and not belonging to education qualification section number "
-            f"{self.identified_educations_count + 1}."
-            f"{'2. STRICTLY answer all queries and extract all info only from relevant observed element and nothing else.' if observed_elements_prompt else ''}"
-        )
 
         if retry and prev_x_paths:
             user_prompt += (
@@ -204,10 +223,10 @@ class EducationSection(PageComponent):
                 " there are many.",
             )
 
-        if observed_elements_prompt:
+        if observed_elements_html:
 
             class EducationSectionFields(BaseModel):
-                observed_element_number: int = Field(
+                relevant_observed_element_number: int = Field(
                     ...,
                     description="Number of the observed element which is strictly having interactive education "
                     "qualification fields.",
@@ -386,16 +405,20 @@ class EducationSection(PageComponent):
                 for i, el in enumerate(observed_elements)
                 if not is_stale(el)
             )
+            observed_elements_html = observed_elements_html.strip()
 
-            observed_elements_prompt = (
-                "I clicked a button to add education qualification. I am using javascript mutation observer to "
-                "observe DOM changes. When I clicked the button, the observer observed that following "
-                "elements were added or modified in the DOM -\n"
-                f"{observed_elements_html}\n\n"
-                f"Out of these observed elements, assess which observed element is strictly having interactive "
-                f"education qualification fields and then you MUST make all the decisions based on that observed "
-                f"element only which is strictly having the interactive education qualification fields."
-            )
+            if observed_elements_html:
+                observed_elements_prompt = (
+                    "I clicked a button to add education qualification. I am using javascript mutation observer to "
+                    "observe DOM changes. When I clicked the button, the observer observed that following "
+                    "elements were added or modified in the DOM -\n"
+                    f"{observed_elements_html}\n\n"
+                    f"Out of these observed elements, assess which observed element is strictly having interactive "
+                    f"education qualification fields and then you MUST make all the decisions based on that observed "
+                    f"element only which is strictly having the interactive education qualification fields."
+                )
+            else:
+                observed_elements_prompt = ""
         else:
             observed_elements_prompt = ""
 
@@ -404,9 +427,9 @@ class EducationSection(PageComponent):
         )
         if interactive_education_fields_visible:
             user_prompt = (
-                f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title} at a "
+                f"Following HTML is of a job application webpage for {self.parent_application_page.parent_job.title} at a "
                 f"company called {self.parent_application_page.parent_job.company}.\n"
-                f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
+                f"HTML: {observed_elements_prompt if observed_elements_prompt else minify_html_for_gpt_prompt(driver.page_source)}\n"
                 f"Current page has UI elements to add candidate's education qualification. It has either first or both or "
                 f"none of the following elements on the current page -\n"
                 f"1. Strictly interactive fields to fill education qualification details like college, degree, major etc. "
@@ -416,7 +439,6 @@ class EducationSection(PageComponent):
                 f"2. A button to mark complete filling in current education qualification info. If 1st point is not valid "
                 f"(meaning already fields to enter education qualification is not present) then this button will also not "
                 f"be present.\n\n"
-                f"{observed_elements_prompt}"
                 f"Carefully analyse the {'relevant observed element' if observed_elements_prompt else 'whole HTML'} and find out "
                 f"whether only first or all are present and visible.\n"
                 f"1. STRICTLY IGNORE all fields which are not related to candidate's education qualification section.\n"
@@ -451,7 +473,7 @@ class EducationSection(PageComponent):
             if observed_elements_prompt:
 
                 class EducationSectionFields(BaseModel):
-                    observed_element_number: int = Field(
+                    relevant_observed_element_number: int = Field(
                         ...,
                         description="Number of the observed element which is strictly having interactive education "
                         "qualification fields.",
@@ -485,10 +507,6 @@ class EducationSection(PageComponent):
             else:
 
                 class EducationSectionFields(BaseModel):
-                    proof_of_education_fields_present: Optional[str] = Field(
-                        None,
-                        description="If interactive and visible education fields are present then give proof of that.",
-                    )
                     education_fields: Optional[List[EducationFieldInfo]] = Field(
                         ...,
                         description="Strictly interactive & clearly visible fields to add education qualification details "
@@ -597,16 +615,14 @@ class EducationSection(PageComponent):
         )
         return None
 
-    @staticmethod
-    def _are_interactive_education_fields_visible(observed_elements_prompt):
+    def _are_interactive_education_fields_visible(self, observed_elements_prompt):
         global driver
 
         user_prompt = (
-            f"Following HTML page is job application webpage for Quantitative Engineering - Associate - Global Banking & Markets at a "
-            f"company called Goldman Sachs.\n"
-            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
-            f"{observed_elements_prompt}"
-            f"Current page may have following UI elements -\n"
+            f"Following HTML of a job application webpage for {self.parent_application_page.parent_job.title} at a "
+            f"company called {self.parent_application_page.parent_job.company}.\n"
+            f"HTML: {observed_elements_prompt if observed_elements_prompt else minify_html_for_gpt_prompt(driver.page_source)}\n"
+            f"Current HTML may have following UI elements -\n"
             f"1. Strictly interactive fields to fill education qualification details like college, degree, major etc. "
             f"This maybe possible that fields strictly related to education qualification are not present on the page, "
             f"in that case don't return any field details. Don't confuse yourself between personal and education "
