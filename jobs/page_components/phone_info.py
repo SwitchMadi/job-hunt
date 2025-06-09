@@ -8,7 +8,11 @@ from jobs.page_components import (
     logger,
     ApplicationField,
 )
-from utilities.selenium import get_selenium_driver, minify_html_for_gpt_prompt
+from utilities.selenium import (
+    get_selenium_driver,
+    minify_html_for_gpt_prompt,
+    find_input_block_for_title,
+)
 from utilities.gpt import get_gpt_response
 from utilities import constants
 
@@ -17,7 +21,8 @@ driver.set_page_load_timeout(15)
 
 
 class PhoneInfo(PageComponent):
-    def __init__(self, parent_application_page):
+    def __init__(self, title, parent_application_page):
+        self.title = title
         self.parent_application_page = parent_application_page
         self.identified_fields = []
         self.component_identified = False
@@ -35,9 +40,34 @@ class PhoneInfo(PageComponent):
 
     def _identify(self):
         global driver
+
+        user_input_element = None
+        try:
+            element_identified, user_input_element = find_input_block_for_title(
+                self.title
+            )
+            if not element_identified:
+                logger.warn(
+                    f"Input block for title {self.title} not identified in job "
+                    f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+                )
+        except Exception as e:
+            logger.warn(
+                f"Error while finding input block for title {self.title} in job "
+                f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}. "
+                f"Error: {e.msg if hasattr(e, 'msg') else str(e)}"
+            )
+
+        if user_input_element:
+            minified_html = minify_html_for_gpt_prompt(
+                user_input_element.get_attribute("outerHTML")
+            )
+        else:
+            minified_html = minify_html_for_gpt_prompt(driver.page_source)
+
         user_prompt = (
-            f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title}."
-            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
+            f"Following HTML is of job application webpage for {self.parent_application_page.parent_job.title}."
+            f"HTML: {minified_html}\n"
             f"Extract all phone information related fields on this page. These can include phone country code, "
             f"phone number etc. Return following info for each field -\n"
             f"1. Exact field title as shown on page\n"
@@ -102,13 +132,16 @@ class PhoneInfo(PageComponent):
     def to_dict(self):
         return {
             "class": self.__class__.__name__,
+            "title": self.title,
             "identified_fields": [field.to_dict() for field in self.identified_fields],
             "next": self.next.to_dict() if self.next else None,
         }
 
     @classmethod
     def from_dict(cls, input_dict, parent_application_page):
-        instance = cls(parent_application_page=parent_application_page)
+        instance = cls(
+            title=input_dict["title"], parent_application_page=parent_application_page
+        )
         instance.component_identified = True
 
         for field_dict in input_dict["identified_fields"]:

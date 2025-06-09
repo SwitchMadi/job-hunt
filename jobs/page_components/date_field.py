@@ -8,7 +8,6 @@ from selenium.common.exceptions import NoSuchElementException
 from jobs import ApplicationField, Button
 from jobs.page_components import PageComponent, logger, get_page_component_class_name
 from jobs.page_components.text_input import TextInput
-from jobs.page_components.drop_down import DropDown
 from utilities.selenium import (
     get_selenium_driver,
     simulate_empty_area_click,
@@ -18,6 +17,7 @@ from utilities.selenium import (
     is_stale,
     element_exists,
     get_element_xpath,
+    find_input_block_for_title,
 )
 from utilities import constants
 from utilities.gpt import get_gpt_response
@@ -217,8 +217,7 @@ class DateField(PageComponent):
             return None
 
         user_prompt = (
-            f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title}."
-            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
+            f"There is a job application webpage for {self.parent_application_page.parent_job.title}. "
             f"When date field was clicked, following elements were observed -\n"
             f"{observed_elements_prompt}"
             f"\nIf these observed elements contain a calendar widget, then find XPath of date 27, which is "
@@ -421,9 +420,33 @@ class DateField(PageComponent):
         """Identifies input methods and xpaths of interactive elements for date field"""
         global driver
 
+        user_input_element = None
+        try:
+            element_identified, user_input_element = find_input_block_for_title(
+                self.title
+            )
+            if not element_identified:
+                logger.warn(
+                    f"Input block for title {self.title} not identified in job "
+                    f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+                )
+        except Exception as e:
+            logger.warn(
+                f"Error while finding input block for title {self.title} in job "
+                f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}. "
+                f"Error: {e.msg if hasattr(e, 'msg') else str(e)}"
+            )
+
+        if user_input_element:
+            minified_html = minify_html_for_gpt_prompt(
+                user_input_element.get_attribute("outerHTML")
+            )
+        else:
+            minified_html = minify_html_for_gpt_prompt(driver.page_source)
+
         user_prompt = (
-            f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title}."
-            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
+            f"Following HTML is of job application webpage for {self.parent_application_page.parent_job.title}."
+            f"HTML: {minified_html}\n"
             f"I need to enter date in following date field -\n"
             f"Field title - {self.title}\n"
             f"Field category - {self.category}\n"

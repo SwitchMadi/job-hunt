@@ -8,6 +8,7 @@ from utilities.selenium import (
     get_selenium_driver,
     minify_html_for_gpt_prompt,
     is_element_visible,
+    find_input_block_for_title,
 )
 
 driver = get_selenium_driver()
@@ -34,9 +35,34 @@ class TermsAndConditions(PageComponent):
 
     def _identify(self, retry=False, prev_xpath=None):
         global driver
+
+        user_input_element = None
+        try:
+            element_identified, user_input_element = find_input_block_for_title(
+                self.field_info.field_title
+            )
+            if not element_identified:
+                logger.warn(
+                    f"Input block for title {self.field_info.field_title} not identified in job "
+                    f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+                )
+        except Exception as e:
+            logger.warn(
+                f"Error while finding input block for title {self.field_info.field_title} in job "
+                f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}. "
+                f"Error: {e.msg if hasattr(e, 'msg') else str(e)}"
+            )
+
+        if user_input_element:
+            minified_html = minify_html_for_gpt_prompt(
+                user_input_element.get_attribute("outerHTML")
+            )
+        else:
+            minified_html = minify_html_for_gpt_prompt(driver.page_source)
+
         user_prompt = (
-            f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title}."
-            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
+            f"Following HTML is of job application webpage for {self.parent_application_page.parent_job.title}."
+            f"HTML: {minified_html}\n"
             f"The webpage has TnC field for applying to the job. Following is info about the TnC field -\n"
             f"Field title - {self.field_info.field_title}\n"
             f"Field category - {self.field_info.field_category}\n"
