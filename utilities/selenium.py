@@ -1101,6 +1101,7 @@ def minify_html_for_gpt_prompt(html_content):
         "span",
         "li",
         "ul",
+        "ol",
         "svg",
         "table",
         "tr",
@@ -1135,6 +1136,8 @@ def minify_html_for_gpt_prompt(html_content):
                 "aria-expanded",
                 "data-automation-id",
                 "data-id",
+                "tabindex",
+                "contenteditable",
             ]:
                 del tag[attr]
 
@@ -1321,3 +1324,158 @@ def generate_xpath(tag):
         path.insert(0, f"{tag.name}[{index}]")
         tag = tag.parent
     return "/" + "/".join(path)
+
+
+def identify_options_container_type(element):
+    """
+    Identify the type of options container from a WebElement using its HTML structure.
+    Returns one of: select-option, ul-li, ol-li, listbox-option, menu-menuitem, or None.
+    """
+    try:
+        outer_html = element.get_attribute("outerHTML")
+    except Exception:
+        return None
+
+    if not outer_html:
+        return None
+
+    if re.search(
+        r"<select[^>]*>(?:\s*<option[^>]*>.*?</option>\s*)+</select>",
+        outer_html,
+        re.DOTALL | re.IGNORECASE,
+    ):
+        return "select-option"
+
+    elif re.search(
+        r"<ul[^>]*>(?:\s*<li[^>]*>.*?</li>\s*)+</ul>",
+        outer_html,
+        re.DOTALL | re.IGNORECASE,
+    ):
+        return "ul-li"
+
+    elif re.search(
+        r"<ol[^>]*>(?:\s*<li[^>]*>.*?</li>\s*)+</ol>",
+        outer_html,
+        re.DOTALL | re.IGNORECASE,
+    ):
+        return "ol-li"
+
+    elif re.search(
+        r'<(?P<outer_tag>\w+)[^>]*\srole=["\']listbox["\'][^>]*>'
+        r'(?:.*?<\w+[^>]*\srole=["\']option["\'][^>]*>.*?</\w+>)+'
+        r".*?</(?P=outer_tag)>",
+        outer_html,
+        re.DOTALL | re.IGNORECASE,
+    ):
+        return "listbox-option"
+
+    elif re.search(
+        r'<(?P<outer_tag>\w+)[^>]*\srole=["\']menu["\'][^>]*>'
+        r'(?:.*?<\w+[^>]*\srole=["\']menuitem["\'][^>]*>.*?</\w+>)+'
+        r".*?</(?P=outer_tag)>",
+        outer_html,
+        re.DOTALL | re.IGNORECASE,
+    ):
+        return "menu-menuitem"
+
+    return None
+
+
+def is_interactive_element(el):
+    """Check if a WebElement is a user input element."""
+    try:
+        tag = el.tag_name.lower()
+        INTERACTIVE_TAGS = {"input", "textarea", "select", "button"}
+        if tag in INTERACTIVE_TAGS:
+            return True
+
+        if el.get_attribute("contenteditable") == "true":
+            return True
+
+        role = el.get_attribute("role")
+        INTERACTIVE_ROLES = {
+            "textbox",
+            "combobox",
+            "searchbox",
+            "button",
+            "listbox",
+            "menu",
+        }
+        if role in INTERACTIVE_ROLES:
+            return True
+
+        tabindex = el.get_attribute("tabindex")
+        if tabindex and tabindex.isdigit() and int(tabindex) >= 0:
+            return True
+
+        # Check dropdown-like patterns
+        if identify_options_container_type(el):
+            return True
+
+        return False
+    except Exception:
+        return False
+
+
+def find_first_interactive_descendant_excluding(base_el, exclude_el):
+    try:
+        all_descendants = base_el.find_elements(By.XPATH, ".//*")
+        for el in all_descendants:
+            # Exclude the subtree containing the title_element
+            if exclude_el.id in [e.id for e in el.find_elements(By.XPATH, ".//*")]:
+                continue
+            if is_interactive_element(el):
+                return el
+    except Exception:
+        pass
+    return None
+
+
+def find_input_block_for_title(title, max_levels: int = 6):
+    """
+    Traverse up the DOM from the title element (found by text) to find a parent
+    that has an interactive input element either:
+    - on the element itself
+    - as a sibling
+    - or in a common ancestor outside the title's own subtree
+    """
+    global driver
+    from selenium.webdriver.common.by import By
+
+    title_xpath = get_xpath_by_text(title)
+    if not title_xpath:
+        return None
+
+    title_element = driver.find_element(By.XPATH, title_xpath)
+
+    # 1. Check if the title element itself is interactive
+    if is_interactive_element(title_element):
+        return title_element
+
+    # 2. Check if any siblings are interactive
+    try:
+        parent = title_element.find_element(By.XPATH, "..")
+        siblings = parent.find_elements(By.XPATH, "./*")
+        for sib in siblings:
+            if sib.id != title_element.id and is_interactive_element(sib):
+                return parent
+    except Exception:
+        pass
+
+    # 3. Traverse upwards and search other descendant interactive inputs
+    current = title_element
+    for _ in range(max_levels):
+        try:
+            parent = current.find_element(By.XPATH, "..")
+        except Exception:
+            break
+
+        interactive_input = find_first_interactive_descendant_excluding(
+            parent, title_element
+        )
+        if interactive_input:
+            return parent
+
+        current = parent
+
+    return None
