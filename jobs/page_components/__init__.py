@@ -79,19 +79,26 @@ class ApplicationField:
 
         user_input_element = None
         try:
-            element_identified, user_input_element = find_input_block_for_title(self.title)
+            element_identified, user_input_element = find_input_block_for_title(
+                self.title
+            )
             if not element_identified:
                 logger.warn(
                     f"Input block for title {self.title} not identified in job "
                     f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
                 )
-            minified_html = minify_html_for_gpt_prompt(user_input_element.get_attribute("outerHTML"))
         except Exception as e:
             logger.warn(
                 f"Error while finding input block for title {self.title} in job "
                 f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}. "
                 f"Error: {e.msg if hasattr(e, 'msg') else str(e)}"
             )
+
+        if user_input_element:
+            minified_html = minify_html_for_gpt_prompt(
+                user_input_element.get_attribute("outerHTML")
+            )
+        else:
             minified_html = minify_html_for_gpt_prompt(driver.page_source)
 
         user_prompt = (

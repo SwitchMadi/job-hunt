@@ -488,9 +488,29 @@ def get_xpath_by_text(text):
         return getElementXPath(el.parentNode) + '/' + el.tagName.toLowerCase() + '[' + ix + ']';
     }
 
+    function cleanTextEdges(str) {
+        return str
+            .trim()  // First trim whitespace
+            .replace(/^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$/g, '')  // Then trim special characters
+            .trim();  // Finally trim again in case special chars created new leading/trailing spaces
+    }
+
     function findSmallestElementByText(text) {
+        const cleanedInput = cleanTextEdges(text);
         const allElements = Array.from(document.querySelectorAll('body *'));
-        const matchingElements = allElements.filter(el => el.textContent.trim() === text.trim());
+        let matchingElements;
+
+        if (cleanedInput.length > 100) {
+            matchingElements = allElements.filter(el => {
+                const cleanedElText = cleanTextEdges(el.textContent);
+                return cleanedElText.includes(cleanedInput);
+            });
+        } else {
+            matchingElements = allElements.filter(el => {
+                const cleanedElText = cleanTextEdges(el.textContent);
+                return cleanedElText === cleanedInput;
+            });
+        }
 
         if (matchingElements.length === 0) {
             return null;
@@ -504,7 +524,6 @@ def get_xpath_by_text(text):
     """
 
     xpath = driver.execute_script(js_script, text)
-
     return xpath
 
 
@@ -1138,6 +1157,7 @@ def minify_html_for_gpt_prompt(html_content):
                 "data-id",
                 "tabindex",
                 "contenteditable",
+                "aria-haspopup",
             ]:
                 del tag[attr]
 
@@ -1443,20 +1463,21 @@ def find_input_block_for_title(title, max_levels: int = 4):
 
     title_xpath = get_xpath_by_text(title)
     if not title_xpath:
-        return None
+        return False, None
 
     title_element = driver.find_element(By.XPATH, title_xpath)
 
     # 1. Check if the title element itself is interactive
     if is_interactive_element(title_element):
-        return title_element
+        parent = title_element.find_element(By.XPATH, "..")
+        return True, parent
 
     # 2. Check if any siblings are interactive
     parent = title_element.find_element(By.XPATH, "..")
     siblings = parent.find_elements(By.XPATH, "./*")
     for sib in siblings:
         if sib.id != title_element.id and is_interactive_element(sib):
-            return parent
+            return True, parent
 
     # 3. Traverse upwards and search other descendant interactive inputs
     current = title_element
