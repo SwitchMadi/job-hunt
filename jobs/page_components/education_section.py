@@ -312,7 +312,7 @@ class EducationSection(PageComponent):
 
                     education_fields.append(component)
 
-                if fields.mark_complete_button_x_path:
+                if fields.mark_complete_button_x_path and isinstance(self.head, Button):
                     mark_complete_education_button = Button(
                         x_path=fields.mark_complete_button_x_path,
                         button_type="mark_complete_current_education",
@@ -588,7 +588,7 @@ class EducationSection(PageComponent):
                         if application_field_component:
                             education_fields.append(application_field_component)
 
-                    if education_fields and fields.mark_complete_button_x_path:
+                    if education_fields and fields.mark_complete_button_x_path and isinstance(self.head, Button):
                         mark_complete_education_button = Button(
                             x_path=fields.mark_complete_button_x_path,
                             button_type="mark_complete_current_education",
