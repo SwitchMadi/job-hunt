@@ -691,12 +691,13 @@ class EducationSection(PageComponent):
 
 class Education(PageComponent):
     def __init__(
-        self, education_fields, save_button, education_no, parent_application_page
+        self, education_fields, save_button, education_no, parent_application_page, refetch_fields=False
     ):
         self.education_fields = education_fields
         self.save_button = save_button
         self.education_no = education_no
         self.parent_application_page = parent_application_page
+        self.refetch_fields = refetch_fields
 
         self.education_info = {}
 
@@ -705,23 +706,39 @@ class Education(PageComponent):
 
     def proceed(self, retry=False):
         for field in self.education_fields:
-            question_backup = field.question
-            field.question = (
-                f"{question_backup}\n"
-                f"Above question should be answered for following education information -\n"
-                f"{self.education_info}"
-            )
+            self._process_field(field)
+        
+        if self.refetch_fields:
+            addiotnal_fields = self._refetch_fields()
+            if addiotnal_fields:
+                logger.info(
+                    f"Adding additional {len(addiotnal_fields)} education fields to education "
+                    f"section {self.education_no} for job {self.parent_application_page.parent_job.title} "
+                    f"at url {self.parent_application_page.url}."
+                )
+                self.education_fields.append(addiotnal_fields)
 
-            category_backup = field.category
-            field.category = f"education__{category_backup}__{self.education_no}"
-
-            field.proceed()
-
-            field.question = question_backup
-            field.category = category_backup
+                for field in addiotnal_fields:
+                    self._process_field(field)
 
         if self.save_button:
             self.save_button.proceed()
+
+    def _process_field(self, field):
+        question_backup = field.question
+        field.question = (
+            f"{question_backup}\n"
+            f"Above question should be answered for following education information -\n"
+            f"{self.education_info}"
+        )
+
+        category_backup = field.category
+        field.category = f"education__{category_backup}__{self.education_no}"
+
+        field.proceed()
+
+        field.question = question_backup
+        field.category = category_backup
 
     def to_dict(self):
         return {
