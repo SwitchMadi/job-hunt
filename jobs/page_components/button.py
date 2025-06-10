@@ -107,7 +107,7 @@ class Button(PageComponent):
                 const elementTop = rect.top + window.pageYOffset;
                 const viewportHeight = window.innerHeight;
                 const offsetToCenter = elementTop - (viewportHeight / 2) + (rect.height / 2) + 100;
-                window.scrollTo({top: offsetToCenter, behavior: 'smooth'});
+                window.scrollTo({top: offsetToCenter, behavior: 'auto'});
             """,
                 element,
             )

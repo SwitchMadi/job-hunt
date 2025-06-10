@@ -878,7 +878,7 @@ def get_active_element_after_click(x_path):
         const elementTop = rect.top + window.pageYOffset;
         const viewportHeight = window.innerHeight;
         const offsetToCenter = elementTop - (viewportHeight / 2) + (rect.height / 2) + 100;
-        window.scrollTo({top: offsetToCenter, behavior: 'smooth'});
+        window.scrollTo({top: offsetToCenter, behavior: 'auto'});
     """,
         element,
     )
@@ -920,7 +920,15 @@ def simulate_typing(xpath, text):
     input_field = driver.find_element(By.XPATH, xpath)
 
     driver.execute_script(
-        "arguments[0].scrollIntoView({block: 'center'});", input_field
+        """
+        const element = arguments[0];
+        const rect = element.getBoundingClientRect();
+        const elementTop = rect.top + window.pageYOffset;
+        const viewportHeight = window.innerHeight;
+        const offsetToCenter = elementTop - (viewportHeight / 2) + (rect.height / 2) + 100;
+        window.scrollTo({top: offsetToCenter, behavior: 'auto'});
+    """,
+        input_field,
     )
 
     clear_text_field(xpath)

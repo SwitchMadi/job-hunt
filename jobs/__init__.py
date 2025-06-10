@@ -888,7 +888,7 @@ class ApplicationPage:
                 "phone_number_without_country_code",
             ]:
                 if not self.phone_info_identified:
-                    self._identify_phone_fields()
+                    self._identify_phone_fields(job_field.field_title)
             elif job_field.field_category.value == "tnc":
                 self._identify_tnc_field(job_field)
             elif job_field.field_category.value == "work_experience":
@@ -1009,9 +1009,9 @@ class ApplicationPage:
         self._update_steps(popup)
 
     @retry()
-    def _identify_phone_fields(self):
+    def _identify_phone_fields(self, title):
         """Identify and handle phone number related fields"""
-        phone_info = PhoneInfo(parent_application_page=self)
+        phone_info = PhoneInfo(title=title, parent_application_page=self)
         phone_info.proceed()
         self._update_steps(phone_info)
 
