@@ -14,6 +14,7 @@ from jobs.page_components import PageComponent, logger, get_page_component_class
 from utilities.selenium import (
     get_selenium_driver,
     is_element_visible,
+    element_exists,
     generalize_xpath_attributes,
 )
 
@@ -71,7 +72,17 @@ class Button(PageComponent):
         global driver
 
         try:
-            if not is_element_visible(self.x_path):
+            if element_exists(self.x_path):
+                element = driver.find_element(By.XPATH, self.x_path)
+            else:
+                logger.warning(
+                    f"Element with XPath {self.x_path} not found. "
+                    f"URL - {self.parent_application_page.url if self.parent_application_page else None}"
+                )
+                self.is_component_functional = False
+                return
+
+            if element.tag_name != "input" and not is_element_visible(self.x_path):
                 logger.warning(
                     f"Element with XPath {self.x_path} not found. "
                     f"URL - {self.parent_application_page.url if self.parent_application_page else None} "
@@ -88,8 +99,6 @@ class Button(PageComponent):
 
             # Add initial random delay
             self._human_like_delay()
-
-            element = driver.find_element(By.XPATH, self.x_path)
 
             driver.execute_script(
                 """

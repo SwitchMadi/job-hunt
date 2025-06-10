@@ -9,6 +9,7 @@ from utilities.selenium import (
     generalize_xpath_attributes,
     element_has_area,
     get_active_element_after_click,
+    start_dom_mutation_observer,
 )
 
 
@@ -41,7 +42,7 @@ class TextInput(PageComponent):
         self.next = None
         self.prev = None
 
-    def proceed(self, retry=False):
+    def proceed(self, retry=False, start_mutation_observer=False):
         global driver
 
         answer_input_successful = False
@@ -71,6 +72,9 @@ class TextInput(PageComponent):
                 clear_text_field(self.x_path)
 
             element = get_active_element_after_click(self.x_path)
+
+            if start_mutation_observer:
+                start_dom_mutation_observer()
 
             if self.category in ["otp_textbox", "date_field"]:
                 for letter in str(self.answer):

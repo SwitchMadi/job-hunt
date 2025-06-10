@@ -131,8 +131,7 @@ class SearchField(PageComponent):
 
                 if not self.options_container_x_path:
                     simulate_empty_area_click(text_to_click=self.title)
-                    start_dom_mutation_observer()
-                    element.proceed()
+                    element.proceed(start_mutation_observer=True)
                     time.sleep(2)
                     observed_elements = get_observed_elements()
 

@@ -885,7 +885,11 @@ def get_active_element_after_click(x_path):
     time.sleep(0.5)
 
     try:
-        element.click()  # Ensure the field is focused
+        if element.tag_name == "input":
+            actions = ActionChains(driver)
+            actions.move_to_element(element).click().perform()
+        else:
+            element.click()  # Ensure the field is focused
     except (ElementClickInterceptedException, ElementNotInteractableException):
         # Fallback: use JS to focus
         driver.execute_script("arguments[0].click();", element)
