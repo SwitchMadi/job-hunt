@@ -151,11 +151,38 @@ class ApplicationPage:
             """
         return execute_sql_query(query)
 
-    def _update_steps(self, step):
+    def update_steps(self, step, inplace=False):
         if step.is_component_functional:
             if self.head_step is None:
                 self.head_step = step
                 self.tail_step = step
+            elif inplace:
+                # Try to find and replace an existing step of the same class
+                cur_step = self.head_step
+                replaced = False
+                while cur_step:
+                    if cur_step.__class__ == step.__class__:
+                        step.prev = cur_step.prev
+                        step.next = cur_step.next
+
+                        if cur_step.prev:
+                            cur_step.prev.next = step
+                        else:
+                            self.head_step = step  # cur_step was head
+
+                        if cur_step.next:
+                            cur_step.next.prev = step
+                        else:
+                            self.tail_step = step  # cur_step was tail
+
+                        replaced = True
+                        break
+                    cur_step = cur_step.next
+
+                if not replaced:
+                    self.tail_step.next = step
+                    step.prev = self.tail_step
+                    self.tail_step = step
             else:
                 self.tail_step.next = step
                 step.prev = self.tail_step
@@ -916,13 +943,13 @@ class ApplicationPage:
     def _identify_cookies_consent(self):
         cookies_field = CookiesConsent(parent_application_page=self)
         cookies_field.proceed()
-        self._update_steps(cookies_field)
+        self.update_steps(cookies_field)
 
     @retry()
     def _identify_start_application_button(self):
         start_application_field = StartApplication(parent_application_page=self)
         start_application_field.proceed()
-        self._update_steps(start_application_field)
+        self.update_steps(start_application_field)
 
         return start_application_field.is_component_functional
 
@@ -932,7 +959,7 @@ class ApplicationPage:
             parent_application_page=self
         )
         application_data_source_field.proceed()
-        self._update_steps(application_data_source_field)
+        self.update_steps(application_data_source_field)
 
         return application_data_source_field.is_component_functional
 
@@ -940,7 +967,7 @@ class ApplicationPage:
     def _extract_login_step_details(self):
         login_step = Login(parent_application_page=self)
         login_step.proceed()
-        self._update_steps(login_step)
+        self.update_steps(login_step)
 
         return login_step.is_component_functional
 
@@ -950,13 +977,13 @@ class ApplicationPage:
             parent_application_page=self, field_info=job_field
         )
         tnc_field_step.proceed()
-        self._update_steps(tnc_field_step)
+        self.update_steps(tnc_field_step)
 
     @retry()
     def _identify_next_page_button(self):
         next_page_button = NextPage(parent_application_page=self)
         next_page_button.proceed()
-        self._update_steps(next_page_button)
+        self.update_steps(next_page_button)
 
         return next_page_button.is_component_functional
 
@@ -964,7 +991,7 @@ class ApplicationPage:
     def _identify_verify_email_field(self):
         verify_account_component = VerifyAccount(parent_application_page=self)
         verify_account_component.proceed()
-        self._update_steps(verify_account_component)
+        self.update_steps(verify_account_component)
 
         return verify_account_component.is_component_functional
 
@@ -982,23 +1009,23 @@ class ApplicationPage:
             return
 
         application_field_component.proceed()
-        self._update_steps(application_field_component)
+        self.update_steps(application_field_component)
 
     def _identify_work_experience_section(self):
         work_experience_section = WorkExperienceSection(parent_application_page=self)
         work_experience_section.proceed()
-        self._update_steps(work_experience_section)
+        self.update_steps(work_experience_section)
 
     def _identify_education_section(self):
         education_section = EducationSection(parent_application_page=self)
         education_section.proceed()
-        self._update_steps(education_section)
+        self.update_steps(education_section)
 
     @retry()
     def _identify_resume_upload_field(self, title):
         resume_upload_button = ResumeUpload(title=title, parent_application_page=self)
         resume_upload_button.proceed()
-        self._update_steps(resume_upload_button)
+        self.update_steps(resume_upload_button)
 
         self._identify_popup()
 
@@ -1006,14 +1033,14 @@ class ApplicationPage:
     def _identify_popup(self):
         popup = Popup(previous_step="resume_upload", parent_application_page=self)
         popup.proceed()
-        self._update_steps(popup)
+        self.update_steps(popup)
 
     @retry()
     def _identify_phone_fields(self, title):
         """Identify and handle phone number related fields"""
         phone_info = PhoneInfo(title=title, parent_application_page=self)
         phone_info.proceed()
-        self._update_steps(phone_info)
+        self.update_steps(phone_info)
 
     def _identify_submit_application_button(self):
         submit_application_button = SubmitApplication(parent_application_page=self)
@@ -1033,4 +1060,4 @@ class ApplicationPage:
                 )
                 self._act_on_job_fields(error_fields)
 
-            self._update_steps(submit_application_button)
+            self.update_steps(submit_application_button)

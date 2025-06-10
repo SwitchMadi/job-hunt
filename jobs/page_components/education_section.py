@@ -64,15 +64,23 @@ class EducationSection(PageComponent):
             if curr_node and isinstance(curr_node, Education):
                 curr_node.education_info = user_education[curr_education_index]
                 curr_node.proceed()
-                curr_education_index += 1
                 self.is_component_functional = True
+
+                self._update_nodes(curr_node)
+
+                curr_education_index += 1
                 curr_node = curr_node.next
 
             if curr_node is None:
                 curr_node = self._identify_add_education_button()
 
             if curr_node and not isinstance(curr_node, Education):
-                curr_node = self._add_another_education_qualification(curr_node)
+                new_curr_node = self._add_another_education_qualification(curr_node)
+                self.is_component_functional = True
+
+                self._update_nodes(curr_node)
+
+                curr_node = new_curr_node
 
         return
 
@@ -112,7 +120,7 @@ class EducationSection(PageComponent):
             f"Updating new education fields in db for job - "
             f"{self.parent_application_page.parent_job.title}, url - {self.parent_application_page.url}"
         )
-        self.parent_application_page.save_application_steps()
+        self.parent_application_page.update_steps(self, inplace=True)
 
         return
 
@@ -326,8 +334,8 @@ class EducationSection(PageComponent):
                     save_button=mark_complete_education_button,
                     education_no=self.identified_educations_count + 1,
                     parent_application_page=self.parent_application_page,
+                    refetch_fields=True,
                 )
-                self._update_nodes(curr_node)
 
             if curr_node:
                 return curr_node
@@ -386,7 +394,6 @@ class EducationSection(PageComponent):
                     button_type="add_another_education_qualification",
                     parent_application_page=self.parent_application_page,
                 )
-                self._update_nodes(add_education_button)
 
                 return add_education_button
 
@@ -607,8 +614,8 @@ class EducationSection(PageComponent):
                             save_button=mark_complete_education_button,
                             education_no=self.identified_educations_count + 1,
                             parent_application_page=self.parent_application_page,
+                            refetch_fields=True,
                         )
-                        self._update_nodes(curr_node)
 
                 if curr_node:
                     return curr_node
@@ -691,7 +698,12 @@ class EducationSection(PageComponent):
 
 class Education(PageComponent):
     def __init__(
-        self, education_fields, save_button, education_no, parent_application_page, refetch_fields=False
+        self,
+        education_fields,
+        save_button,
+        education_no,
+        parent_application_page,
+        refetch_fields=False,
     ):
         self.education_fields = education_fields
         self.save_button = save_button
@@ -707,18 +719,18 @@ class Education(PageComponent):
     def proceed(self, retry=False):
         for field in self.education_fields:
             self._process_field(field)
-        
+
         if self.refetch_fields:
-            addiotnal_fields = self._refetch_fields()
-            if addiotnal_fields:
+            additional_fields = self._refetch_fields()
+            if additional_fields:
                 logger.info(
-                    f"Adding additional {len(addiotnal_fields)} education fields to education "
+                    f"Adding additional {len(additional_fields)} education fields to education "
                     f"section {self.education_no} for job {self.parent_application_page.parent_job.title} "
                     f"at url {self.parent_application_page.url}."
                 )
-                self.education_fields.append(addiotnal_fields)
+                self.education_fields.append(additional_fields)
 
-                for field in addiotnal_fields:
+                for field in additional_fields:
                     self._process_field(field)
 
         if self.save_button:
@@ -739,6 +751,103 @@ class Education(PageComponent):
 
         field.question = question_backup
         field.category = category_backup
+
+    def _refetch_fields(self):
+        """Fetch additional education fields that are not already present in existing education_fields"""
+        global driver
+
+        user_prompt = (
+            f"Following HTML is of a job application webpage for {self.parent_application_page.parent_job.title} at a "
+            f"company called {self.parent_application_page.parent_job.company}.\n"
+            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
+            f"Current page has UI elements to add candidate's education qualification. I am currently working on "
+            f"education qualification number {self.education_no}. Give me details about education qualification "
+            f"section number {self.education_no} only. If more than one education sections seem to be present on "
+            f"the page, focus only on education qualification section number {self.education_no} and completely "
+            f"ignore all other education sections. "
+            f"Identify strictly interactive fields to fill education qualification "
+            f"details like college, degree, major etc. Only return fields that are "
+            f"clearly visible, interactive, and related to education qualifications.\n"
+            f"1. STRICTLY IGNORE all fields which are not related to candidate's education qualification section. "
+            f"If more than one education sections seem to be present, ignore fields not belonging to education "
+            f"qualification section number {self.education_no}.\n"
+        )
+
+        from enum import Enum
+
+        class FieldCategory(Enum):
+            degree = "degree"
+            field_of_study = "field_of_study"
+            institution = "institution"
+            location = "location"
+            start_date = "start_date"
+            end_date = "end_date"
+            other = "other"
+
+        class EducationFieldInfo(BaseModel):
+            field_title: str = Field(
+                ...,
+                description="Education field's exact title / question mentioned on the webpage, without any "
+                "modification.",
+            )
+            field_question: Optional[str] = Field(
+                ...,
+                description="If field title on its own is not self explanatory then modify it so that it makes sense as"
+                " a question.",
+            )
+            field_category: FieldCategory = Field(
+                ...,
+                description="Education qualification field category like college, degree etc.",
+            )
+
+        class EducationFields(BaseModel):
+            education_fields: List[EducationFieldInfo] = Field(
+                ...,
+                description="Strictly interactive & clearly visible fields to add education qualification "
+                "details like college, degree etc.",
+            )
+
+        fields_found, fields = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=EducationFields,
+        )
+
+        additional_fields = []
+        if fields_found and fields.education_fields:
+            # Filter out any fields that might have duplicate titles by mistake
+            filtered_fields = []
+            existing_field_titles = [field.title for field in self.education_fields]
+            for field in fields.education_fields:
+                if field.field_title not in existing_field_titles:
+                    filtered_fields.append(field)
+
+            for field in filtered_fields:
+                if field.field_category.value in ["start_date", "end_date"]:
+                    from jobs.page_components.date_field import DateField
+
+                    application_field_component = DateField(
+                        title=field.field_title,
+                        question=field.field_question,
+                        category=field.field_category.value,
+                        parent_application_page=self.parent_application_page,
+                        persist_context_fields=False,
+                    )
+                else:
+                    application_field = ApplicationField(
+                        parent_application_page=self.parent_application_page,
+                        title=field.field_title,
+                        question=field.field_question,
+                        category=field.field_category.value,
+                    )
+                    application_field_component = (
+                        application_field.get_field_component()
+                    )
+
+                if application_field_component:
+                    additional_fields.append(application_field_component)
+
+        return additional_fields
 
     def to_dict(self):
         return {

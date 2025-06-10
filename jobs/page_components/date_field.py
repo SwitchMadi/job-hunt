@@ -84,30 +84,33 @@ class DateField(PageComponent):
             "xpath"
         ) or self.components.get("date", {}).get("xpath")
 
-        date_format = self._extract_date_format_from_input_type_tag(click_xpath)
-        if date_format:
-            self.date_format = date_format
-            self.input_method_details_identified = True
-            return True
+        if element_exists(click_xpath):
+            date_format = self._extract_date_format_from_input_type_tag(click_xpath)
+            if date_format:
+                self.date_format = date_format
+                self.input_method_details_identified = True
+                return True
 
-        start_dom_mutation_observer()
-        button = Button(
-            x_path=click_xpath,
-            button_type="date",
-            parent_application_page=self.parent_application_page,
-        )
-        button.proceed()
-
-        observed_elements = get_observed_elements()
-        observed_elements = [el for el in observed_elements if not is_stale(el)]
-        if observed_elements:
-            is_regex_op_successful = self._identify_calendar_using_regex(
-                observed_elements
+            start_dom_mutation_observer()
+            button = Button(
+                x_path=click_xpath,
+                button_type="date",
+                parent_application_page=self.parent_application_page,
             )
-            if not is_regex_op_successful:
-                self._identify_calendar_using_llm(observed_elements)
+            button.proceed()
 
-        if self.components.get("date", {}).get("xpath"):
+            observed_elements = get_observed_elements()
+            observed_elements = [el for el in observed_elements if not is_stale(el)]
+            if observed_elements:
+                is_regex_op_successful = self._identify_calendar_using_regex(
+                    observed_elements
+                )
+                if not is_regex_op_successful:
+                    self._identify_calendar_using_llm(observed_elements)
+
+        if self.components.get("date", {}).get("xpath") and element_exists(
+            self.components.get("date", {}).get("xpath")
+        ):
             # Get format from field value after selecting 27th or Jan month
             field = driver.find_element(
                 By.XPATH, self.components.get("date", {}).get("xpath")

@@ -196,13 +196,14 @@ def is_element_visible(x_path):
     try:
         elements = driver.find_elements(By.XPATH, x_path)
         for element in elements:
-            element_size = element.size
-            if (
-                element.is_displayed()
-                and element_size["width"] > 0
-                and element_size["height"] > 0
-            ):
-                return True
+            if not is_stale(element):
+                element_size = element.size
+                if (
+                    element.is_displayed()
+                    and element_size["width"] > 0
+                    and element_size["height"] > 0
+                ):
+                    return True
         return False
     except (InvalidSelectorException, NoSuchElementException):
         return False
