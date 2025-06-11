@@ -2,6 +2,7 @@ from selenium.webdriver.common.by import By
 
 from jobs import ApplicationField
 from jobs.page_components import PageComponent, get_page_component_class_name
+from jobs.page_components.button import Button
 from utilities.selenium import get_selenium_driver
 
 
@@ -58,14 +59,25 @@ class CheckBox(PageComponent):
     def validate_checkbox(cls, options):
         multiple_correct = False
 
+        # If there are no options or only one option, we can consider it valid
         if len(options) <= 1:
-            return multiple_correct
+            return True
 
         option_1 = driver.find_element(By.XPATH, options[0]["x_path"])
-        option_1.click()
+        option_button_1 = Button(
+            x_path=options[0]["x_path"],
+            button_type="checkbox",
+            parent_application_page=None,
+        )
+        option_button_1.proceed()
 
         option_2 = driver.find_element(By.XPATH, options[1]["x_path"])
-        option_2.click()
+        option_button_2 = Button(
+            x_path=options[1]["x_path"],
+            button_type="checkbox",
+            parent_application_page=None,
+        )
+        option_button_2.proceed()
 
         if option_1.is_selected() and option_2.is_selected():
             multiple_correct = True

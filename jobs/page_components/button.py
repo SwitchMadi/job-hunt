@@ -47,8 +47,8 @@ class Button(PageComponent):
         size = element.size
 
         # Calculate a random point within the element
-        offset_x = random.randint(5, size["width"] - 5)
-        offset_y = random.randint(5, size["height"] - 5)
+        offset_x = random.randint(5, (size["width"] or 15) - 5)
+        offset_y = random.randint(5, (size["height"] or 15) - 5)
 
         # Create a curved movement by adding intermediate points
         start_x = random.randint(0, 100)

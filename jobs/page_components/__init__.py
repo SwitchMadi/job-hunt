@@ -159,7 +159,7 @@ class ApplicationField:
             x_path: str = Field(
                 ...,
                 description="XPath of the checkbox / radio button which can be used in selenium "
-                "chrome driver to search the checkbox / radio button. Don't use HTML "
+                "chrome driver to search & click the checkbox / radio button. Don't use HTML "
                 "hierarchy to construct XPath.",
             )
 

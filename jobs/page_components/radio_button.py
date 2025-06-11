@@ -2,6 +2,7 @@ from selenium.webdriver.common.by import By
 
 from jobs import ApplicationField
 from jobs.page_components import PageComponent, get_page_component_class_name
+from jobs.page_components.button import Button
 from utilities.selenium import get_selenium_driver
 
 
@@ -49,8 +50,12 @@ class RadioButton(PageComponent):
             )
 
         option = [option for option in self.options if option["text"] == answer][0]
-        option_element = driver.find_element(By.XPATH, option["x_path"])
-        option_element.click()
+        option_element = Button(
+            x_path=option["x_path"],
+            button_type="radio",
+            parent_application_page=None,
+        )
+        option_element.proceed()
 
         self.is_component_functional = True
         return
