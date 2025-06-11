@@ -757,7 +757,9 @@ class Education(PageComponent):
         global driver
 
         existing_field_titles = [field.title for field in self.education_fields]
-        existing_field_titles_prompt = "\n".join([f"{idx + 1} - {value}" for idx, value in enumerate(existing_field_titles)])
+        existing_field_titles_prompt = "\n".join(
+            [f"{idx + 1} - {value}" for idx, value in enumerate(existing_field_titles)]
+        )
 
         user_prompt = (
             f"Following HTML is of a job application webpage for {self.parent_application_page.parent_job.title} at a "
