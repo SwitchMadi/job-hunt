@@ -756,18 +756,22 @@ class Education(PageComponent):
         """Fetch additional education fields that are not already present in existing education_fields"""
         global driver
 
+        existing_field_titles = [field.title for field in self.education_fields]
+        existing_field_titles_prompt = "\n".join([f"{idx + 1} - {value}" for idx, value in enumerate(existing_field_titles)])
+
         user_prompt = (
             f"Following HTML is of a job application webpage for {self.parent_application_page.parent_job.title} at a "
             f"company called {self.parent_application_page.parent_job.company}.\n"
             f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
             f"Current page has UI elements to add candidate's education qualification. I am currently working on "
-            f"education qualification number {self.education_no}. Give me details about education qualification "
-            f"section number {self.education_no} only. If more than one education sections seem to be present on "
+            f"education qualification number {self.education_no}. If more than one education sections seem to be present on "
             f"the page, focus only on education qualification section number {self.education_no} and completely "
             f"ignore all other education sections. "
             f"Identify strictly interactive fields to fill education qualification "
             f"details like college, degree, major etc. Only return fields that are "
             f"clearly visible, interactive, and related to education qualifications.\n"
+            f"Following title I have already identified so you can ignore them and not send in your response -\n"
+            f"{existing_field_titles_prompt}\n"
             f"1. STRICTLY IGNORE all fields which are not related to candidate's education qualification section. "
             f"If more than one education sections seem to be present, ignore fields not belonging to education "
             f"qualification section number {self.education_no}.\n"
@@ -817,7 +821,6 @@ class Education(PageComponent):
         if fields_found and fields.education_fields:
             # Filter out any fields that might have duplicate titles by mistake
             filtered_fields = []
-            existing_field_titles = [field.title for field in self.education_fields]
             for field in fields.education_fields:
                 if field.field_title not in existing_field_titles:
                     filtered_fields.append(field)
