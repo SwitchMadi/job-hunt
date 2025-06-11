@@ -724,6 +724,17 @@ class ApplicationPage:
             job_fields = self._identify_application_fields()
             self._act_on_job_fields(job_fields)
 
+            # Try to get additional fields that might have been missed
+            additional_fields = self._identify_application_fields(
+                get_additional_fields=True, existing_fields=job_fields
+            )
+            if additional_fields:
+                logger.info(
+                    f"Found {len(additional_fields)} additional fields to process for {self.parent_job.title}. "
+                    f"URL - {self.url}"
+                )
+                self._act_on_job_fields(additional_fields)
+
         # last action after all on page components
         if elements.next_button.value:
             is_next_page_button_functional = self._identify_next_page_button()
@@ -741,7 +752,12 @@ class ApplicationPage:
             return True
 
     # Identify application fields
-    def _identify_application_fields(self, identify_only_errors=False):
+    def _identify_application_fields(
+        self,
+        identify_only_errors=False,
+        get_additional_fields=False,
+        existing_fields=None,
+    ):
         global driver
 
         if identify_only_errors:
@@ -750,6 +766,30 @@ class ApplicationPage:
                 "errors on the page / around job fields. Analyse the whole HTML very carefully for extracting all the "
                 "application fields which are definitely having an error. Strictly ignore the fields where there is no "
                 "error for sure."
+            )
+        elif get_additional_fields and existing_fields:
+            # Create a summary of existing fields for the additional fields prompt
+            found_fields_summary = []
+            for field in existing_fields:
+                if hasattr(field, "field_title") and hasattr(field, "field_category"):
+                    found_fields_summary.append(
+                        f"- {field.field_title} ({field.field_category.value if hasattr(field.field_category, 'value') else field.field_category})"
+                    )
+                else:
+                    # Handle case where field might be a simple dict or different structure
+                    field_title = (
+                        field.get("field_title", "")
+                        if isinstance(field, dict)
+                        else str(field)
+                    )
+                    found_fields_summary.append(f"- {field_title}")
+
+            prompt_part = (
+                "The webpage has job application related fields. I have already identified the following fields:\n"
+                f"{chr(10).join(found_fields_summary)}\n\n"
+                "Analyse the whole HTML very carefully again to identify any ADDITIONAL application fields "
+                "that might have been missed in the previous analysis. Only return fields that are NOT already "
+                "listed above. If no additional fields are found, return an empty list."
             )
         else:
             prompt_part = (
@@ -849,61 +889,39 @@ class ApplicationPage:
             )
             return []
 
-        # If we found 10 or more fields, there might be missed fields, so try a refetch
-        # Skip refetch for error-only identification as it's meant for specific error fields
-        if len(initial_fields) > 10 and not identify_only_errors:
-            logger.info(
-                f"Found {len(initial_fields)} fields, attempting refetch to catch any missed fields "
-                f"for {self.parent_job.title}. URL - {self.url}"
-            )
-
-            # Create a summary of previously found fields for the refetch prompt
-            found_fields_summary = []
-            for field in initial_fields:
-                found_fields_summary.append(
-                    f"- {field.field_title} ({field.field_category.value})"
-                )
-
-            # Keep the same start but modify the analysis part for refetch
-            refetch_prompt_part = (
-                "The webpage has job application related fields. I have already identified the following fields:\n"
-                f"{chr(10).join(found_fields_summary)}\n\n"
-                "Analyse the whole HTML very carefully again to identify any ADDITIONAL application fields "
-                "that might have been missed in the previous analysis. Only return fields that are NOT already "
-                "listed above. If no additional fields are found, return an empty list."
-            )
-
-            refetch_fields = _get_fields_from_gpt(refetch_prompt_part)
-
-            if refetch_fields:
+        # If this is a request for additional fields, return them directly
+        if get_additional_fields and existing_fields:
+            if initial_fields:
                 logger.info(
-                    f"Found {len(refetch_fields)} additional fields in refetch for {self.parent_job.title}. "
+                    f"Found {len(initial_fields)} additional fields for {self.parent_job.title}. "
                     f"URL - {self.url}"
                 )
 
-                # Combine initial and refetch fields
-                combined_fields = initial_fields + refetch_fields
+                # Deduplicate against existing fields based on field_title (case-insensitive)
+                existing_titles = set()
+                for field in existing_fields:
+                    if hasattr(field, "field_title"):
+                        existing_titles.add(field.field_title.lower().strip())
+                    elif isinstance(field, dict) and "field_title" in field:
+                        existing_titles.add(field["field_title"].lower().strip())
 
-                # Deduplicate based on field_title (case-insensitive) to avoid duplicates
-                seen_titles = set()
                 deduplicated_fields = []
-
-                for field in combined_fields:
+                for field in initial_fields:
                     field_title_lower = field.field_title.lower().strip()
-                    if field_title_lower not in seen_titles:
-                        seen_titles.add(field_title_lower)
+                    if field_title_lower not in existing_titles:
                         deduplicated_fields.append(field)
 
                 logger.info(
-                    f"After deduplication: {len(deduplicated_fields)} total fields for {self.parent_job.title}. "
+                    f"After deduplication against existing fields: {len(deduplicated_fields)} new fields for {self.parent_job.title}. "
                     f"URL - {self.url}"
                 )
 
                 return deduplicated_fields
             else:
                 logger.info(
-                    f"No additional fields found in refetch for {self.parent_job.title}. URL - {self.url}"
+                    f"No additional fields found for {self.parent_job.title}. URL - {self.url}"
                 )
+                return []
 
         return initial_fields
 
