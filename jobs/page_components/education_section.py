@@ -75,12 +75,7 @@ class EducationSection(PageComponent):
                 curr_node = self._identify_add_education_button()
 
             if curr_node and not isinstance(curr_node, Education):
-                new_curr_node = self._add_another_education_qualification(curr_node)
-                self.is_component_functional = True
-
-                self._update_nodes(curr_node)
-
-                curr_node = new_curr_node
+                curr_node = self._add_another_education_qualification(curr_node)
 
         return
 
@@ -133,6 +128,9 @@ class EducationSection(PageComponent):
         start_dom_mutation_observer()
         curr_node.proceed()
         observed_elements = get_observed_elements()
+
+        self.is_component_functional = True
+        self._update_nodes(curr_node)
 
         if not self.education_fields:
             curr_node = self._identify_education_fields(observed_elements)
