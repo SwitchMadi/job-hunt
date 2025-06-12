@@ -517,7 +517,26 @@ def get_xpath_by_text(text):
             return null;
         }
 
-        matchingElements.sort((a, b) => a.textContent.length - b.textContent.length);
+        // Helper to get element depth in the DOM tree
+        function getDepth(el) {
+            let depth = 0;
+            while (el.parentElement) {
+                depth++;
+                el = el.parentElement;
+            }
+            return depth;
+        }
+
+        // Sort by text length first, then by nesting depth (desc)
+        matchingElements.sort((a, b) => {
+            const lenA = cleanTextEdges(a.textContent).length;
+            const lenB = cleanTextEdges(b.textContent).length;
+            if (lenA !== lenB) {
+                return lenA - lenB;  // shorter text first
+            }
+            return getDepth(b) - getDepth(a);  // more nested first if tie
+        });
+        
         return getElementXPath(matchingElements[0]);
     }
 
