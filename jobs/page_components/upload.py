@@ -45,7 +45,7 @@ class Upload(PageComponent):
             element.click()
             time.sleep(1)
 
-            pyautogui.write(self.file_path, interval=0.05)
+            self._type_file_path_cleanly()
             time.sleep(1)
 
             current_os = platform.system()
@@ -67,6 +67,23 @@ class Upload(PageComponent):
             )
 
         return
+    
+    def _type_file_path_cleanly(self):
+        # Step 1: Type a fixed key to ensure typing bar is active
+        pyautogui.write("abcdefgh", interval=0.05)
+        time.sleep(0.3)
+
+        # Step 2: Select all and delete (OS-specific)
+        current_os = platform.system()
+        if current_os == "Darwin":
+            pyautogui.hotkey("command", "a")
+        else:
+            pyautogui.hotkey("ctrl", "a")
+        pyautogui.press("backspace")
+        time.sleep(0.3)
+
+        # Step 3: Write the correct file path
+        pyautogui.write(self.file_path, interval=0.05)
 
     def to_dict(self):
         return {
