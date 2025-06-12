@@ -67,10 +67,10 @@ class Upload(PageComponent):
             )
 
         return
-    
+
     def _type_file_path_cleanly(self):
         # Step 1: Type a fixed key to ensure typing bar is active
-        pyautogui.write("abcdefgh", interval=0.05)
+        pyautogui.write("/abcdefgh", interval=0.05)
         time.sleep(0.3)
 
         # Step 2: Select all and delete (OS-specific)
