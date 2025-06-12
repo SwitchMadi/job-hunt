@@ -724,16 +724,28 @@ class ApplicationPage:
             job_fields = self._identify_application_fields()
             self._act_on_job_fields(job_fields)
 
-            # Try to get additional fields that might have been missed
-            additional_fields = self._identify_application_fields(
-                get_additional_fields=True, existing_fields=job_fields
-            )
+            # Fetch fields again and remove duplicates based on title
+            additional_fields = self._identify_application_fields()
             if additional_fields:
-                logger.info(
-                    f"Found {len(additional_fields)} additional fields to process for {self.parent_job.title}. "
-                    f"URL - {self.url}"
-                )
-                self._act_on_job_fields(additional_fields)
+                # Remove duplicates based on field title (case-insensitive)
+                existing_titles = set()
+                for field in job_fields:
+                    if hasattr(field, "field_title"):
+                        existing_titles.add(field.field_title.lower().strip())
+
+                unique_additional_fields = []
+                for field in additional_fields:
+                    field_title_lower = field.field_title.lower().strip()
+                    if field_title_lower not in existing_titles:
+                        unique_additional_fields.append(field)
+                        existing_titles.add(field_title_lower)
+
+                if unique_additional_fields:
+                    logger.info(
+                        f"Found {len(unique_additional_fields)} additional unique fields for {self.parent_job.title}. "
+                        f"URL - {self.url}"
+                    )
+                    self._act_on_job_fields(unique_additional_fields)
 
         # last action after all on page components
         if elements.next_button.value:
@@ -755,8 +767,6 @@ class ApplicationPage:
     def _identify_application_fields(
         self,
         identify_only_errors=False,
-        get_additional_fields=False,
-        existing_fields=None,
     ):
         global driver
 
@@ -766,30 +776,6 @@ class ApplicationPage:
                 "errors on the page / around job fields. Analyse the whole HTML very carefully for extracting all the "
                 "application fields which are definitely having an error. Strictly ignore the fields where there is no "
                 "error for sure."
-            )
-        elif get_additional_fields and existing_fields:
-            # Create a summary of existing fields for the additional fields prompt
-            found_fields_summary = []
-            for field in existing_fields:
-                if hasattr(field, "field_title") and hasattr(field, "field_category"):
-                    found_fields_summary.append(
-                        f"- {field.field_title} ({field.field_category.value if hasattr(field.field_category, 'value') else field.field_category})"
-                    )
-                else:
-                    # Handle case where field might be a simple dict or different structure
-                    field_title = (
-                        field.get("field_title", "")
-                        if isinstance(field, dict)
-                        else str(field)
-                    )
-                    found_fields_summary.append(f"- {field_title}")
-
-            prompt_part = (
-                "The webpage has job application related fields. I have already identified the following fields:\n"
-                f"{chr(10).join(found_fields_summary)}\n\n"
-                "Analyse the whole HTML very carefully again to identify any ADDITIONAL application fields "
-                "that might have been missed in the previous analysis. Only return fields that are NOT already "
-                "listed above. If no additional fields are found, return an empty list."
             )
         else:
             prompt_part = (
@@ -888,40 +874,6 @@ class ApplicationPage:
                 f"Couldn't extract job fields for {self.parent_job.title}. URL - {self.url}"
             )
             return []
-
-        # If this is a request for additional fields, return them directly
-        if get_additional_fields and existing_fields:
-            if initial_fields:
-                logger.info(
-                    f"Found {len(initial_fields)} additional fields for {self.parent_job.title}. "
-                    f"URL - {self.url}"
-                )
-
-                # Deduplicate against existing fields based on field_title (case-insensitive)
-                existing_titles = set()
-                for field in existing_fields:
-                    if hasattr(field, "field_title"):
-                        existing_titles.add(field.field_title.lower().strip())
-                    elif isinstance(field, dict) and "field_title" in field:
-                        existing_titles.add(field["field_title"].lower().strip())
-
-                deduplicated_fields = []
-                for field in initial_fields:
-                    field_title_lower = field.field_title.lower().strip()
-                    if field_title_lower not in existing_titles:
-                        deduplicated_fields.append(field)
-
-                logger.info(
-                    f"After deduplication against existing fields: {len(deduplicated_fields)} new fields for {self.parent_job.title}. "
-                    f"URL - {self.url}"
-                )
-
-                return deduplicated_fields
-            else:
-                logger.info(
-                    f"No additional fields found for {self.parent_job.title}. URL - {self.url}"
-                )
-                return []
 
         return initial_fields
 
