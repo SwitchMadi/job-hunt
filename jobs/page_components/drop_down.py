@@ -222,6 +222,10 @@ class DropDown(PageComponent):
             return f"{options_container_x_path}//*[contains(@role, 'option')]"
         elif dropdown_type == "menu-menuitem":
             return f"{options_container_x_path}//*[contains(@role, 'menuitem')]"
+        elif dropdown_type == "custom-div-dropdown":
+            return (
+                f"{options_container_x_path}//*[contains(@class, 'dropdown-location')]"
+            )
         else:
             return None
 

@@ -50,7 +50,13 @@ class CheckBox(PageComponent):
 
         for option in options_to_select:
             option_element = driver.find_element(By.XPATH, option["x_path"])
-            option_element.click()
+            if not option_element.is_selected():
+                option_element = Button(
+                    x_path=option["x_path"],
+                    button_type="checkbox",
+                    parent_application_page=None,
+                )
+                option_element.proceed()
 
         self.is_component_functional = True
         return
@@ -64,6 +70,8 @@ class CheckBox(PageComponent):
             return True
 
         option_1 = driver.find_element(By.XPATH, options[0]["x_path"])
+        driver.execute_script("arguments[0].checked = false;", option_1)
+
         option_button_1 = Button(
             x_path=options[0]["x_path"],
             button_type="checkbox",
@@ -72,6 +80,8 @@ class CheckBox(PageComponent):
         option_button_1.proceed()
 
         option_2 = driver.find_element(By.XPATH, options[1]["x_path"])
+        driver.execute_script("arguments[0].checked = false;", option_2)
+
         option_button_2 = Button(
             x_path=options[1]["x_path"],
             button_type="checkbox",
@@ -81,6 +91,9 @@ class CheckBox(PageComponent):
 
         if option_1.is_selected() and option_2.is_selected():
             multiple_correct = True
+
+        driver.execute_script("arguments[0].checked = false;", option_1)
+        driver.execute_script("arguments[0].checked = false;", option_2)
 
         return multiple_correct
 

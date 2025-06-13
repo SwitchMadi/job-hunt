@@ -476,7 +476,7 @@ class ApplicationPage:
     def _verify_application_submission(self):
         """Verify if job application was successfully submitted by analyzing the page content"""
         global driver
-        time.sleep(2)  # Wait for page to load completely
+        time.sleep(3)  # Wait for page to load completely
 
         user_prompt = (
             f"Following HTML page is shown after submitting job application for {self.parent_job.title} "
@@ -1015,19 +1015,4 @@ class ApplicationPage:
     def _identify_submit_application_button(self):
         submit_application_button = SubmitApplication(parent_application_page=self)
         submit_application_button.proceed()
-
-        if submit_application_button.is_component_functional:
-            error_fields = self._identify_application_fields(identify_only_errors=True)
-            # Filter out fields that don't have errors
-            error_fields = [
-                field
-                for field in error_fields
-                if field.is_error_present and field.error
-            ]
-            if error_fields:
-                logger.warn(
-                    f"Errors in job application fields for {self.parent_job.title}. URL - {self.url}"
-                )
-                self._act_on_job_fields(error_fields)
-
-            self.update_steps(submit_application_button)
+        self.update_steps(submit_application_button)

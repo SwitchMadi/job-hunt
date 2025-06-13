@@ -208,18 +208,35 @@ class ApplicationField:
                 return None
 
             if (
+                application_field.x_path.startswith("/")
+                and not application_field.x_path.startswith("//")
+                and not element_exists(application_field.x_path)
+            ):
+                application_field.x_path = "/" + application_field.x_path
+
+            if (
                 application_field.field_type.value != "date_field"
             ) and not element_exists(application_field.x_path):
-                if not retry:
-                    logger.warn(
-                        f"Element with x_path {application_field.x_path} doesn't exist for "
-                        f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
-                    )
-                    return self._identify_x_path(
-                        retry=True, prev_x_path=application_field.x_path
-                    )
+                logger.warn(
+                    f"Element with x_path {application_field.x_path} doesn't exist for "
+                    f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+                )
+                prompt = (
+                    f"The x_path that we are trying to extract is of following application field -\n"
+                    f"Field title - {self.title}\n"
+                    f"Field category - {self.category}\n"
+                )
+                correct_x_path = self.extract_correct_x_path(
+                    prev_x_path=application_field.x_path,
+                    prompt=prompt,
+                    job_title=self.parent_application_page.parent_job.title,
+                    job_url=self.parent_application_page.url,
+                    html=minified_html,
+                )
+                if not correct_x_path:
+                    return None
                 else:
-                    return
+                    application_field.x_path = correct_x_path
 
             if self.parent_application_page.component_x_path_exists(
                 application_field.x_path
@@ -620,6 +637,14 @@ class ApplicationField:
             re.DOTALL | re.IGNORECASE,
         ):
             return "menu-menuitem"
+        elif re.search(
+            r'<div[^>]*class=["\'][^"\']*dropdown-container[^"\']*["\'][^>]*>'
+            r'(?:.|\n)*?<div[^>]*class=["\'][^"\']*dropdown-results[^"\']*["\'][^>]*>'
+            r'(?:.|\n)*?<div[^>]*class=["\'][^"\']*dropdown-location[^"\']*["\'][^>]*>.*?</div>',
+            outer_html,
+            re.DOTALL | re.IGNORECASE,
+        ):
+            return "custom-div-dropdown"
         else:
             return None
 
@@ -886,12 +911,12 @@ class ApplicationField:
             return None, False
 
     @classmethod
-    def extract_correct_x_path(cls, prev_x_path, prompt, job_title, job_url):
+    def extract_correct_x_path(cls, prev_x_path, prompt, job_title, job_url, html=None):
         global driver
 
         user_prompt = (
             f"Following HTML page is job application webpage for {job_title}. "
-            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
+            f"HTML: {html if html else minify_html_for_gpt_prompt(driver.page_source)}\n"
             f"In my another GPT call you gave following x_path for a field but when I tried to find the element using "
             f"that x_path, it couldn't be found. So, find correct x_path for the same field. After finding correct "
             f"x_path, try to assess yourself if the x_path is correct or not. If it is not correct then try again to "

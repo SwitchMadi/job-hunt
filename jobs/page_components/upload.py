@@ -43,7 +43,7 @@ class Upload(PageComponent):
                 "arguments[0].scrollIntoView({block: 'center'});", element
             )
             element.click()
-            time.sleep(1)
+            time.sleep(2)
 
             self._type_file_path_cleanly()
             time.sleep(1)
@@ -70,7 +70,7 @@ class Upload(PageComponent):
 
     def _type_file_path_cleanly(self):
         # Step 1: Type a fixed key to ensure typing bar is active
-        pyautogui.write("/abcdefgh", interval=0.05)
+        pyautogui.write(f"/{'a'*26}", interval=0.05)
         time.sleep(0.3)
 
         # Step 2: Select all and delete (OS-specific)
@@ -83,7 +83,7 @@ class Upload(PageComponent):
         time.sleep(0.3)
 
         # Step 3: Write the correct file path
-        pyautogui.write(self.file_path, interval=0.05)
+        pyautogui.write(self.file_path, interval=0.025)
 
     def to_dict(self):
         return {

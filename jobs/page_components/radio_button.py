@@ -50,12 +50,15 @@ class RadioButton(PageComponent):
             )
 
         option = [option for option in self.options if option["text"] == answer][0]
-        option_element = Button(
-            x_path=option["x_path"],
-            button_type="radio",
-            parent_application_page=None,
-        )
-        option_element.proceed()
+
+        option_element = driver.find_element(By.XPATH, option["x_path"])
+        if not option_element.is_selected():
+            option_element = Button(
+                x_path=option["x_path"],
+                button_type="radio",
+                parent_application_page=None,
+            )
+            option_element.proceed()
 
         self.is_component_functional = True
         return

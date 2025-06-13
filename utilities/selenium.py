@@ -266,12 +266,12 @@ def start_dom_mutation_observer():
           if (mutation.type === "childList") {
             for (const added of mutation.addedNodes) {
               if (added.nodeType !== Node.ELEMENT_NODE) continue;
-              setTimeout(() => addIfValid(added), 100);
+              setTimeout(() => addIfValid(added), 1250);
             }
           }
 
           if (mutation.type === "attributes" && mutation.attributeName.match(/class|style/)) {
-            setTimeout(() => addIfValid(mutation.target), 100);
+            setTimeout(() => addIfValid(mutation.target), 1250);
           }
         }
       });
