@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 from enum import Enum
 import json
 
-from utilities import constants, generate_hash, retry
+from utilities import constants, generate_hash, retry, clean_text_edges
 from utilities.selenium import (
     get_selenium_driver,
     extract_iframe_urls,
@@ -731,11 +731,12 @@ class ApplicationPage:
                 existing_titles = set()
                 for field in job_fields:
                     if hasattr(field, "field_title"):
-                        existing_titles.add(field.field_title.lower().strip())
+                        existing_titles.add(clean_text_edges(field.field_title).lower())
 
                 unique_additional_fields = []
                 for field in additional_fields:
-                    field_title_lower = field.field_title.lower().strip()
+                    field_title_lower = clean_text_edges(field.field_title).lower()
+
                     if field_title_lower not in existing_titles:
                         unique_additional_fields.append(field)
                         existing_titles.add(field_title_lower)

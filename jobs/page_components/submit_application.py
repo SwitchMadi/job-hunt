@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 import os
+from selenium.webdriver.support.ui import WebDriverWait
 
 from jobs.page_components import PageComponent, get_page_component_class_name
 from jobs.page_components.button import Button
@@ -67,6 +68,12 @@ class SubmitApplication(PageComponent):
                 if self.field_component.is_component_functional:
                     self.is_component_functional = True
                     self.component_identified = True
+
+                    # Wait for page load to complete
+                    WebDriverWait(driver, 10).until(
+                        lambda d: d.execute_script("return document.readyState")
+                        == "complete"
+                    )
 
                     self._delete_downloaded_resume()
 

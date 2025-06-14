@@ -115,8 +115,9 @@ class ApplicationField:
             f"2. Sometimes under one field title there can be multiple fields as in same vicinity or under same parent."
             f" In that case, get XPath of the field which is most relevant to the field title & category.\n"
             f"3. XPath should be of one interactive element only. Don't get XPath for element which has multiple "
-            f"interactive elements in it and the element is not interactive itself.\n"
-            f"{'4. Since given HTML is not of full page so make sure that if XPath is being provided, it will most porbably be unique in whole page.' if user_input_element else ''}"
+            f"interactive elements in it (except for checkboxes and radio buttons) and the element is not interactive "
+            f"itself.\n"
+            f"{'4. Since given HTML is not of full page so make sure that if XPath is being provided, it will most probably be unique in whole page.' if user_input_element else ''}"
         )
 
         if self.category in ["phone_country_code", "phone_number_without_country_code"]:

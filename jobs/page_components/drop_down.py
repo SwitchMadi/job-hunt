@@ -83,6 +83,18 @@ class DropDown(PageComponent):
                     self.options_container_x_path = generalize_xpath_attributes(
                         self.options_container_x_path
                     )
+            else:
+                driver.execute_script(
+                    """
+                    const element = arguments[0];
+                    const rect = element.getBoundingClientRect();
+                    const elementTop = rect.top + window.pageYOffset;
+                    const viewportHeight = window.innerHeight;
+                    const offsetToCenter = elementTop - (viewportHeight / 2) + (rect.height / 2) + 100;
+                    window.scrollTo({top: offsetToCenter, behavior: 'auto'});
+                """,
+                    dropdown_element,
+                )
 
             if not self.options_xpath_pattern:
                 self.options_xpath_pattern, options = self.get_dropdown_options(
@@ -313,6 +325,9 @@ class DropDown(PageComponent):
 
         if dropdown_type == "select-option":
             all_options = driver.find_elements(By.XPATH, xpath_pattern)
+            all_options = [
+                option for option in all_options if option.get_attribute("value")
+            ]
         else:
             # Scroll the container by sending PAGE_DOWN or using JS scroll
             last_count = 0

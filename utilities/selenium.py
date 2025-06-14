@@ -223,25 +223,25 @@ def element_has_area(x_path):
         return False
 
 
-def start_dom_mutation_observer():
+def start_dom_mutation_observer(timeout=100):
     """
     MutationObserver that collects visible + attached DOM elements,
     and ignores irrelevant elements like <html>, <body>, etc.
     """
     global driver
 
-    script = """
+    script = f"""
       // tear down any previous observer
-      if (window.__observer) {
+      if (window.__observer) {{
         window.__observer.disconnect();
         window.__observer = null;
-      }
+      }}
 
       window.__observedElements = [];
 
       const IGNORED_TAGS = ["HTML", "BODY", "HEAD", "SCRIPT", "STYLE"];
 
-      function isVisibleAndAttached(node) {
+      function isVisibleAndAttached(node) {{
         if (!node || !document.documentElement.contains(node)) return false;
         if (IGNORED_TAGS.includes(node.tagName)) return false;
 
@@ -252,36 +252,36 @@ def start_dom_mutation_observer():
           node.offsetWidth > 0 &&
           node.offsetHeight > 0
         );
-      }
+      }}
 
-      function addIfValid(node) {
+      function addIfValid(node) {{
         if (!isVisibleAndAttached(node)) return;
-        if (!window.__observedElements.includes(node)) {
+        if (!window.__observedElements.includes(node)) {{
           window.__observedElements.push(node);
-        }
-      }
+        }}
+      }}
 
-      window.__observer = new MutationObserver(function(mutations) {
-        for (const mutation of mutations) {
-          if (mutation.type === "childList") {
-            for (const added of mutation.addedNodes) {
+      window.__observer = new MutationObserver(function(mutations) {{
+        for (const mutation of mutations) {{
+          if (mutation.type === "childList") {{
+            for (const added of mutation.addedNodes) {{
               if (added.nodeType !== Node.ELEMENT_NODE) continue;
-              setTimeout(() => addIfValid(added), 1250);
-            }
-          }
+              setTimeout(() => addIfValid(added), {timeout});
+            }}
+          }}
 
-          if (mutation.type === "attributes" && mutation.attributeName.match(/class|style/)) {
-            setTimeout(() => addIfValid(mutation.target), 1250);
-          }
-        }
-      });
+          if (mutation.type === "attributes" && mutation.attributeName.match(/class|style/)) {{
+            setTimeout(() => addIfValid(mutation.target), {timeout});
+          }}
+        }}
+      }});
 
-      window.__observer.observe(document.documentElement, {
+      window.__observer.observe(document.documentElement, {{
         childList: true,
         attributes: true,
         attributeFilter: ["class", "style"],
         subtree: true
-      });
+      }});
     """
     driver.execute_script(script)
 

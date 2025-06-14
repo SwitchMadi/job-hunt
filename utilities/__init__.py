@@ -247,3 +247,18 @@ def retry(times=3, delay=1, exceptions=(Exception,), raise_exception=True):
         return wrapper
 
     return decorator
+
+
+def clean_text_edges(text: str) -> str:
+    """
+    Strip leading/trailing whitespace and any non-alphanumeric
+    characters at the edges of the string, then trim again.
+    """
+    # 1. Initial whitespace trim (same as .trim() in JS)
+    text = text.strip()
+
+    # 2. Remove non-alphanumeric chars from start or end
+    text = re.sub(r"^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$", "", text)
+
+    # 3. Final whitespace trim in case step 2 exposed new spaces
+    return text.strip()

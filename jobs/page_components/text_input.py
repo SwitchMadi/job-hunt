@@ -74,7 +74,7 @@ class TextInput(PageComponent):
             element = get_active_element_after_click(self.x_path)
 
             if start_mutation_observer:
-                start_dom_mutation_observer()
+                start_dom_mutation_observer(timeout=1500)
 
             if self.category in ["otp_textbox", "date_field"]:
                 for letter in str(self.answer):
