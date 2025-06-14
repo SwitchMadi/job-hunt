@@ -166,6 +166,7 @@ class Button(PageComponent):
                 self.is_component_functional = False
                 raise e
 
+        time.sleep(1)
         return
 
     def to_dict(self):
