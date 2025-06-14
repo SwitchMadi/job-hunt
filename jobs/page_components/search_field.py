@@ -133,7 +133,7 @@ class SearchField(PageComponent):
                     simulate_empty_area_click(text_to_click=self.title)
                     element.proceed(start_mutation_observer=True)
                     time.sleep(2)
-                    observed_elements = get_observed_elements()
+                    observed_elements = get_observed_elements(timeout=10)
 
                     is_container_present, container_x_path = (
                         ApplicationField.identify_options_container(

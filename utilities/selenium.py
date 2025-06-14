@@ -286,7 +286,7 @@ def start_dom_mutation_observer(timeout=100):
     driver.execute_script(script)
 
 
-def get_observed_elements(timeout=10, poll_frequency=0.5):
+def get_observed_elements(timeout=3, poll_frequency=0.25):
     """
     Polls the global variable window.__observedElement until it is non-null
     or until the timeout is reached.
