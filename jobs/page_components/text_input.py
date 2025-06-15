@@ -10,6 +10,7 @@ from utilities.selenium import (
     element_has_area,
     get_active_element_after_click,
     start_dom_mutation_observer,
+    get_unique_element_by_xpath,
 )
 
 
@@ -47,15 +48,25 @@ class TextInput(PageComponent):
 
         answer_input_successful = False
         try:
-            if not element_has_area(self.x_path):
+            element = get_unique_element_by_xpath(self.x_path, self.title)
+            if not element:
+                logger.warning(
+                    f"Element with XPath {self.x_path} not found. "
+                    f"URL - {self.parent_application_page.url if self.parent_application_page else None}"
+                )
+                self.is_component_functional = False
+                return
+
+            if not element_has_area(element=element):
                 logger.warn(
                     f"Element with XPath {self.x_path} not found. "
                     f"URL - {self.parent_application_page.url if self.parent_application_page else None} "
                     f"Retrying with generalized XPath..."
                 )
                 self.x_path = generalize_xpath_attributes(self.x_path)
+                element = get_unique_element_by_xpath(self.x_path, self.title)
 
-                if not element_has_area(self.x_path):
+                if not element_has_area(element=element):
                     logger.warning(
                         f"Element has zero dimension in class TextInput's proceed method.\nTextInput instance - "
                         f"{vars(self)}"
@@ -69,9 +80,9 @@ class TextInput(PageComponent):
             if (self.category != "otp_textbox") and not self.category.endswith(
                 ("- month", "- day", "- year")
             ):
-                clear_text_field(self.x_path)
+                clear_text_field(self.x_path, title=self.title)
 
-            element = get_active_element_after_click(self.x_path)
+            element = get_active_element_after_click(self.x_path, title=self.title)
 
             if start_mutation_observer:
                 start_dom_mutation_observer(timeout=1500)

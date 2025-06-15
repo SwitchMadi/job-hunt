@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import Select
+import time
 
 from jobs.page_components import (
     PageComponent,
@@ -17,10 +18,10 @@ from utilities.selenium import (
     get_selenium_driver,
     is_element_visible,
     get_element_xpath,
-    minify_html_for_gpt_prompt,
     simulate_empty_area_click,
     generalize_xpath_attributes,
     element_exists,
+    get_unique_element_by_xpath,
 )
 
 
@@ -47,6 +48,7 @@ class DropDown(PageComponent):
         self.dropdown_button = Button(
             x_path=self.x_path,
             button_type="dropdown",
+            title=title,
             parent_application_page=self.parent_application_page,
         )
 
@@ -60,7 +62,7 @@ class DropDown(PageComponent):
     def proceed(self, retry=False):
         global driver
 
-        dropdown_element = driver.find_element(By.XPATH, self.x_path)
+        dropdown_element = get_unique_element_by_xpath(self.x_path, title=self.title)
         dropdown_type = ApplicationField.identify_options_container_type(
             dropdown_element
         )
@@ -75,6 +77,16 @@ class DropDown(PageComponent):
                 simulate_empty_area_click()
                 self.dropdown_button.proceed()
 
+                if (
+                    not element_exists(self.options_container_x_path)
+                    and dropdown_element.tag_name.lower() == "input"
+                ):
+                    # send vowels to trigger options loading for cases where just click is not enough
+                    for vowel in "aeiou":
+                        dropdown_element.send_keys(vowel)
+                        time.sleep(0.5)
+                        dropdown_element.send_keys("\ue003")  # Backspace key
+
                 if not element_exists(self.options_container_x_path):
                     logger.warning(
                         f"Element with dropdown container XPath {self.options_container_x_path} not found at url "
@@ -82,6 +94,12 @@ class DropDown(PageComponent):
                     )
                     self.options_container_x_path = generalize_xpath_attributes(
                         self.options_container_x_path
+                    )
+
+                if not element_exists(self.options_container_x_path):
+                    raise Exception(
+                        f"Element with generalized dropdown container XPath {self.options_container_x_path} not found at url "
+                        f"{self.parent_application_page.url}"
                     )
             else:
                 driver.execute_script(
@@ -155,7 +173,9 @@ class DropDown(PageComponent):
 
             if dropdown_type == "select-option":
                 # Handle standard select dropdowns
-                select_element = driver.find_element(By.XPATH, self.x_path)
+                select_element = get_unique_element_by_xpath(
+                    self.x_path, title=self.title
+                )
                 select = Select(select_element)
                 select.select_by_visible_text(option["text"])
             else:
@@ -168,6 +188,7 @@ class DropDown(PageComponent):
                 option_button = Button(
                     x_path=clickable_xpath,
                     button_type="dropdown_option",
+                    title=self.title,
                     parent_application_page=self.parent_application_page,
                 )
                 option_button.proceed()

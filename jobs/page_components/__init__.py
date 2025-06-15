@@ -1,3 +1,4 @@
+import time
 from abc import ABC, abstractmethod
 import re
 from pydantic import BaseModel, Field
@@ -21,6 +22,7 @@ from utilities.selenium import (
     is_element_visible,
     get_element_xpath,
     find_input_block_for_title,
+    get_unique_element_by_xpath,
 )
 from utilities.logging import get_logger
 from utilities import pascal_to_snake_casing, retry
@@ -156,7 +158,8 @@ class ApplicationField:
 
         class Option(BaseModel):
             text: str = Field(
-                ..., description="Text of the checkbox / radio button option"
+                ...,
+                description="Exact text of the checkbox / radio button / normal option",
             )
             x_path: str = Field(
                 ...,
@@ -217,8 +220,13 @@ class ApplicationField:
                 application_field.x_path = "/" + application_field.x_path
 
             if (
-                application_field.field_type.value != "date_field"
-            ) and not element_exists(application_field.x_path):
+                (application_field.field_type.value != "date_field")
+                and not (
+                    application_field.html_type != "dropdown"
+                    and application_field.options
+                )
+                and not element_exists(application_field.x_path)
+            ):
                 logger.warn(
                     f"Element with x_path {application_field.x_path} doesn't exist for "
                     f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
@@ -258,12 +266,89 @@ class ApplicationField:
                     {"text": option.text, "x_path": option.x_path}
                     for option in application_field.options
                 ]
+                self.options = self._validate_options_xpaths(
+                    self.options, minified_html
+                )
         elif not retry:
             self._identify_x_path(retry=True)
         else:
             raise Exception(
                 f"Couldn't extract following application field {self.category} for "
                 f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+            )
+
+        return None
+
+    def _validate_options_xpaths(self, options, html):
+        all_xpaths_valid = True
+        for option in options:
+            if not element_exists(option["x_path"]):
+                all_xpaths_valid = False
+                break
+
+        if all_xpaths_valid:
+            return options
+
+        xpath_prompt = (
+            f"The x_path that we are trying to find is of an option under following title - \n"
+            f"Field title - {self.title}\n"
+            f"The option is following - \n"
+            f"Option text - {option['text']}"
+        )
+
+        correct_xpath = ApplicationField.extract_correct_x_path(
+            prev_x_path=option["x_path"],
+            prompt=xpath_prompt,
+            job_title=self.parent_application_page.parent_job.title,
+            job_url=self.parent_application_page.url,
+            html=html,
+        )
+        if not correct_xpath:
+            raise Exception(
+                f"Couldn't extract correct x_path for the option {option['text']} under title {option['x_path']} for "
+                f"url {self.parent_application_page.parent_job.url}."
+            )
+
+        options_prompt = "\n".join(f"- {option['text']}" for option in options)
+        user_prompt = (
+            f"Following HTML is of job application webpage for {self.parent_application_page.parent_job.title}."
+            f"HTML: {html}\n"
+            f"The webpage has following application field for applying to the job -\n"
+            f"Field title - {self.title}\n"
+            f"Field category - {self.category}\n"
+            f"The field has following options - \n"
+            f"{options_prompt}\n"
+            f"For the option with text as {option['text']}, following is the correct xpath - {correct_xpath}\n"
+            f"Fetch the xpath for all above given options, in strictly same pattern as the above given xpath."
+        )
+
+        class Option(BaseModel):
+            text: str = Field(..., description="Exact text of the option")
+            x_path: str = Field(
+                ...,
+                description=f"XPath of the option using following pattern - {correct_xpath}",
+            )
+
+        class Options(BaseModel):
+            options: List[Option] = Field(
+                ...,
+                description="Options with text and x_paths",
+            )
+
+        options_xpaths_found, options = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=Options,
+        )
+        if options_xpaths_found:
+            return [
+                {"text": option.text, "x_path": option.x_path}
+                for option in options.options
+            ]
+        else:
+            raise Exception(
+                f"Couldn't extract correct x_paths for the options under title {self.title} for "
+                f"url {self.parent_application_page.parent_job.url}."
             )
 
     def get_field_component(self):
@@ -281,14 +366,12 @@ class ApplicationField:
             )
 
         if self.x_path:
-            self.html_type, container_x_path = (
-                ApplicationField.revalidate_component_type(
-                    x_path=self.x_path,
-                    html_type=self.html_type,
-                    field_title=self.title,
-                    job_title=self.parent_application_page.parent_job.title,
-                    options=self.options,
-                )
+            self.html_type, container_x_path = self.revalidate_component_type(
+                x_path=self.x_path,
+                html_type=self.html_type,
+                field_title=self.title,
+                job_title=self.parent_application_page.parent_job.title,
+                options=self.options,
             )
 
             if self.html_type == "text_box":
@@ -352,9 +435,8 @@ class ApplicationField:
             )
             return None
 
-    @classmethod
     def revalidate_component_type(
-        cls, x_path, html_type, field_title, job_title, options=[]
+        self, x_path, html_type, field_title, job_title, options=[]
     ):
         if html_type == "text_box":
             from jobs.page_components.search_field import SearchField
@@ -363,23 +445,42 @@ class ApplicationField:
             if is_search_field:
                 return "search_field", None
 
-            is_container_present, container_x_path = cls.validate_options_container(
+            is_container_present, container_x_path = self.validate_options_container(
                 x_path, field_title, job_title
             )
             if is_container_present and container_x_path:
                 return "dropdown", container_x_path
 
+            # try once more if there is any button inside the text box element
+            element_identified, user_input_element = find_input_block_for_title(
+                field_title
+            )
+            if element_identified and user_input_element:
+                button = user_input_element.find_element(By.TAG_NAME, "button")
+                button_x_path = get_element_xpath(button, xpath_type="relative")
+
+                is_container_present, container_x_path = (
+                    self.validate_options_container(
+                        button_x_path, field_title, job_title
+                    )
+                )
+                if is_container_present and container_x_path:
+                    self.x_path = button_x_path
+                    return "dropdown", container_x_path
+
             return "text_box", None
 
-        elif html_type == "check_box":
+        elif (html_type == "check_box") or ((html_type == "button") and options):
             from jobs.page_components.check_box import CheckBox
 
-            multiple_correct = CheckBox.validate_checkbox(options)
+            multiple_correct = CheckBox.validate_checkbox(options, field_title)
             if not multiple_correct:
                 return "radio_button", None
+            else:
+                return "check_box", None
 
         elif html_type == "dropdown":
-            is_container_present, container_x_path = cls.validate_options_container(
+            is_container_present, container_x_path = self.validate_options_container(
                 x_path, field_title, job_title
             )
             if is_container_present:
@@ -389,7 +490,7 @@ class ApplicationField:
 
     @classmethod
     def validate_options_container(cls, x_path, field_title, job_title):
-        dropdown_element = driver.find_element(By.XPATH, x_path)
+        dropdown_element = get_unique_element_by_xpath(x_path, title=field_title)
         dropdown_type = ApplicationField.identify_options_container_type(
             dropdown_element
         )
@@ -406,6 +507,7 @@ class ApplicationField:
             element_button = Button(
                 x_path=x_path,
                 button_type="dropdown",
+                title=field_title,
                 parent_application_page=None,
             )
             element_button.proceed()
@@ -413,6 +515,7 @@ class ApplicationField:
             element_button = Button(
                 x_path=find_clickable_parent_xpath(x_path),
                 button_type="dropdown",
+                title=field_title,
                 parent_application_page=None,
             )
             element_button.proceed()
@@ -430,6 +533,29 @@ class ApplicationField:
             if is_container_present:
                 simulate_empty_area_click(text_to_click=field_title)
                 return True, container_x_path
+
+        if dropdown_element.tag_name.lower() == "input":
+            start_dom_mutation_observer()
+
+            # send vowels to trigger options loading for cases where just click is not enough
+            for vowel in "aeiou":
+                dropdown_element.send_keys(vowel)
+                time.sleep(0.5)
+                dropdown_element.send_keys("\ue003")  # Backspace key
+
+            observed_elements = get_observed_elements()
+
+            if observed_elements:
+                is_container_present, container_x_path = cls.identify_options_container(
+                    job_title=job_title,
+                    field_title=field_title,
+                    field_x_path=x_path,
+                    observed_elements=observed_elements,
+                    html_type="dropdown",
+                )
+                if is_container_present:
+                    simulate_empty_area_click(text_to_click=field_title)
+                    return True, container_x_path
 
         simulate_empty_area_click(text_to_click=field_title)
         return False, None
@@ -942,8 +1068,10 @@ class ApplicationField:
         user_prompt = (
             f"Following HTML page is job application webpage for {job_title}. "
             f"HTML: {html if html else minify_html_for_gpt_prompt(driver.page_source)}\n"
-            f"In my another GPT call you gave following x_path for a field but when I tried to find the element using "
-            f"that x_path, it couldn't be found. So, find correct x_path for the same field. After finding correct "
+            f"In my another GPT call you gave following x_path for a field / element but when I tried to find the "
+            f"element using "
+            f"that x_path, it couldn't be found. So, find correct x_path for the same field / element. After finding "
+            f"correct "
             f"x_path, try to assess yourself if the x_path is correct or not. If it is not correct then try again to "
             f"find the correct x_path.\n"
             f"Previous x_path - {prev_x_path}\n"

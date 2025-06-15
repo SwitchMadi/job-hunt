@@ -187,8 +187,22 @@ def element_exists(x_path):
         return False
 
 
-def is_element_visible(x_path):
+def is_element_visible(x_path=None, element=None):
     global driver
+
+    if element:
+        if not is_stale(element):
+            element_size = element.size
+            if (
+                element.is_displayed()
+                and element_size["width"] > 0
+                and element_size["height"] > 0
+            ):
+                return True
+            else:
+                return False
+        else:
+            return False
 
     if not x_path:
         return False
@@ -209,8 +223,18 @@ def is_element_visible(x_path):
         return False
 
 
-def element_has_area(x_path):
+def element_has_area(x_path=None, element=None):
     global driver
+
+    if element:
+        element_size = element.size
+        if element_size["width"] > 0 and element_size["height"] > 0:
+            return True
+        else:
+            return False
+
+    if not x_path:
+        return False
 
     try:
         elements = driver.find_elements(By.XPATH, x_path)
@@ -854,14 +878,14 @@ def get_observed_network_calls():
     return driver.execute_script("return window.capturedRequests || [];")
 
 
-def clear_text_field(x_path, skip_all_sections=False):
+def clear_text_field(x_path, title=None, skip_all_sections=False):
     """
     Clears the input field using keyboard shortcuts to ensure any custom handlers are triggered.
     """
 
     global driver
 
-    input_field = get_active_element_after_click(x_path)
+    input_field = get_active_element_after_click(x_path, title=title)
 
     value = input_field.get_attribute("value") or input_field.text or ""
     if not value:
@@ -909,7 +933,7 @@ def clear_text_field(x_path, skip_all_sections=False):
             pass
 
     if is_stale(input_field):
-        input_field = get_active_element_after_click(x_path)
+        input_field = get_active_element_after_click(x_path, title=title)
 
     # Directly set the value to empty and dispatch an input event
     driver.execute_script("arguments[0].value = '';", input_field)
@@ -918,7 +942,7 @@ def clear_text_field(x_path, skip_all_sections=False):
     return
 
 
-def get_active_element_after_click(x_path):
+def get_active_element_after_click(x_path, title=None):
     """
     Clicks on the element at the given XPath and returns the active element.
     This is useful for ensuring that the correct element is focused after a click.
@@ -928,7 +952,7 @@ def get_active_element_after_click(x_path):
 
     simulate_empty_area_click()
 
-    element = driver.find_element(By.XPATH, x_path)
+    element = get_unique_element_by_xpath(x_path, title=title)
     driver.execute_script(
         """
         const element = arguments[0];
@@ -1619,3 +1643,35 @@ def find_input_block_for_title(title, max_levels: int = 4):
         current = parent
 
     return False, current
+
+
+def get_unique_element_by_xpath(xpath, title=None):
+    """
+    Returns a unique WebElement by its XPath.
+    If multiple elements match, find the one that is at same level as given title.
+    """
+    global driver
+
+    elements = driver.find_elements(By.XPATH, xpath)
+    if len(elements) == 1:
+        return elements[0]
+    elif len(elements) > 1 and title:
+        element_identified, user_input_element = find_input_block_for_title(title)
+        if element_identified:
+            element = user_input_element.find_elements(By.XPATH, f".{xpath}")
+            if len(element) == 1:
+                return element[0]
+            else:
+                logging.warning(
+                    f"Multiple elements found for XPath '{xpath}' under title '{title}'."
+                )
+                return None
+        else:
+            logging.warning(
+                f"Multiple elements found for XPath '{xpath}' but no unique input block identified under title "
+                f"'{title}'."
+            )
+            return None
+    else:
+        logging.warning(f"No elements found for XPath '{xpath}'.")
+        return None

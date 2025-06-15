@@ -15,7 +15,6 @@ from utilities.selenium import (
     get_observed_network_calls,
     stop_network_observer,
     simulate_empty_area_click,
-    start_dom_mutation_observer,
     get_observed_elements,
     is_element_visible,
     clear_text_field,
@@ -55,13 +54,16 @@ class SearchField(PageComponent):
         try:
             special_key = "special_key"
             element = TextInput(
-                x_path=x_path, category="search_field", parent_application_page=None
+                x_path=x_path,
+                category="search_field",
+                title=field_title,
+                parent_application_page=None,
             )
             element.answer = special_key
             element.proceed()
             time.sleep(2)  # Allow API calls to trigger
         except ElementNotInteractableException:
-            clear_text_field(x_path)
+            clear_text_field(x_path, title=field_title)
             simulate_empty_area_click()
             return False
         except Exception as e:
@@ -114,7 +116,7 @@ class SearchField(PageComponent):
                 if is_search_field:
                     break
 
-        clear_text_field(x_path)
+        clear_text_field(x_path, title=field_title)
         simulate_empty_area_click()
 
         return is_search_field
@@ -125,6 +127,7 @@ class SearchField(PageComponent):
                 element = TextInput(
                     x_path=self.x_path,
                     category="search_field",
+                    title=self.title,
                     parent_application_page=None,
                 )
                 element.answer = input_key
@@ -198,6 +201,7 @@ class SearchField(PageComponent):
                     # Create a Button instance for the clickable element
                     option_button = Button(
                         x_path=option["x_path"],
+                        title=self.title,
                         button_type="search_option",
                         parent_application_page=self.parent_application_page,
                     )

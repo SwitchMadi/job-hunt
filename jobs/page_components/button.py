@@ -14,8 +14,8 @@ from jobs.page_components import PageComponent, logger, get_page_component_class
 from utilities.selenium import (
     get_selenium_driver,
     is_element_visible,
-    element_exists,
     generalize_xpath_attributes,
+    get_unique_element_by_xpath,
 )
 
 
@@ -24,11 +24,12 @@ driver.set_page_load_timeout(15)
 
 
 class Button(PageComponent):
-    def __init__(self, x_path, button_type, parent_application_page):
+    def __init__(self, x_path, button_type, parent_application_page, title=None):
         global driver
         self.x_path = x_path
         self.button_type = button_type
         self.parent_application_page = parent_application_page
+        self.title = title
 
         self.next = None
         self.prev = None
@@ -36,7 +37,8 @@ class Button(PageComponent):
         self.attempt = 1
         self.max_attempt = 3
 
-    def _move_mouse_naturally(self, element, actions):
+    @staticmethod
+    def _move_mouse_naturally(element, actions):
         """Move mouse in a more natural way to the element"""
         # Get element location and size
         location = element.location
@@ -68,9 +70,8 @@ class Button(PageComponent):
         global driver
 
         try:
-            if element_exists(self.x_path):
-                element = driver.find_element(By.XPATH, self.x_path)
-            else:
+            element = get_unique_element_by_xpath(self.x_path, self.title)
+            if not element:
                 logger.warning(
                     f"Element with XPath {self.x_path} not found. "
                     f"URL - {self.parent_application_page.url if self.parent_application_page else None}"
@@ -78,15 +79,16 @@ class Button(PageComponent):
                 self.is_component_functional = False
                 return
 
-            if element.tag_name != "input" and not is_element_visible(self.x_path):
+            if element.tag_name != "input" and not is_element_visible(element=element):
                 logger.warning(
                     f"Element with XPath {self.x_path} not found. "
                     f"URL - {self.parent_application_page.url if self.parent_application_page else None} "
                     f"Retrying with generalized XPath..."
                 )
                 self.x_path = generalize_xpath_attributes(self.x_path)
+                element = get_unique_element_by_xpath(self.x_path, self.title)
 
-                if not is_element_visible(self.x_path):
+                if not is_element_visible(element=element):
                     logger.warning(
                         f"Element not visible in class Button's proceed method.\nButton instance - {vars(self)}"
                     )
@@ -111,9 +113,7 @@ class Button(PageComponent):
 
             if self.button_type == "dropdown":
                 time.sleep(0.5)
-                WebDriverWait(driver, 5).until(
-                    EC.element_to_be_clickable((By.XPATH, self.x_path))
-                )
+                WebDriverWait(driver, 5).until(EC.element_to_be_clickable(element))
                 element.click()
             elif element.tag_name == "input":
                 actions = ActionChains(driver)
@@ -142,13 +142,13 @@ class Button(PageComponent):
             logger.info(
                 f"element not interactable in class Button's proceed method.\n{e.msg}\nButton instance - {vars(self)}"
             )
-            element = driver.find_element(By.XPATH, self.x_path)
+            element = get_unique_element_by_xpath(self.x_path, self.title)
             driver.execute_script("arguments[0].click();", element)
         except (ElementClickInterceptedException, TimeoutException) as e:
             logger.info(
                 f"element click intercepted in class Button's proceed method.\n{e.msg}\nButton instance - {vars(self)}"
             )
-            element = driver.find_element(By.XPATH, self.x_path)
+            element = get_unique_element_by_xpath(self.x_path, self.title)
             actions = ActionChains(driver)
             actions.move_to_element(element).click().perform()
         except Exception as e:

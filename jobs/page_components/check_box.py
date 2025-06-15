@@ -1,9 +1,17 @@
-from selenium.webdriver.common.by import By
+from pydantic import BaseModel, Field
 
 from jobs import ApplicationField
 from jobs.page_components import PageComponent, get_page_component_class_name
 from jobs.page_components.button import Button
-from utilities.selenium import get_selenium_driver
+from utilities.selenium import (
+    get_selenium_driver,
+    get_unique_element_by_xpath,
+    get_element_xpath,
+    find_input_block_for_title,
+    minify_html_for_gpt_prompt,
+)
+from utilities import constants
+from utilities.gpt import get_gpt_response
 
 
 driver = get_selenium_driver()
@@ -49,41 +57,62 @@ class CheckBox(PageComponent):
         ]
 
         for option in options_to_select:
-            option_element = driver.find_element(By.XPATH, option["x_path"])
-            if not option_element.is_selected():
-                option_element = Button(
-                    x_path=option["x_path"],
-                    button_type="checkbox",
-                    parent_application_page=None,
-                )
-                option_element.proceed()
+            option_element = get_unique_element_by_xpath(option["x_path"], self.title)
+            if (
+                (option_element.tag_name == "input")
+                and (option_element.get_attribute("type") == "checkbox")
+                and option_element.is_selected()
+            ):
+                continue
+
+            option_element = Button(
+                x_path=get_element_xpath(option_element),
+                button_type="checkbox",
+                parent_application_page=None,
+            )
+            option_element.proceed()
 
         self.is_component_functional = True
         return
 
     @classmethod
-    def validate_checkbox(cls, options):
+    def validate_checkbox(cls, options, title):
         multiple_correct = False
 
         # If there are no options or only one option, we can consider it valid
         if len(options) <= 1:
             return True
 
-        option_1 = driver.find_element(By.XPATH, options[0]["x_path"])
-        driver.execute_script("arguments[0].checked = false;", option_1)
+        option_1 = get_unique_element_by_xpath(xpath=options[0]["x_path"], title=title)
+        if not option_1:
+            raise Exception(
+                f"Unique element not found for x_path - {options[0]['x_path']}"
+            )
+
+        if (
+            option_1.tag_name == "input"
+            and option_1.get_attribute("type") == "checkbox"
+        ):
+            driver.execute_script("arguments[0].checked = false;", option_1)
+        else:
+            return cls._validate_checkbox_using_llm(title)
 
         option_button_1 = Button(
-            x_path=options[0]["x_path"],
+            x_path=get_element_xpath(option_1),
             button_type="checkbox",
             parent_application_page=None,
         )
         option_button_1.proceed()
 
-        option_2 = driver.find_element(By.XPATH, options[1]["x_path"])
+        option_2 = get_unique_element_by_xpath(xpath=options[1]["x_path"], title=title)
+        if not option_2:
+            raise Exception(
+                f"Unique element not found for x_path - {options[1]['x_path']}"
+            )
         driver.execute_script("arguments[0].checked = false;", option_2)
 
         option_button_2 = Button(
-            x_path=options[1]["x_path"],
+            x_path=get_element_xpath(option_2),
             button_type="checkbox",
             parent_application_page=None,
         )
@@ -96,6 +125,43 @@ class CheckBox(PageComponent):
         driver.execute_script("arguments[0].checked = false;", option_2)
 
         return multiple_correct
+
+    @staticmethod
+    def _validate_checkbox_using_llm(title):
+        global driver
+
+        element_identified, user_input_element = find_input_block_for_title(title)
+        if user_input_element:
+            minified_html = minify_html_for_gpt_prompt(
+                user_input_element.get_attribute("outerHTML")
+            )
+        else:
+            minified_html = minify_html_for_gpt_prompt(driver.page_source)
+
+        user_prompt = (
+            f"Following HTML is of job application webpage."
+            f"HTML: {minified_html}\n"
+            f"The webpage has following application field for applying to the job -\n"
+            f"Field title - {title}\n"
+            f"Please asses the HTML and determine if the field has possibility multiple correct answers or it can have "
+            f"just 1 correct answer.\n"
+        )
+
+        class ApplicationFieldInfo(BaseModel):
+            is_multiple_correct_answers_field: bool = Field(
+                ...,
+                description="Can the field can have multiple correct answers?",
+            )
+
+        checkbox_validation_done, checkbox_validation = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=ApplicationFieldInfo,
+        )
+        if checkbox_validation_done:
+            return checkbox_validation.is_multiple_correct_answers_field
+        else:
+            return False
 
     def to_dict(self):
         return {

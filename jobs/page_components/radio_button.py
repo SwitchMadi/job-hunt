@@ -3,7 +3,11 @@ from selenium.webdriver.common.by import By
 from jobs import ApplicationField
 from jobs.page_components import PageComponent, get_page_component_class_name
 from jobs.page_components.button import Button
-from utilities.selenium import get_selenium_driver
+from utilities.selenium import (
+    get_selenium_driver,
+    get_unique_element_by_xpath,
+    get_element_xpath,
+)
 
 
 driver = get_selenium_driver()
@@ -51,10 +55,16 @@ class RadioButton(PageComponent):
 
         option = [option for option in self.options if option["text"] == answer][0]
 
-        option_element = driver.find_element(By.XPATH, option["x_path"])
-        if not option_element.is_selected():
+        option_element = get_unique_element_by_xpath(option["x_path"], self.title)
+        if (
+            option_element.tag_name == "input"
+            and option_element.get_attribute("type") == "radio"
+            and option_element.is_selected()
+        ):
+            pass
+        else:
             option_element = Button(
-                x_path=option["x_path"],
+                x_path=get_element_xpath(option_element),
                 button_type="radio",
                 parent_application_page=None,
             )
