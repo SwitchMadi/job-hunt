@@ -643,33 +643,9 @@ class ApplicationPage:
             return False
 
         if elements.captcha.value:
-            logger.warn(f"There is captcha on the page so cannot move forward.")
-            self.is_application_feasible = False
-
-            application_steps_query = f"""
-                                            select *
-                                            from jobs.application_steps
-                                            where job_id = {self.parent_job.id}
-                                            and is_active;
-                                       """
-            current_application_steps = get_sql_query_output(application_steps_query)
-            if current_application_steps:
-                query = f"""
-                            update jobs.application_steps
-                            set is_application_feasible = false, is_identification_complete = true
-                            where job_id = {self.parent_job.id}
-                            and is_active;
-                         """
-            else:
-                query = f"""
-                            INSERT INTO jobs.application_steps
-                            (job_id, is_application_feasible, is_identification_complete)
-                            VALUES ({self.parent_job.id}, false, true);
-                         """
-
-            execute_sql_query(query)
-
-            return False
+            logger.warn(
+                f"Captcha is present on the page. Job title - {self.parent_job.url}. URL - {self.url}"
+            )
 
         if elements.cookies_prompt.value:
             self._identify_cookies_consent()
