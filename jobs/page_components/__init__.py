@@ -7,6 +7,7 @@ from selenium.common import (
     ElementClickInterceptedException,
     ElementNotInteractableException,
 )
+from selenium.webdriver.common.by import By
 
 from utilities.selenium import (
     get_selenium_driver,
@@ -362,42 +363,11 @@ class ApplicationField:
             if is_search_field:
                 return "search_field", None
 
-            simulate_empty_area_click(text_to_click=field_title)
-
-            start_dom_mutation_observer()
-
-            from jobs import Button
-
-            try:
-                element_button = Button(
-                    x_path=x_path,
-                    button_type="dropdown",
-                    parent_application_page=None,
-                )
-                element_button.proceed()
-            except (ElementClickInterceptedException, ElementNotInteractableException):
-                element_button = Button(
-                    x_path=find_clickable_parent_xpath(x_path),
-                    button_type="dropdown",
-                    parent_application_page=None,
-                )
-                element_button.proceed()
-
-            observed_elements = get_observed_elements()
-
-            if observed_elements:
-                is_container_present, container_x_path = cls.identify_options_container(
-                    job_title=job_title,
-                    field_title=field_title,
-                    field_x_path=x_path,
-                    observed_elements=observed_elements,
-                    html_type="dropdown",
-                )
-                if is_container_present:
-                    simulate_empty_area_click()
-                    return "dropdown", container_x_path
-
-            simulate_empty_area_click()
+            is_container_present, container_x_path = cls.validate_options_container(
+                x_path, field_title, job_title
+            )
+            if is_container_present and container_x_path:
+                return "dropdown", container_x_path
 
             return "text_box", None
 
@@ -408,7 +378,61 @@ class ApplicationField:
             if not multiple_correct:
                 return "radio_button", None
 
+        elif html_type == "dropdown":
+            is_container_present, container_x_path = cls.validate_options_container(
+                x_path, field_title, job_title
+            )
+            if is_container_present:
+                return "dropdown", container_x_path
+
         return html_type, None
+
+    @classmethod
+    def validate_options_container(cls, x_path, field_title, job_title):
+        dropdown_element = driver.find_element(By.XPATH, x_path)
+        dropdown_type = ApplicationField.identify_options_container_type(
+            dropdown_element
+        )
+        if dropdown_type == "select-option":
+            return True, None
+
+        simulate_empty_area_click(text_to_click=field_title)
+
+        start_dom_mutation_observer()
+
+        from jobs import Button
+
+        try:
+            element_button = Button(
+                x_path=x_path,
+                button_type="dropdown",
+                parent_application_page=None,
+            )
+            element_button.proceed()
+        except (ElementClickInterceptedException, ElementNotInteractableException):
+            element_button = Button(
+                x_path=find_clickable_parent_xpath(x_path),
+                button_type="dropdown",
+                parent_application_page=None,
+            )
+            element_button.proceed()
+
+        observed_elements = get_observed_elements()
+
+        if observed_elements:
+            is_container_present, container_x_path = cls.identify_options_container(
+                job_title=job_title,
+                field_title=field_title,
+                field_x_path=x_path,
+                observed_elements=observed_elements,
+                html_type="dropdown",
+            )
+            if is_container_present:
+                simulate_empty_area_click(text_to_click=field_title)
+                return True, container_x_path
+
+        simulate_empty_area_click(text_to_click=field_title)
+        return False, None
 
     @classmethod
     def get_field_value(cls, field_category, user):

@@ -529,11 +529,32 @@ def get_xpath_by_text(text):
 
         // Sort by text length first, then by nesting depth (desc)
         matchingElements.sort((a, b) => {
+            const styleA = window.getComputedStyle(a);
+            const styleB = window.getComputedStyle(b);
+        
+            const visibleA = (
+                styleA.display !== "none" &&
+                styleA.visibility !== "hidden" &&
+                a.offsetWidth > 1 &&
+                a.offsetHeight > 1
+            );
+            const visibleB = (
+                styleB.display !== "none" &&
+                styleB.visibility !== "hidden" &&
+                b.offsetWidth > 1 &&
+                b.offsetHeight > 1
+            );
+        
+            if (visibleA !== visibleB) {
+                return visibleB - visibleA;  // true > false, so visible comes first
+            }
+            
             const lenA = cleanTextEdges(a.textContent).length;
             const lenB = cleanTextEdges(b.textContent).length;
             if (lenA !== lenB) {
                 return lenA - lenB;  // shorter text first
             }
+            
             return getDepth(b) - getDepth(a);  // more nested first if tie
         });
         
@@ -611,9 +632,26 @@ def simulate_empty_area_click(text_to_click=None):
                 )
                 return
             element = driver.find_element(By.XPATH, xpath)
+
+            driver.execute_script(
+                """
+                const element = arguments[0];
+                const rect = element.getBoundingClientRect();
+                const elementTop = rect.top + window.pageYOffset;
+                const viewportHeight = window.innerHeight;
+                const offsetToCenter = elementTop - (viewportHeight / 2) + (rect.height / 2) + 100;
+                window.scrollTo({top: offsetToCenter, behavior: 'auto'});
+            """,
+                element,
+            )
+
             element.click()
         except (NoSuchElementException, InvalidSelectorException):
             logging.warning(f"Element with text '{text_to_click}' not found.")
+        except ElementClickInterceptedException:
+            element = driver.find_element(By.XPATH, xpath)
+            actions = ActionChains(driver)
+            actions.move_to_element(element).click().perform()
 
     return
 
@@ -1125,9 +1163,8 @@ def minify_html_for_gpt_prompt(html_content):
     for tag in soup.find_all(True):
         if has_zero_dimension(tag):
             try:
-                tag_xpath = generate_xpath(tag)
-                tag_element = driver.find_element(By.XPATH, tag_xpath)
-                if not has_visible_descendant(tag_element):
+                tag_element = find_element_from_bs4_tag(tag)
+                if tag_element and not has_visible_descendant(tag_element):
                     tag.decompose()
             except Exception:
                 pass
@@ -1376,6 +1413,63 @@ def generate_xpath(tag):
         path.insert(0, f"{tag.name}[{index}]")
         tag = tag.parent
     return "/" + "/".join(path)
+
+
+def find_element_from_bs4_tag(tag):
+    """
+    Tries to find the corresponding Selenium WebElement from a BeautifulSoup tag
+    using a sequence of strategies: id, name, data-*, class, and guessed XPath.
+
+    Parameters:
+        tag: BeautifulSoup tag
+
+    Returns:
+        Selenium WebElement or None
+    """
+    global driver
+
+    # 1. Try by ID
+    if tag.has_attr("id"):
+        try:
+            return driver.find_element(By.ID, tag["id"])
+        except NoSuchElementException:
+            pass
+
+    # 2. Try by Name
+    if tag.has_attr("name"):
+        try:
+            return driver.find_element(By.NAME, tag["name"])
+        except NoSuchElementException:
+            pass
+
+    # 3. Try by data-* attributes
+    for attr in tag.attrs:
+        if attr.startswith("data-"):
+            try:
+                selector = f'[{attr}="{tag[attr]}"]'
+                return driver.find_element(By.CSS_SELECTOR, selector)
+            except NoSuchElementException:
+                continue
+
+    # 4. Try by class (partial match)
+    if tag.has_attr("class"):
+        classes = tag["class"]
+        for i in range(1, len(classes) + 1):
+            selector = "." + ".".join(classes[:i])
+            try:
+                return driver.find_element(By.CSS_SELECTOR, f"{tag.name}{selector}")
+            except NoSuchElementException:
+                continue
+
+    # 5. Try by guessed XPath (may fail if BS4 DOM doesn't match real DOM)
+    guessed_xpath = generate_xpath(tag)
+    try:
+        return driver.find_element(By.XPATH, guessed_xpath)
+    except Exception:
+        pass
+
+    # All strategies failed
+    return None
 
 
 def identify_options_container_type(element):

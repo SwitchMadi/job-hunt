@@ -1,11 +1,16 @@
 from pydantic import BaseModel, Field
 from enum import Enum
+from selenium.webdriver.common.by import By
 
 from jobs.page_components import PageComponent, get_page_component_class_name
 from jobs.page_components.button import Button
 from utilities import constants
 from utilities.gpt import get_gpt_response
-from utilities.selenium import get_selenium_driver, minify_html_for_gpt_prompt
+from utilities.selenium import (
+    get_selenium_driver,
+    minify_html_for_gpt_prompt,
+    element_exists,
+)
 
 driver = get_selenium_driver()
 driver.set_page_load_timeout(15)
@@ -68,6 +73,16 @@ class StartApplication(PageComponent):
 
         if button_found:
             if button.is_start_application_button_present.value:
+                if element_exists(button.x_path):
+                    element = driver.find_element(By.XPATH, button.x_path)
+                    element_text = element.text or ""
+
+                    if (
+                        "submit" in button.x_path
+                        or "submit" in element_text.strip().lower()
+                    ):
+                        return
+
                 self.field_component = Button(
                     x_path=button.x_path,
                     button_type="start_application",

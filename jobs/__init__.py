@@ -26,6 +26,7 @@ from jobs.page_components.education_section import EducationSection
 from jobs.page_components.resume_upload import ResumeUpload
 from jobs.page_components.submit_application import SubmitApplication
 from jobs.page_components.button import Button
+from jobs.page_components.text_input import TextInput
 from jobs.page_components.check_box import CheckBox
 from jobs.page_components.date_field import DateField
 from jobs.page_components.drop_down import DropDown
@@ -109,15 +110,16 @@ class ApplicationPage:
         application_steps = get_sql_query_output(application_steps_query)
         if application_steps:
             application_steps = application_steps[0]
-            head_step_class = globals()[application_steps["steps"]["class"]]
-            self.head_step = self.tail_step = head_step_class.from_dict(
-                input_dict=application_steps["steps"], parent_application_page=self
-            )
+            if application_steps["steps"]:
+                head_step_class = globals()[application_steps["steps"]["class"]]
+                self.head_step = self.tail_step = head_step_class.from_dict(
+                    input_dict=application_steps["steps"], parent_application_page=self
+                )
 
-            next_step = self.head_step.next
-            while next_step:
-                self.tail_step = next_step
-                next_step = next_step.next
+                next_step = self.head_step.next
+                while next_step:
+                    self.tail_step = next_step
+                    next_step = next_step.next
 
             self.steps_identified = application_steps["is_identification_complete"]
             self.is_application_feasible = application_steps["is_application_feasible"]
@@ -705,7 +707,11 @@ class ApplicationPage:
 
                 return
 
-        if elements.select_application_data_source.value:
+        # There are no application fields on the page and application data source is to be selected
+        if (
+            elements.select_application_data_source.value
+            and not elements.application_fields.value
+        ):
             is_manual_input_functional = (
                 self._extract_application_data_source_options_details()
             )
