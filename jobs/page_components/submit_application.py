@@ -1,3 +1,4 @@
+import time
 from pydantic import BaseModel, Field
 import os
 from selenium.webdriver.support.ui import WebDriverWait
@@ -74,6 +75,7 @@ class SubmitApplication(PageComponent):
                         lambda d: d.execute_script("return document.readyState")
                         == "complete"
                     )
+                    time.sleep(5)
 
                     self._delete_downloaded_resume()
 
