@@ -7,6 +7,7 @@ from typing import Optional, List
 from selenium.common import (
     ElementClickInterceptedException,
     ElementNotInteractableException,
+    NoSuchElementException,
 )
 from selenium.webdriver.common.by import By
 
@@ -439,6 +440,17 @@ class ApplicationField:
         self, x_path, html_type, field_title, job_title, options=[]
     ):
         if html_type == "text_box":
+            if self.category in [
+                "first_name",
+                "middle_name",
+                "last_name",
+                "full_name",
+                "email",
+                "phone_number_without_country_code",
+                "password",
+            ]:
+                return "text_box", None
+
             from jobs.page_components.search_field import SearchField
 
             is_search_field = SearchField.validate_search_field(x_path, field_title)
@@ -456,17 +468,20 @@ class ApplicationField:
                 field_title
             )
             if element_identified and user_input_element:
-                button = user_input_element.find_element(By.TAG_NAME, "button")
-                button_x_path = get_element_xpath(button, xpath_type="relative")
+                try:
+                    button = user_input_element.find_element(By.TAG_NAME, "button")
+                    button_x_path = get_element_xpath(button, xpath_type="relative")
 
-                is_container_present, container_x_path = (
-                    self.validate_options_container(
-                        button_x_path, field_title, job_title
+                    is_container_present, container_x_path = (
+                        self.validate_options_container(
+                            button_x_path, field_title, job_title
+                        )
                     )
-                )
-                if is_container_present and container_x_path:
-                    self.x_path = button_x_path
-                    return "dropdown", container_x_path
+                    if is_container_present and container_x_path:
+                        self.x_path = button_x_path
+                        return "dropdown", container_x_path
+                except NoSuchElementException:
+                    pass
 
             return "text_box", None
 

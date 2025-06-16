@@ -808,13 +808,16 @@ def start_network_observer():
                 window._originalFetch = window.fetch;
                 window.fetch = function(input, init = {}) {
                     const url = typeof input === 'string' ? input : input.url;
+                    const absoluteUrl = (url.startsWith('http://') || url.startsWith('https://')) 
+                        ? url 
+                        : new URL(url, location.href).href;
                     const method = init.method || 'GET';
                     const body = init.body || '';
 
                     if (!window.capturedRequests.some(r => r.url === url && r.method === method && r.body === body)) {
                         window.capturedRequests.push({
                             type: 'fetch',
-                            url: url,
+                            url: absoluteUrl,
                             method: method,
                             body: body,
                             decodedQueryParams: decodeQueryParams(url)
@@ -834,10 +837,14 @@ def start_network_observer():
                 };
 
                 XMLHttpRequest.prototype.send = function(body) {
+                    const absoluteUrl = (this._requestUrl.startsWith('http://') || this._requestUrl.startsWith('https://')) 
+                        ? this._requestUrl 
+                        : new URL(this._requestUrl, location.href).href;
+                    
                     if (!window.capturedRequests.some(r => r.url === this._requestUrl && r.method === this._requestMethod && r.body === (body || ''))) {
                         window.capturedRequests.push({
                             type: 'xhr',
-                            url: this._requestUrl,
+                            url: absoluteUrl,
                             method: this._requestMethod,
                             body: body || '',
                             decodedQueryParams: decodeQueryParams(this._requestUrl)

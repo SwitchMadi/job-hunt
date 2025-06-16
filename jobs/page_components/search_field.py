@@ -94,14 +94,34 @@ class SearchField(PageComponent):
         def is_tracking_domain(url):
             return any(domain in url for domain in tracking_domains)
 
+        special_domains = [
+            {"domain": "jobs.ashbyhq.com", "search_pattern": "Autocomplete"}
+        ]
+
         is_search_field = False
         for request in captured_requests:
             if not is_tracking_domain(request["url"]):
                 # Check decoded query params
                 for key, value in request.get("decodedQueryParams", {}).items():
-                    if special_key in value:
-                        is_search_field = True
-                        break
+                    if special_key in value.lower():
+                        if any(
+                            domain["domain"] in request["url"]
+                            for domain in special_domains
+                        ):
+                            special_domain = [
+                                domain
+                                for domain in special_domains
+                                if domain["domain"] in request["url"]
+                            ][0]
+                            if (
+                                special_domain["search_pattern"].lower()
+                                in value.lower()
+                            ):
+                                is_search_field = True
+                                break
+                        else:
+                            is_search_field = True
+                            break
 
                 # Check POST body
                 if (
@@ -109,9 +129,25 @@ class SearchField(PageComponent):
                     and request["method"] == "POST"
                     and request["body"]
                 ):
-                    if special_key in request["body"]:
-                        is_search_field = True
-                        break
+                    if special_key in request["body"].lower():
+                        if any(
+                            domain["domain"] in request["url"]
+                            for domain in special_domains
+                        ):
+                            special_domain = [
+                                domain
+                                for domain in special_domains
+                                if domain["domain"] in request["url"]
+                            ][0]
+                            if (
+                                special_domain["search_pattern"].lower()
+                                in request["body"].lower()
+                            ):
+                                is_search_field = True
+                                break
+                        else:
+                            is_search_field = True
+                            break
 
                 if is_search_field:
                     break
