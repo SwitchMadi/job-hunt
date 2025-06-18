@@ -48,6 +48,19 @@ class WorkExperienceSection(PageComponent):
         self.prev = None
 
     def proceed(self, retry=False):
+        if not self.is_component_functional:
+            (
+                add_education_button_present,
+                is_comprehensive,
+                comprehensive_fields,
+                non_comprehensive_fields,
+            ) = self._analyze_section_structure()
+            if non_comprehensive_fields:
+                self._process_non_comprehensive_fields(non_comprehensive_fields)
+
+            if not add_education_button_present and not is_comprehensive:
+                return None
+
         curr_node = self.head
 
         user_work_experience = (
@@ -88,7 +101,7 @@ class WorkExperienceSection(PageComponent):
             if curr_node and not isinstance(curr_node, WorkExperience):
                 curr_node = self._add_another_work_experience(curr_node)
 
-        return
+        return None
 
     @property
     def work_experience_fields(self):
@@ -718,6 +731,244 @@ class WorkExperienceSection(PageComponent):
         else:
             return False, [], None, False
 
+    def _extract_page_elements(self):
+        """
+        Private method to analyze all user input fields and buttons on the current page
+        using GPT to determine work experience relevance.
+
+        Returns:
+            tuple: (fields_analysis, buttons_analysis) where each is a list of dicts
+                   containing element details and relevance flags
+        """
+        global driver
+
+        user_prompt = (
+            f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title} at a "
+            f"company called {self.parent_application_page.parent_job.company}.\n"
+            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
+            f"Analyze this page and provide the following information:\n"
+            f"1. List ALL user input fields (text inputs, dropdowns, textareas, date fields, etc.) - anything that is NOT a button\n"
+            f"2. For each field, determine if it is related to work experience or not\n"
+            f"3. List ALL buttons on the page\n"
+            f"4. For each button, determine if it is for adding new/another work experience or not\n"
+            f"Be thorough and include ALL interactive elements you can find."
+        )
+
+        class Fields(BaseModel):
+            field_title: str = Field(
+                ...,
+                description="Exact field title/label as shown on the page, without any modification.",
+            )
+            is_work_experience_related: bool = Field(
+                ...,
+                description="Boolean flag indicating whether this field is related to work experience or not.",
+            )
+
+        class Buttons(BaseModel):
+            button_text: str = Field(
+                ...,
+                description="Exact button text as shown on the page, without any modification.",
+            )
+            is_add_work_experience_button: bool = Field(
+                ...,
+                description="Boolean flag indicating whether this button is for adding new/another work experience or not.",
+            )
+
+        class PageElements(BaseModel):
+            input_fields: List[Fields] = Field(
+                ...,
+                description="List of all user input fields found on the page (excluding buttons).",
+            )
+            buttons: List[Buttons] = Field(
+                ..., description="List of all buttons found on the page."
+            )
+
+        analysis_found, analysis = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=PageElements,
+        )
+
+        if analysis_found:
+            fields_analysis = [
+                {
+                    "field_title": field.field_title,
+                    "is_work_experience_related": field.is_work_experience_related,
+                }
+                for field in analysis.input_fields
+            ]
+
+            buttons_analysis = [
+                {
+                    "button_text": button.button_text,
+                    "is_add_work_experience_button": button.is_add_work_experience_button,
+                }
+                for button in analysis.buttons
+            ]
+
+            return fields_analysis, buttons_analysis
+        else:
+            logger.error(
+                f"Couldn't analyze page elements for {self.parent_application_page.parent_job.title}. "
+                f"URL - {self.parent_application_page.url}"
+            )
+            return [], []
+
+    def _analyze_work_experience_fields_comprehensiveness(self, field_titles):
+        """
+        Private method to analyze work experience related field titles to determine if they are
+        comprehensive enough to gather specific work experience details or just random questions.
+
+        Args:
+            field_titles (list): List of field title strings
+
+        Returns:
+            tuple: (is_comprehensive, field_analysis) where:
+                   - is_comprehensive: bool indicating if fields are comprehensive
+                   - field_analysis: list of dicts with field details and relevance flags
+        """
+        if not field_titles:
+            return False, []
+
+        # Create numbered list for GPT analysis
+        field_titles_text = "\n".join(
+            f"{i+1}. {title}" for i, title in enumerate(field_titles)
+        )
+
+        user_prompt = (
+            f"Following are work experience related fields from a job application webpage for "
+            f"{self.parent_application_page.parent_job.title} at {self.parent_application_page.parent_job.company}.\n"
+            f"Work Experience Fields:\n{field_titles_text}\n\n"
+            f"Analyze these fields and determine:\n"
+            f"1. Whether these fields collectively are comprehensive enough to gather a candidate's "
+            f"specific work experience details in a thorough manner\n"
+            f"2. For each individual field, whether it is genuinely intended to collect comprehensive "
+            f"work experience information or seems like a random/standalone question\n\n"
+            f"Consider comprehensive work experience fields to typically include things like:\n"
+            f"- Company name, job title, employment dates, location\n"
+            f"- Job responsibilities, achievements, skills used\n"
+            f"- Employment type, industry, etc.\n\n"
+            f"Fields that seem random or not intended for comprehensive work experience gathering might be:\n"
+            f"- Single generic questions about work\n"
+            f"- Isolated questions without context of building a complete work history"
+        )
+
+        class FieldComprehensiveness(BaseModel):
+            field_number: int = Field(
+                ...,
+                description="Serial number of the field from the provided list (1-based index).",
+            )
+            is_comprehensive_work_experience_field: bool = Field(
+                ...,
+                description="Boolean flag indicating whether this specific field is genuinely intended "
+                "to collect comprehensive work experience information, not just a random work-related question.",
+            )
+
+        class WorkExperienceFieldsAnalysis(BaseModel):
+            are_fields_collectively_comprehensive: bool = Field(
+                ...,
+                description="Boolean indicating whether all the fields together are comprehensive enough "
+                "to gather a candidate's specific work experience details thoroughly.",
+            )
+            individual_field_analysis: List[FieldComprehensiveness] = Field(
+                ...,
+                description="Analysis of each individual field's comprehensiveness for work experience collection. "
+                "Return only the field numbers (1-based index) and boolean flags, not the full field titles.",
+            )
+
+        analysis_found, analysis = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=WorkExperienceFieldsAnalysis,
+        )
+
+        if analysis_found:
+            # Create a mapping of field numbers to boolean flags
+            field_flags = {}
+            for field in analysis.individual_field_analysis:
+                field_index = field.field_number - 1  # Convert to 0-based index
+                if 0 <= field_index < len(field_titles):
+                    field_flags[field_index] = (
+                        field.is_comprehensive_work_experience_field
+                    )
+
+            # Attach boolean flags to original field titles
+            field_analysis = []
+            for i, title in enumerate(field_titles):
+                field_analysis.append(
+                    {
+                        "field_title": title,
+                        "is_comprehensive_work_experience_field": field_flags.get(
+                            i, False
+                        ),
+                    }
+                )
+
+            return analysis.are_fields_collectively_comprehensive, field_analysis
+        else:
+            logger.error(
+                f"Couldn't analyze work experience fields comprehensiveness for {self.parent_application_page.parent_job.title}. "
+                f"URL - {self.parent_application_page.url}"
+            )
+            return False, []
+
+    def _analyze_section_structure(self):
+        is_comprehensive = False
+        comprehensive_fields = []
+        non_comprehensive_fields = []
+
+        fields, buttons = self._extract_page_elements()
+
+        add_education_button_present = (
+            True
+            if [button for button in buttons if button["is_add_work_experience_button"]]
+            else False
+        )
+
+        work_experience_fields = [
+            field["field_title"]
+            for field in fields
+            if field["is_work_experience_related"]
+        ]
+        if work_experience_fields:
+            is_comprehensive, field_analysis = (
+                self._analyze_work_experience_fields_comprehensiveness(
+                    work_experience_fields
+                )
+            )
+
+            comprehensive_fields = [
+                field["field_title"]
+                for field in field_analysis
+                if field["is_comprehensive_work_experience_field"]
+            ]
+
+            non_comprehensive_fields = [
+                field["field_title"]
+                for field in field_analysis
+                if not field["is_comprehensive_work_experience_field"]
+            ]
+
+        return (
+            add_education_button_present,
+            is_comprehensive,
+            comprehensive_fields,
+            non_comprehensive_fields,
+        )
+
+    def _process_non_comprehensive_fields(self, fields):
+        for field in fields:
+            application_field = ApplicationField(
+                parent_application_page=self.parent_application_page,
+                title=field,
+                question=field,
+                category="other",
+            )
+            application_field_component = application_field.get_field_component()
+            if application_field_component:
+                application_field_component.proceed()
+                self.parent_application_page.update_steps(application_field_component)
+
     def to_dict(self):
         return {
             "class": self.__class__.__name__,
@@ -736,6 +987,7 @@ class WorkExperienceSection(PageComponent):
             head=head,
             parent_application_page=parent_application_page,
         )
+        instance.is_component_functional = True
 
         if input_dict["next"]:
             next_class = get_page_component_class_name(
