@@ -303,6 +303,7 @@ class ApplicationField:
             job_title=self.parent_application_page.parent_job.title,
             job_url=self.parent_application_page.url,
             html=html,
+            xpath_count=20,
         )
         if not correct_xpath:
             raise Exception(
@@ -1077,7 +1078,9 @@ class ApplicationField:
             return None, False
 
     @classmethod
-    def extract_correct_x_path(cls, prev_x_path, prompt, job_title, job_url, html=None):
+    def extract_correct_x_path(
+        cls, prev_x_path, prompt, job_title, job_url, html=None, xpath_count=10
+    ):
         global driver
 
         user_prompt = (
@@ -1096,7 +1099,7 @@ class ApplicationField:
         class CorrectXPath(BaseModel):
             possible_x_paths: List[str] = Field(
                 ...,
-                description="10 Possible correct XPaths of the element which can be used in selenium chrome driver to "
+                description=f"{xpath_count} Possible correct XPaths of the element which can be used in selenium chrome driver to "
                 "search the element. Try to give short & simple XPaths which point to desired element. Avoid long "
                 "ancestor chains, multiple contains(@class,…) filters, or deep nesting because long XPaths can be brittle.",
             )

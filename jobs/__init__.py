@@ -460,7 +460,7 @@ class ApplicationPage:
         finally:
             # Close the driver after application
             global driver
-            if driver:
+            if driver and type(driver) is not Exception:
                 driver.quit()
 
             driver = None
@@ -715,13 +715,30 @@ class ApplicationPage:
                     if hasattr(field, "field_title"):
                         existing_titles.add(clean_text_edges(field.field_title).lower())
 
+                curr_node = self.head_step
+                while curr_node:
+                    if hasattr(curr_node, "title"):
+                        existing_titles.add(clean_text_edges(curr_node.title).lower())
+                    curr_node = curr_node.next
+
                 unique_additional_fields = []
                 for field in additional_fields:
                     field_title_lower = clean_text_edges(field.field_title).lower()
 
-                    if field_title_lower not in existing_titles:
-                        unique_additional_fields.append(field)
-                        existing_titles.add(field_title_lower)
+                    if len(field_title_lower) < 75:
+                        if field_title_lower not in existing_titles:
+                            unique_additional_fields.append(field)
+                            existing_titles.add(field_title_lower)
+                    else:
+                        if not any(
+                            (
+                                (field_title_lower in existing_title)
+                                or (existing_title in field_title_lower)
+                            )
+                            for existing_title in existing_titles
+                        ):
+                            unique_additional_fields.append(field)
+                            existing_titles.add(field_title_lower)
 
                 if unique_additional_fields:
                     logger.info(
@@ -743,7 +760,6 @@ class ApplicationPage:
 
         if elements.submit_application_button.value:
             self._identify_submit_application_button()
-
             return True
 
     # Identify application fields
@@ -789,11 +805,11 @@ class ApplicationPage:
                 field_title: str = Field(
                     ...,
                     description="Application field's exact title / question mentioned on the webpage, without any "
-                    "modification.",
+                    "modification whatsoever. Just pick what's in HTML and respond as it is, not matter how long it is.",
                 )
                 field_question: str = Field(
                     ...,
-                    description="Field title on its own may not be self explanatory so modify it, if needed, so that it "
+                    description="If field title on its own is not self explanatory so modify it, so that it "
                     "makes sense as a question. Otherwise respond same as field title.",
                 )
                 field_category: FieldCategory = Field(
@@ -815,11 +831,11 @@ class ApplicationPage:
                 field_title: str = Field(
                     ...,
                     description="Application field's exact title / question mentioned on the webpage, without any "
-                    "modification.",
+                    "modification whatsoever. Just pick what's in HTML and respond as it is, not matter how long it is.",
                 )
                 field_question: str = Field(
                     ...,
-                    description="Field title on its own may not be self explanatory so modify it, if needed, so that it "
+                    description="If field title on its own is not self explanatory so modify it, so that it "
                     "makes sense as a question. Otherwise respond same as field title.",
                 )
                 field_category: FieldCategory = Field(

@@ -525,7 +525,7 @@ def get_xpath_by_text(text):
         const allElements = Array.from(document.querySelectorAll('body *'));
         let matchingElements;
 
-        if (cleanedInput.length > 100) {
+        if (cleanedInput.length > 70) {
             matchingElements = allElements.filter(el => {
                 const cleanedElText = cleanTextEdges(el.textContent);
                 return cleanedElText.includes(cleanedInput);

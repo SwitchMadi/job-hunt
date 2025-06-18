@@ -3,12 +3,20 @@ from pydantic import BaseModel, Field
 import os
 from selenium.webdriver.support.ui import WebDriverWait
 
-from jobs.page_components import PageComponent, get_page_component_class_name
+from jobs.page_components import (
+    PageComponent,
+    get_page_component_class_name,
+    ApplicationField,
+)
 from jobs.page_components.button import Button
 from jobs.page_components.resume_upload import ResumeUpload
 from utilities import constants
 from utilities.gpt import get_gpt_response
-from utilities.selenium import get_selenium_driver, minify_html_for_gpt_prompt
+from utilities.selenium import (
+    get_selenium_driver,
+    minify_html_for_gpt_prompt,
+    is_element_visible,
+)
 
 driver = get_selenium_driver()
 driver.set_page_load_timeout(15)
@@ -59,6 +67,23 @@ class SubmitApplication(PageComponent):
         )
         if button_found:
             if button.is_submit_button_present:
+                if not is_element_visible(button.x_path):
+                    prompt = "The x_path that we are trying to extract is of submit application button."
+                    correct_x_path = ApplicationField.extract_correct_x_path(
+                        prev_x_path=button.x_path,
+                        prompt=prompt,
+                        job_title=self.parent_application_page.parent_job.title,
+                        job_url=self.parent_application_page.url,
+                    )
+                    if not correct_x_path:
+                        raise Exception(
+                            f"Couldn't extract submit application button XPath for "
+                            f"{self.parent_application_page.parent_job.title}. "
+                            f"URL - {self.parent_application_page.parent_job.url}"
+                        )
+                    else:
+                        button.x_path = correct_x_path
+
                 self.field_component = Button(
                     x_path=button.x_path,
                     button_type="submit_application",

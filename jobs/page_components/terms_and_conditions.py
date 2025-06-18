@@ -1,6 +1,11 @@
 from pydantic import BaseModel, Field
 
-from jobs.page_components import PageComponent, get_page_component_class_name, logger
+from jobs.page_components import (
+    PageComponent,
+    get_page_component_class_name,
+    logger,
+    ApplicationField,
+)
 from jobs.page_components.button import Button
 from utilities import constants
 from utilities.gpt import get_gpt_response
@@ -33,7 +38,7 @@ class TermsAndConditions(PageComponent):
 
         self.field_component.proceed()
 
-    def _identify(self, retry=False, prev_xpath=None):
+    def _identify(self, retry=False):
         global driver
 
         user_input_element = None
@@ -70,13 +75,6 @@ class TermsAndConditions(PageComponent):
             f"or a button."
         )
 
-        if retry and prev_xpath:
-            user_prompt += (
-                f"\n\nIn previous try you gave following xpath but the element couldn't be found or wasn't visible. "
-                f"So, find correct xpath for the same field.\n"
-                f"Previous xpath - {prev_xpath}\n"
-            )
-
         class TnCField(BaseModel):
             x_path: str = Field(
                 ...,
@@ -89,7 +87,24 @@ class TermsAndConditions(PageComponent):
             user_prompt,
             response_format=TnCField,
         )
-        if tnc_field_found and is_element_visible(tnc_field.x_path):
+        if tnc_field_found:
+            if not is_element_visible(tnc_field.x_path):
+                prompt = "The x_path that we are trying to extract is of T&C field checkbox / button."
+                correct_x_path = ApplicationField.extract_correct_x_path(
+                    prev_x_path=tnc_field.x_path,
+                    prompt=prompt,
+                    job_title=self.parent_application_page.parent_job.title,
+                    job_url=self.parent_application_page.url,
+                )
+                if not correct_x_path:
+                    raise Exception(
+                        f"Couldn't extract T&C field XPath for "
+                        f"{self.parent_application_page.parent_job.title}. "
+                        f"URL - {self.parent_application_page.parent_job.url}"
+                    )
+                else:
+                    tnc_field.x_path = correct_x_path
+
             if self.parent_application_page.component_x_path_exists(tnc_field.x_path):
                 logger.warn(
                     f"Page component with following x_path already exists - {tnc_field.x_path}"
@@ -111,8 +126,6 @@ class TermsAndConditions(PageComponent):
                     f"Couldn't extract TnC field for {self.parent_application_page.parent_job.title}. "
                     f"URL - {self.parent_application_page.url}"
                 )
-        elif not retry:
-            return self._identify(retry=True, prev_xpath=tnc_field.x_path)
         else:
             raise Exception(
                 f"Couldn't extract TnC field for {self.parent_application_page.parent_job.title}. "
