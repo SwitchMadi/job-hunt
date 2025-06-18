@@ -74,12 +74,7 @@ class WorkExperienceSection(PageComponent):
         ):
             if curr_node is None:
                 if not self.work_experience_fields:
-                    resp = self._identify_work_experience_fields()
-
-                    if isinstance(resp, list):
-                        return resp
-                    else:
-                        curr_node = resp
+                    curr_node = self._identify_work_experience_fields()
                 else:
                     curr_node = self._extract_known_work_experience_fields_info()
 
@@ -453,14 +448,12 @@ class WorkExperienceSection(PageComponent):
         else:
             observed_elements_prompt = ""
 
-        (
-            interactive_work_experience_fields_visible,
-            work_experience_fields_titles,
-            are_fields_comprehensive,
-        ) = self._are_interactive_work_experience_fields_visible(
-            observed_elements_prompt
+        interactive_work_experience_fields_visible = (
+            self._are_interactive_work_experience_fields_visible(
+                observed_elements_prompt
+            )
         )
-        if interactive_work_experience_fields_visible and are_fields_comprehensive:
+        if interactive_work_experience_fields_visible:
             user_prompt = (
                 f"Following HTML is of a job application webpage for {self.parent_application_page.parent_job.title} at a "
                 f"company called {self.parent_application_page.parent_job.company}.\n"
@@ -655,22 +648,12 @@ class WorkExperienceSection(PageComponent):
                         )
 
                 return curr_node
-            else:
-                return None
-        elif (
-            interactive_work_experience_fields_visible and not are_fields_comprehensive
-        ):
-            logger.info(
-                f"Work experience fields are visible but not comprehensive for {self.parent_application_page.parent_job.title}. "
-                f"URL - {self.parent_application_page.url}"
-            )
-            return work_experience_fields_titles
-        else:
-            logger.warn(
-                f"Couldn't extract work experience fields for {self.parent_application_page.parent_job.title}. "
-                f"URL - {self.parent_application_page.url}"
-            )
-            return None
+
+        logger.warn(
+            f"Couldn't extract work experience fields for {self.parent_application_page.parent_job.title}. "
+            f"URL - {self.parent_application_page.url}"
+        )
+        return None
 
     def _are_interactive_work_experience_fields_visible(self, observed_elements_prompt):
         global driver
@@ -698,23 +681,6 @@ class WorkExperienceSection(PageComponent):
                 "- Your assessment must be **based solely on the actual visibility of interactive work experience related input fields**, "
                 "not on page instructions or labels.",
             )
-            work_experience_fields_titles: Optional[List[str]] = Field(
-                ...,
-                description="If interactive work experience fields are visible, return their exact titles. "
-                "This is optional and may not be present if no work experience fields are visible.",
-            )
-            are_fields_comprehensive: bool = Field(
-                ...,
-                description="Determine whether the visible work experience fields are comprehensive enough to cover all "
-                "necessary work experience information. If not, return False. This is to judge if the section is about "
-                "collecting comprehensive work experience information or is just couple of standalone fields which are "
-                "not intended for gathering comprehensive information about work experience.",
-            )
-            add_new_work_experience_button_visible: bool = Field(
-                ...,
-                description="Determine whether the button to add new / another work experience is currently "
-                "**present and clearly visible** on the page.\n",
-            )
 
         info_found, info = get_gpt_response(
             constants.gpt["system_prompts"]["application_step_identification"],
@@ -722,14 +688,9 @@ class WorkExperienceSection(PageComponent):
             response_format=WorkExperienceSectionInfo,
         )
         if info_found:
-            return (
-                info.interactive_work_experience_fields_visible,
-                info.work_experience_fields_titles,
-                info.are_fields_comprehensive,
-                info.add_new_work_experience_button_visible,
-            )
+            return info.interactive_work_experience_fields_visible
         else:
-            return False, [], None, False
+            return False
 
     def _extract_page_elements(self):
         """
