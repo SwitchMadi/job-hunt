@@ -70,12 +70,7 @@ class EducationSection(PageComponent):
         while user_education and (curr_education_index < len(user_education)):
             if curr_node is None:
                 if not self.education_fields:
-                    resp = self._identify_education_fields()
-
-                    if isinstance(resp, list):
-                        return resp
-                    else:
-                        curr_node = resp
+                    curr_node = self._identify_education_fields()
                 else:
                     curr_node = self._extract_known_education_fields_info()
 
@@ -445,12 +440,10 @@ class EducationSection(PageComponent):
         else:
             observed_elements_prompt = ""
 
-        (
-            interactive_education_fields_visible,
-            education_fields_titles,
-            are_fields_comprehensive,
-        ) = self._are_interactive_education_fields_visible(observed_elements_prompt)
-        if interactive_education_fields_visible and are_fields_comprehensive:
+        interactive_education_fields_visible = (
+            self._are_interactive_education_fields_visible(observed_elements_prompt)
+        )
+        if interactive_education_fields_visible:
             user_prompt = (
                 f"Following HTML is of a job application webpage for {self.parent_application_page.parent_job.title} at a "
                 f"company called {self.parent_application_page.parent_job.company}.\n"
@@ -635,21 +628,14 @@ class EducationSection(PageComponent):
                             refetch_fields=True,
                         )
 
-                return curr_node
-            else:
-                return None
-        elif interactive_education_fields_visible and not are_fields_comprehensive:
-            logger.info(
-                f"Education fields are visible but not comprehensive for {self.parent_application_page.parent_job.title}. "
-                f"URL - {self.parent_application_page.url}"
-            )
-            return education_fields_titles
-        else:
-            logger.warn(
-                f"Couldn't extract education fields for {self.parent_application_page.parent_job.title}. "
-                f"URL - {self.parent_application_page.url}"
-            )
-            return None
+                if curr_node:
+                    return curr_node
+
+        logger.warn(
+            f"Couldn't extract education fields for {self.parent_application_page.parent_job.title}. "
+            f"URL - {self.parent_application_page.url}"
+        )
+        return None
 
     def _are_interactive_education_fields_visible(self, observed_elements_prompt):
         global driver
@@ -677,18 +663,6 @@ class EducationSection(PageComponent):
                 "- Your assessment must be **based solely on the actual visibility of interactive educational input fields**, "
                 "not on page instructions or labels.",
             )
-            education_fields_titles: Optional[List[str]] = Field(
-                ...,
-                description="If interactive education fields are visible, return their exact titles. "
-                "This is optional and may not be present if no education qualification fields are visible.",
-            )
-            are_fields_comprehensive: bool = Field(
-                ...,
-                description="Determine whether the visible education fields are comprehensive enough to cover all "
-                "necessary educational qualifications. If not, return False. This is to judge if the section is about "
-                "collecting comprehensive educational qualifications or is just couple of standalone fields which are "
-                "not intended for gathering comprehensive information about educational qualifications.",
-            )
 
         info_found, info = get_gpt_response(
             constants.gpt["system_prompts"]["application_step_identification"],
@@ -696,13 +670,9 @@ class EducationSection(PageComponent):
             response_format=EducationSectionInfo,
         )
         if info_found:
-            return (
-                info.interactive_education_fields_visible,
-                info.education_fields_titles,
-                info.are_fields_comprehensive,
-            )
+            return info.interactive_education_fields_visible
         else:
-            return False, [], None
+            return False
 
     def _extract_page_elements(self):
         """
