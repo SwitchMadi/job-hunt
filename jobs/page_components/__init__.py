@@ -66,9 +66,18 @@ class PageComponent(ABC):
 
 
 class ApplicationField:
-    def __init__(self, parent_application_page, title, question, category, x_path=None):
+    def __init__(
+        self,
+        parent_application_page,
+        title,
+        question,
+        category,
+        x_path=None,
+        title_to_click=None,
+    ):
         self.parent_application_page = parent_application_page
         self.title = title
+        self.title_to_click = title_to_click or title
         self.question = question
         self.category = category
         self.x_path = x_path
@@ -164,7 +173,7 @@ class ApplicationField:
             )
             x_path: str = Field(
                 ...,
-                description="XPath of the checkbox / radio button which can be used in selenium "
+                description="XPath of the clickable checkbox / radio button which can be used in selenium "
                 "chrome driver to search & click the checkbox / radio button. Don't use HTML "
                 "hierarchy to construct XPath.",
             )
@@ -192,7 +201,7 @@ class ApplicationField:
             )
             options: Optional[List[Option]] = Field(
                 ...,
-                description="Options to select from if the field_type is either checkbox or radio button",
+                description="Clickable options to select from if the field_type is either checkbox or radio button",
             )
             format: Optional[str] = Field(
                 ...,
@@ -459,7 +468,7 @@ class ApplicationField:
                 return "search_field", None
 
             is_container_present, container_x_path = self.validate_options_container(
-                x_path, field_title, job_title
+                x_path, field_title, job_title, text_to_click=self.title_to_click
             )
             if is_container_present and container_x_path:
                 return "dropdown", container_x_path
@@ -475,7 +484,10 @@ class ApplicationField:
 
                     is_container_present, container_x_path = (
                         self.validate_options_container(
-                            button_x_path, field_title, job_title
+                            button_x_path,
+                            field_title,
+                            job_title,
+                            text_to_click=self.title_to_click,
                         )
                     )
                     if is_container_present and container_x_path:
@@ -497,7 +509,7 @@ class ApplicationField:
 
         elif html_type == "dropdown":
             is_container_present, container_x_path = self.validate_options_container(
-                x_path, field_title, job_title
+                x_path, field_title, job_title, text_to_click=self.title_to_click
             )
             if is_container_present:
                 return "dropdown", container_x_path
@@ -505,7 +517,9 @@ class ApplicationField:
         return html_type, None
 
     @classmethod
-    def validate_options_container(cls, x_path, field_title, job_title):
+    def validate_options_container(
+        cls, x_path, field_title, job_title, text_to_click=None
+    ):
         dropdown_element = get_unique_element_by_xpath(x_path, title=field_title)
         dropdown_type = ApplicationField.identify_options_container_type(
             dropdown_element
@@ -513,7 +527,7 @@ class ApplicationField:
         if dropdown_type == "select-option":
             return True, None
 
-        simulate_empty_area_click(text_to_click=field_title)
+        simulate_empty_area_click(text_to_click=text_to_click or field_title)
 
         start_dom_mutation_observer()
 
@@ -547,7 +561,9 @@ class ApplicationField:
                 html_type="dropdown",
             )
             if is_container_present:
-                simulate_empty_area_click(text_to_click=field_title)
+                simulate_empty_area_click(text_to_click=text_to_click or field_title)
+                if is_element_visible(container_x_path):
+                    simulate_empty_area_click()
                 return True, container_x_path
 
         if dropdown_element.tag_name.lower() == "input":
@@ -570,10 +586,14 @@ class ApplicationField:
                     html_type="dropdown",
                 )
                 if is_container_present:
-                    simulate_empty_area_click(text_to_click=field_title)
+                    simulate_empty_area_click(
+                        text_to_click=text_to_click or field_title
+                    )
+                    if is_element_visible(container_x_path):
+                        simulate_empty_area_click()
                     return True, container_x_path
 
-        simulate_empty_area_click(text_to_click=field_title)
+        simulate_empty_area_click(text_to_click=text_to_click or field_title)
         return False, None
 
     @classmethod

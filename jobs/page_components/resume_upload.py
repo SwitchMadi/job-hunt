@@ -52,11 +52,13 @@ class ResumeUpload(PageComponent):
     def _identify(self, retry=False, prev_x_path=None):
         global driver
 
+        title_prompt = f"Field title - {self.title}\n" if self.title else ""
+
         user_prompt = (
             f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title}."
             f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
             f"There is following field on this webpage to upload resume -\n"
-            f"Field title - {self.title}\n"
+            f"{title_prompt}"
             f"I need to find XPath of upload resume button so that I can upload the resume. Keep in "
             f"mind following -\n"
             f"1. Be pragmatic — if a simple XPath like `//input[@type='file']` or a visible button works, prefer it. "

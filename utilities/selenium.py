@@ -1229,6 +1229,7 @@ def minify_html_for_gpt_prompt(html_content):
         "thead",
         "tbody",
         "tfoot",
+        "i",
     ]
 
     # Remove all children from each SVG tag so that only the tag remains with its attributes

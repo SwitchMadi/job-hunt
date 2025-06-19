@@ -114,6 +114,7 @@ class PhoneInfo(PageComponent):
                         title=field.field_title,
                         question=field.field_question,
                         category=field.field_category.value,
+                        title_to_click=self.title,
                     )
                     field_component = application_field.get_field_component()
                     if field_component:

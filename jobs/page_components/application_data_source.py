@@ -1,11 +1,20 @@
 from pydantic import BaseModel, Field
 from enum import Enum
 
-from jobs.page_components import PageComponent, get_page_component_class_name, logger
+from jobs.page_components import (
+    PageComponent,
+    get_page_component_class_name,
+    logger,
+    ApplicationField,
+)
 from jobs.page_components.button import Button
 from utilities import constants
 from utilities.gpt import get_gpt_response
-from utilities.selenium import get_selenium_driver, minify_html_for_gpt_prompt
+from utilities.selenium import (
+    get_selenium_driver,
+    minify_html_for_gpt_prompt,
+    is_element_visible,
+)
 
 driver = get_selenium_driver()
 driver.set_page_load_timeout(15)
@@ -40,7 +49,8 @@ class ApplicationDataSource(PageComponent):
             f"Out of the given application data source options in the identified section is there an explicit option to"
             f" choose data input strategy as manual input? If yes then give XPath of the button. The button must only "
             f"be for choosing data input strategy as manual, not to actually start inputting application data. If there"
-            f" is no such button then return false."
+            f" is no such button then return check if button for uploading resume is there. If it is there then return "
+            f"true otherwise return false."
         )
 
         class IsElementPresent(Enum):
@@ -60,6 +70,11 @@ class ApplicationDataSource(PageComponent):
                 "manually inputting application data which can be used in selenium chrome driver to search the button. "
                 "Don't use HTML hierarchy to construct XPath.",
             )
+            upload_resume_button_present: IsElementPresent = Field(
+                ...,
+                description="If there is no option to select manual data input strategy then check if there is an "
+                "option to upload resume. If yes then return true, else return false.",
+            )
 
         manual_data_input_option_searched, manual_data_input_option = get_gpt_response(
             constants.gpt["system_prompts"]["application_step_identification"],
@@ -77,6 +92,30 @@ class ApplicationDataSource(PageComponent):
                     )
                     return
 
+                if not is_element_visible(
+                    manual_data_input_option.manual_data_input_x_path
+                ):
+                    prompt = (
+                        "The x_path that we are trying to extract is of a button to opt for manually inputting "
+                        "application data or selecting data input strategy as manual."
+                    )
+                    correct_x_path = ApplicationField.extract_correct_x_path(
+                        prev_x_path=manual_data_input_option.manual_data_input_x_path,
+                        prompt=prompt,
+                        job_title=self.parent_application_page.parent_job.title,
+                        job_url=self.parent_application_page.url,
+                    )
+                    if not correct_x_path:
+                        raise Exception(
+                            f"Couldn't extract XPath for selecting manual data input option for "
+                            f"{self.parent_application_page.parent_job.title}. "
+                            f"URL - {self.parent_application_page.parent_job.url}"
+                        )
+                    else:
+                        manual_data_input_option.manual_data_input_x_path = (
+                            correct_x_path
+                        )
+
                 self.field_component = Button(
                     x_path=manual_data_input_option.manual_data_input_x_path,
                     button_type="select_application_data_source",
@@ -87,14 +126,16 @@ class ApplicationDataSource(PageComponent):
                 if self.field_component.is_component_functional:
                     self.is_component_functional = True
                     self.component_identified = True
-                elif not retry:
-                    self._identify(retry=True)
+
+                    return None
                 else:
                     raise Exception(
                         f"Data input option not found / identified for {self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
                     )
+            elif manual_data_input_option.upload_resume_button_present.value:
+                return "resume_upload"
             else:
-                return
+                return None
         else:
             raise Exception(
                 f"Data input option not found / identified for {self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"

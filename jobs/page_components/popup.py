@@ -26,7 +26,10 @@ class Popup(PageComponent):
 
     def proceed(self, retry=False):
         if not self.component_identified:
-            return self._identify()
+            self._identify()
+            if self.previous_step == "resume_upload":
+                time.sleep(10)
+            return
 
         if self.field_component:
             self.field_component.proceed()

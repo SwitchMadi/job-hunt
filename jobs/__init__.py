@@ -902,7 +902,6 @@ class ApplicationPage:
             elif job_field.field_category.value == "resume_upload":
                 if self.resume_upload_identified:
                     continue
-
                 self._identify_resume_upload_field(job_field.field_title)
             else:
                 self._complete_application_field_identification(job_field)
@@ -927,8 +926,13 @@ class ApplicationPage:
         application_data_source_field = ApplicationDataSource(
             parent_application_page=self
         )
-        application_data_source_field.proceed()
-        self.update_steps(application_data_source_field)
+        resp = application_data_source_field.proceed()
+
+        if resp == "resume_upload":
+            self._identify_resume_upload_field()
+            return True
+        else:
+            self.update_steps(application_data_source_field)
 
         return application_data_source_field.is_component_functional
 
@@ -991,7 +995,7 @@ class ApplicationPage:
         self.update_steps(education_section)
 
     @retry()
-    def _identify_resume_upload_field(self, title):
+    def _identify_resume_upload_field(self, title=None):
         resume_upload_button = ResumeUpload(title=title, parent_application_page=self)
         resume_upload_button.proceed()
         self.update_steps(resume_upload_button)

@@ -45,8 +45,8 @@ class Button(PageComponent):
         size = element.size
 
         # Calculate a random point within the element
-        offset_x = random.randint(5, (size["width"] or 15) - 5)
-        offset_y = random.randint(5, (size["height"] or 15) - 5)
+        offset_x = random.randint(5, max(size["width"], 10) - 5)
+        offset_y = random.randint(5, max(size["height"], 10) - 5)
 
         # Create a curved movement by adding intermediate points
         start_x = random.randint(0, 100)
@@ -111,7 +111,7 @@ class Button(PageComponent):
             actions = ActionChains(driver)
             self._move_mouse_naturally(element, actions)
 
-            if self.button_type == "dropdown":
+            if self.button_type in ["dropdown", "dropdown_option"]:
                 time.sleep(0.5)
                 WebDriverWait(driver, 5).until(EC.element_to_be_clickable(element))
                 element.click()
