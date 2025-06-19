@@ -1,10 +1,19 @@
 from pydantic import BaseModel, Field
 
-from jobs.page_components import PageComponent, get_page_component_class_name, logger
+from jobs.page_components import (
+    PageComponent,
+    get_page_component_class_name,
+    logger,
+    ApplicationField,
+)
 from jobs.page_components.button import Button
 from utilities import constants
 from utilities.gpt import get_gpt_response
-from utilities.selenium import get_selenium_driver, minify_html_for_gpt_prompt
+from utilities.selenium import (
+    get_selenium_driver,
+    minify_html_for_gpt_prompt,
+    is_element_visible,
+)
 
 driver = get_selenium_driver()
 driver.set_page_load_timeout(15)
@@ -58,6 +67,23 @@ class CookiesConsent(PageComponent):
                 )
                 return
 
+            if not is_element_visible(button.x_path):
+                prompt = "The x_path that we are trying to extract is of button to accept all cookies in cookies consent."
+                correct_x_path = ApplicationField.extract_correct_x_path(
+                    prev_x_path=button.x_path,
+                    prompt=prompt,
+                    job_title=self.parent_application_page.parent_job.title,
+                    job_url=self.parent_application_page.url,
+                )
+                if not correct_x_path:
+                    raise Exception(
+                        f"Couldn't extract start application button XPath for "
+                        f"{self.parent_application_page.parent_job.title}. "
+                        f"URL - {self.parent_application_page.parent_job.url}"
+                    )
+                else:
+                    button.x_path = correct_x_path
+
             self.field_component = Button(
                 x_path=button.x_path,
                 button_type="accept_cookies",
@@ -68,8 +94,6 @@ class CookiesConsent(PageComponent):
             if self.field_component.is_component_functional:
                 self.is_component_functional = True
                 self.component_identified = True
-            elif not retry:
-                self._identify(retry=True)
             else:
                 raise Exception(
                     f"Couldn't extract cookies consent field for {self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"

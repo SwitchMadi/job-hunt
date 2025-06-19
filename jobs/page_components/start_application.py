@@ -2,14 +2,18 @@ from pydantic import BaseModel, Field
 from enum import Enum
 from selenium.webdriver.common.by import By
 
-from jobs.page_components import PageComponent, get_page_component_class_name
+from jobs.page_components import (
+    PageComponent,
+    get_page_component_class_name,
+    ApplicationField,
+)
 from jobs.page_components.button import Button
 from utilities import constants
 from utilities.gpt import get_gpt_response
 from utilities.selenium import (
     get_selenium_driver,
     minify_html_for_gpt_prompt,
-    element_exists,
+    is_element_visible,
 )
 
 driver = get_selenium_driver()
@@ -73,15 +77,31 @@ class StartApplication(PageComponent):
 
         if button_found:
             if button.is_start_application_button_present.value:
-                if element_exists(button.x_path):
-                    element = driver.find_element(By.XPATH, button.x_path)
-                    element_text = element.text or ""
+                if not is_element_visible(button.x_path):
+                    prompt = "The x_path that we are trying to extract is of start application button."
+                    correct_x_path = ApplicationField.extract_correct_x_path(
+                        prev_x_path=button.x_path,
+                        prompt=prompt,
+                        job_title=self.parent_application_page.parent_job.title,
+                        job_url=self.parent_application_page.url,
+                    )
+                    if not correct_x_path:
+                        raise Exception(
+                            f"Couldn't extract start application button XPath for "
+                            f"{self.parent_application_page.parent_job.title}. "
+                            f"URL - {self.parent_application_page.parent_job.url}"
+                        )
+                    else:
+                        button.x_path = correct_x_path
 
-                    if (
-                        "submit" in button.x_path
-                        or "submit" in element_text.strip().lower()
-                    ):
-                        return
+                element = driver.find_element(By.XPATH, button.x_path)
+                element_text = element.text or ""
+
+                if (
+                    "submit" in button.x_path
+                    or "submit" in element_text.strip().lower()
+                ):
+                    return
 
                 self.field_component = Button(
                     x_path=button.x_path,
@@ -93,8 +113,6 @@ class StartApplication(PageComponent):
                 if self.field_component.is_component_functional:
                     self.is_component_functional = True
                     self.component_identified = True
-                elif not retry:
-                    self._identify(retry=True)
                 else:
                     raise Exception(
                         f"Couldn't extract start application button for {self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
