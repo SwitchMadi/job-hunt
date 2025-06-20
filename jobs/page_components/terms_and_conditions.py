@@ -71,14 +71,14 @@ class TermsAndConditions(PageComponent):
             f"The webpage has TnC field for applying to the job. Following is info about the TnC field -\n"
             f"Field title - {self.field_info.field_title}\n"
             f"Field category - {self.field_info.field_category}\n"
-            f"Analyse the whole HTML very carefully for extracting XPath of the TnC field. It is usually a checkbox "
+            f"Analyse the whole HTML very carefully for extracting XPath of clickable TnC field to accept the terms. It is usually a checkbox "
             f"or a button."
         )
 
         class TnCField(BaseModel):
             x_path: str = Field(
                 ...,
-                description="XPath of TnC field which can be used in selenium chrome driver to search the field. Don't "
+                description="XPath of clickable TnC field (to accept the terms) which can be used in selenium chrome driver to search the field. Don't "
                 "use HTML hierarchy to construct XPath.",
             )
 
