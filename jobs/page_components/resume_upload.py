@@ -86,7 +86,7 @@ class ResumeUpload(PageComponent):
             )
             another_file_already_uploaded: bool = Field(
                 False,
-                description="If True, it means that based on HTML there seems to be another file already uploaded for "
+                description="Whether, based on HTML, there seems to be another file already uploaded for "
                 "the upload button with the extracted x_path.",
             )
 

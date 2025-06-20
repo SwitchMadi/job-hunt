@@ -771,15 +771,15 @@ class ApplicationPage:
 
         if identify_only_errors:
             prompt_part = (
-                "While filling job application I clicked submit / next section button. There might or might not be any "
+                "While filling job application I clicked submit / next section button. There may be some "
                 "errors on the page / around job fields. Analyse the whole HTML very carefully for extracting all the "
-                "application fields which are definitely having an error. Strictly ignore the fields where there is no "
-                "error for sure."
+                "errors & their fields. Strictly ignore the fields where there is no error."
             )
         else:
             prompt_part = (
                 "The webpage has job application related fields. Analyse the whole HTML very carefully for "
-                "extracting all the application fields."
+                "extracting all the application fields. While extracting field titles, strictly extract exact field "
+                "titles as they are mentioned on the webpage, without any modification whatsoever."
             )
 
         class FieldCategory(Enum):
@@ -814,15 +814,12 @@ class ApplicationPage:
                 )
                 field_category: FieldCategory = Field(
                     ...,
-                    description="Application field category like email, work_experience, education, city etc.",
-                )
-                is_error_present: bool = Field(
-                    ...,
-                    description="Whether this field has any validation/requirement errors.",
+                    description="Application field category like email, work_experience, education, city etc. Note that "
+                    "TnC field must be a checkbox kind of field, not expect any answer.",
                 )
                 error: str | None = Field(
                     None,
-                    description="The error message shown for this field if it has validation/requirement errors.",
+                    description="The error message shown for this field.",
                 )
 
         else:
@@ -840,7 +837,8 @@ class ApplicationPage:
                 )
                 field_category: FieldCategory = Field(
                     ...,
-                    description="Application field category like email, work_experience, education, city etc.",
+                    description="Application field category like email, work_experience, education, city etc. Note that "
+                    "TnC field must be a checkbox kind of field, not expect any answer.",
                 )
 
         class JobFields(BaseModel):
@@ -852,7 +850,7 @@ class ApplicationPage:
                 f"Following HTML page is job application webpage for {self.parent_job.title} at a company called "
                 f"{self.parent_job.company}.\n"
                 f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
-                f"{prompt_part_text}"
+                f"{prompt_part_text}\n"
             )
 
             job_fields_found, job_fields = get_gpt_response(
@@ -1018,4 +1016,17 @@ class ApplicationPage:
     def _identify_submit_application_button(self):
         submit_application_button = SubmitApplication(parent_application_page=self)
         submit_application_button.proceed()
-        self.update_steps(submit_application_button)
+
+        if submit_application_button.is_component_functional:
+            error_fields = self._identify_application_fields(identify_only_errors=True)
+            # Filter out fields that don't have errors
+            error_fields = [field for field in error_fields if field.error]
+            if error_fields:
+                logger.warn(
+                    f"Errors in job application fields for {self.parent_job.title}. URL - {self.url}"
+                )
+                self._act_on_job_fields(error_fields)
+
+                submit_application_button.proceed()
+
+            self.update_steps(submit_application_button)

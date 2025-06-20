@@ -130,7 +130,6 @@ class ApplicationField:
             f"3. XPath should be of one interactive element only. Don't get XPath for element which has multiple "
             f"interactive elements in it (except for checkboxes and radio buttons) and the element is not interactive "
             f"itself.\n"
-            f"{'4. Since given HTML is not of full page so make sure that if XPath is being provided, it will most probably be unique in whole page.' if user_input_element else ''}"
         )
 
         if self.category in ["phone_country_code", "phone_number_without_country_code"]:
@@ -174,40 +173,80 @@ class ApplicationField:
             x_path: str = Field(
                 ...,
                 description="XPath of the clickable checkbox / radio button which can be used in selenium "
-                "chrome driver to search & click the checkbox / radio button. Don't use HTML "
-                "hierarchy to construct XPath.",
+                "chrome driver to search & click the checkbox / radio button. If checkbox / radio button is "
+                "different from option text then give xpath of the clickable checkbox / radio button element",
             )
 
-        class ApplicationFieldInfo(BaseModel):
-            x_path: Optional[str] = Field(
-                ...,
-                description="XPath of the application field which can be used in selenium chrome driver to search the "
-                "application field. Don't use HTML hierarchy to construct XPath. XPath of the first field "
-                "if there are many.",
-            )
-            is_field_match_confident: bool = Field(
-                ...,
-                description="Very carefully assess whether the extracted x_path element matches with the given title and category with great"
-                " confidence or not. If true then field is correct and should be used. If false then extracted field info "
-                "is not reliable enough and should not be used. Be very strict for assessing the confidence.",
-            )
-            field_type: FieldType = Field(
-                ...,
-                description="Application sub-field type like date, addButton, upload etc.",
-            )
-            html_type: FieldHtmlType = Field(
-                ...,
-                description="Application field html type like textbox, checkbox, dropdown etc.",
-            )
-            options: Optional[List[Option]] = Field(
-                ...,
-                description="Clickable options to select from if the field_type is either checkbox or radio button",
-            )
-            format: Optional[str] = Field(
-                ...,
-                description="Format of field answer if the field requires its answer to be in some specific format. "
-                "e.g. date format etc.",
-            )
+        if user_input_element:
+
+            class ApplicationFieldInfo(BaseModel):
+                x_path: Optional[str] = Field(
+                    ...,
+                    description="XPath of the application field which can be used in selenium chrome driver to search the "
+                    "application field. Don't use HTML hierarchy to construct XPath. XPath of the first field "
+                    "if there are many.",
+                )
+                is_field_match_confident: bool = Field(
+                    ...,
+                    description="Very carefully assess whether the extracted x_path element matches with the given title and category with great"
+                    " confidence or not. If true then field is correct and should be used. If false then extracted field info "
+                    "is not reliable enough and should not be used. Be very strict for assessing the confidence.",
+                )
+                field_type: FieldType = Field(
+                    ...,
+                    description="Application sub-field type like date, addButton, upload etc.",
+                )
+                html_type: FieldHtmlType = Field(
+                    ...,
+                    description="Application field html type like textbox, checkbox, dropdown etc.",
+                )
+                options: Optional[List[Option]] = Field(
+                    ...,
+                    description="Clickable options to select from if the field_type is either checkbox or radio button",
+                )
+                format: Optional[str] = Field(
+                    ...,
+                    description="Format of field answer if the field requires its answer to be in some specific format. "
+                    "e.g. date format etc.",
+                )
+
+        else:
+
+            class ApplicationFieldInfo(BaseModel):
+                x_path: Optional[str] = Field(
+                    ...,
+                    description="XPath of the application field which can be used in selenium chrome driver to search the "
+                    "application field. Don't use HTML hierarchy to construct XPath. XPath of the first field "
+                    "if there are many.",
+                )
+                is_field_match_confident: bool = Field(
+                    ...,
+                    description="Very carefully assess whether the extracted x_path element matches with the given title and category with great"
+                    " confidence or not. If true then field is correct and should be used. If false then extracted field info "
+                    "is not reliable enough and should not be used. Be very strict for assessing the confidence.",
+                )
+                field_type: FieldType = Field(
+                    ...,
+                    description="Application sub-field type like date, addButton, upload etc.",
+                )
+                html_type: FieldHtmlType = Field(
+                    ...,
+                    description="Application field html type like textbox, checkbox, dropdown etc.",
+                )
+                options: Optional[List[Option]] = Field(
+                    ...,
+                    description="Clickable options to select from if the field_type is either checkbox or radio button",
+                )
+                format: Optional[str] = Field(
+                    ...,
+                    description="Format of field answer if the field requires its answer to be in some specific format. "
+                    "e.g. date format etc.",
+                )
+                exact_field_title: Optional[str] = Field(
+                    ...,
+                    description="Exact field title as shown on page without any modification whatsoever, even if exact "
+                    "title is too long.",
+                )
 
         application_field_found, application_field = get_gpt_response(
             constants.gpt["system_prompts"]["application_step_identification"],
@@ -270,6 +309,9 @@ class ApplicationField:
             self.field_type = application_field.field_type.value
             self.html_type = application_field.html_type.value
             self.format = application_field.format
+
+            if not user_input_element:
+                self.title = application_field.exact_field_title or self.title
 
             if application_field.options:
                 self.options = [
@@ -979,8 +1021,8 @@ class ApplicationField:
             else:
                 user_prompt += (
                     f"I have to select an option out of following options -\n{options_list}\n If based on "
-                    f"the given context there is no answer that makes sense then pick the option which is "
-                    f"safest from a candidate's point of view."
+                    f"the given context there is no answer that matches then pick the option which is "
+                    f"safest from a candidate's point of view, meaning it should not prompt more questions."
                 )
 
             FieldAnswerOptions = Enum(
