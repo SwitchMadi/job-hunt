@@ -11,7 +11,7 @@ from jobs.page_components import (
     logger,
 )
 from jobs.page_components.button import Button
-from utilities import constants
+from utilities import constants, remove_emoji
 from utilities.gpt import get_gpt_response
 from utilities.selenium import (
     find_clickable_parent_xpath,
@@ -192,6 +192,8 @@ class DropDown(PageComponent):
                     parent_application_page=self.parent_application_page,
                 )
                 option_button.proceed()
+
+            break
 
         self.is_component_functional = True
         return
@@ -376,11 +378,12 @@ class DropDown(PageComponent):
         output_options = []
         option_texts = []
         for option in all_options:
-            if option.text not in option_texts:
+            clean_text = remove_emoji(option.text)
+            if clean_text not in option_texts:
                 output_options.append(
-                    {"text": option.text, "x_path": get_element_xpath(option)}
+                    {"text": clean_text, "x_path": get_element_xpath(option)}
                 )
-                option_texts.append(option.text)
+                option_texts.append(clean_text)
 
         return output_options
 

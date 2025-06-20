@@ -84,7 +84,8 @@ class PhoneInfo(PageComponent):
         class PhoneField(BaseModel):
             field_title: str = Field(
                 ...,
-                description="Phone field's exact title / question mentioned on the webpage, without modification",
+                description="Phone field's exact title / question mentioned on the webpage, strictly without any "
+                "modification whatsoever.",
             )
             field_question: Optional[str] = Field(
                 ...,

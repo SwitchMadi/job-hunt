@@ -1000,7 +1000,9 @@ class ApplicationField:
                 class FieldAnswer(BaseModel):
                     answer: str = Field(
                         ...,
-                        description="Correct or most close but exact option out of the given options.",
+                        description="Correct or most close but option out of the given options. Don't modify the option "
+                        "text at all. Just return the option text strictly as it is. Keep in mind serial "
+                        "number of the option is not important, just return the option text.",
                     )
 
             elif multiple_correct:
@@ -1080,10 +1082,10 @@ class ApplicationField:
             response_format=FieldAnswer,
         )
         if field_answer_found:
-            if (answer_type == "text") or (
-                (answer_type == "enum") and len(options) > 250
-            ):
+            if answer_type == "text":
                 return field_answer.answer, True
+            elif (answer_type == "enum") and len(options) > 250:
+                return re.sub(r"^\d+\.\s+", "", field_answer.answer), True
             elif multiple_correct:
                 return [answer.value for answer in field_answer.answers], True
             else:

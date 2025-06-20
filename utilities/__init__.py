@@ -262,3 +262,21 @@ def clean_text_edges(text: str) -> str:
 
     # 3. Final whitespace trim in case step 2 exposed new spaces
     return text.strip()
+
+
+def remove_emoji(text):
+    # This regex pattern removes most common emojis
+    emoji_pattern = re.compile(
+        "["
+        "\U0001F600-\U0001F64F"  # emoticons
+        "\U0001F300-\U0001F5FF"  # symbols & pictographs
+        "\U0001F680-\U0001F6FF"  # transport & map symbols
+        "\U0001F1E0-\U0001F1FF"  # flags (i.e. regional indicators)
+        "\U00002700-\U000027BF"  # Dingbats
+        "\U0001F900-\U0001F9FF"  # Supplemental Symbols and Pictographs
+        "\U0001FA70-\U0001FAFF"  # Symbols and Pictographs Extended-A
+        "\U00002600-\U000026FF"  # Misc symbols
+        "]+",
+        flags=re.UNICODE,
+    )
+    return emoji_pattern.sub(r"", text).strip()

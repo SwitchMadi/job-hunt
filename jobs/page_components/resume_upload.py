@@ -7,6 +7,7 @@ from jobs.page_components import (
     PageComponent,
     get_page_component_class_name,
     ApplicationField,
+    logger,
 )
 from jobs.page_components.upload import Upload
 from utilities import constants
@@ -83,6 +84,11 @@ class ResumeUpload(PageComponent):
                 description="XPath of the button to upload the resume which can be used in selenium chrome driver to "
                 "search the button. Don't use HTML hierarchy to construct XPath.",
             )
+            another_file_already_uploaded: bool = Field(
+                False,
+                description="If True, it means that based on HTML there seems to be another file already uploaded for "
+                "the upload button with the extracted x_path.",
+            )
 
         button_found, button = get_gpt_response(
             constants.gpt["system_prompts"]["application_step_identification"],
@@ -91,6 +97,13 @@ class ResumeUpload(PageComponent):
         )
 
         if button_found:
+            if button.another_file_already_uploaded:
+                logger.warning(
+                    f"Another file/resume seems to be already uploaded for job "
+                    f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+                )
+                return
+
             if not element_exists(button.x_path):
                 prompt = "The x_path that we are trying to extract is of resume upload button."
                 correct_x_path = ApplicationField.extract_correct_x_path(
