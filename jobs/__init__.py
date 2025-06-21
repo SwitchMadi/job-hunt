@@ -700,6 +700,15 @@ class ApplicationPage:
 
             return False, "Job not available"
 
+        if elements.mandatory_account_login_signup.value:
+            return False, "Login required"
+
+        if elements.account_verification.value:
+            return False, "Account verification required"
+
+        if elements.next_button.value:
+            return False, "Next page button present"
+
         # Feasible sections
         if elements.captcha.value:
             logger.warn(
