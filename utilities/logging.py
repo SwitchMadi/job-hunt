@@ -19,6 +19,8 @@ def get_logger(
     config = yaml.safe_load(open("config.yml"))
 
     cloudwatch_log_group = os.getenv("CLOUDWATCH_LOG_GROUP")
+    log_group_suffix = os.getenv("LOG_GROUP_STREAM_SUFFIX")
+
     today = datetime.now(pytz.timezone("Asia/Kolkata")).date()
     today = f"{today.year}{str(today.month).zfill(2)}{str(today.day).zfill(2)}"
 
@@ -30,7 +32,7 @@ def get_logger(
             "class": "logging.handlers.RotatingFileHandler",
             "level": file_log_level,
             "formatter": "standard",
-            "filename": f"{config['log_folder']}/{cloudwatch_log_group}-{today}.log",
+            "filename": f"{config['log_folder']}/{cloudwatch_log_group}-{log_group_suffix if log_group_suffix else today}.log",
             "mode": "a",
             "maxBytes": 2 * 1024 * 1024,
             "backupCount": 50,
@@ -52,7 +54,7 @@ def get_logger(
             "level": cloudwatch_log_level,
             "formatter": "standard",
             "log_group": cloudwatch_log_group,
-            "stream_name": f"{cloudwatch_log_group}-{today}",
+            "stream_name": f"{cloudwatch_log_group}-{log_group_suffix if log_group_suffix else today}",
             "boto3_client": boto3_logs_client,
         }
         handlers.append("cloudwatch")
