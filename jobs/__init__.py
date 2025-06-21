@@ -1,4 +1,6 @@
 import time
+from typing import Optional
+
 from pydantic import BaseModel, Field
 from enum import Enum
 import json
@@ -402,35 +404,21 @@ class ApplicationPage:
             self._update_application_status(application_id, "failed")
             return
 
+        steps_identified_at_beginning = self.steps_identified
         try:
             if not self.steps_identified:
-                self.steps_identified = self._identify_application_steps()
-
-                application_steps_query = f"""
-                                                select *
-                                                from jobs.application_steps
-                                                where job_id = {self.parent_job.id}
-                                                and is_active;
-                                           """
-                current_application_steps = get_sql_query_output(
-                    application_steps_query
-                )
-                if current_application_steps:
-                    query = f"""
-                                update jobs.application_steps
-                                set is_identification_complete = true,
-                                    is_application_feasible = {"true" if self.steps_identified else "false"}
-                                where job_id = {self.parent_job.id}
-                                and is_active;
-                             """
-                else:
-                    query = f"""
-                                INSERT INTO jobs.application_steps
-                                (job_id, is_identification_complete, is_application_feasible)
-                                VALUES ({self.parent_job.id}, true, {"true" if self.steps_identified else "false"});
-                             """
-
-                execute_sql_query(query)
+                try:
+                    self.steps_identified, failure_reason = (
+                        self._identify_application_steps()
+                    )
+                except Exception as e:
+                    self.steps_identified = False
+                    failure_reason = "Unknown exception"
+                    raise e
+                finally:
+                    self._update_steps_identification_status(
+                        self.steps_identified, failure_reason
+                    )
 
                 if not self.steps_identified:
                     logger.exception(
@@ -442,13 +430,26 @@ class ApplicationPage:
                 self.run_steps()
 
             # Verify submission status and update application
-            application_submitted = self._verify_application_submission()
+            application_submitted, failure_reason = (
+                self._verify_application_submission()
+            )
             if application_submitted is None:
                 self._update_application_status(application_id, "unknown")
                 return None
 
             status = "submitted" if application_submitted else "failed"
             self._update_application_status(application_id, status)
+
+            if not application_submitted:
+                logger.error(
+                    f"Application for job {self.parent_job.title} failed. Reason - {failure_reason}"
+                )
+
+                if not steps_identified_at_beginning:
+                    self._update_steps_identification_status(
+                        is_application_feasible=False, remarks=failure_reason
+                    )
+
             return application_submitted
         except Exception as e:
             logger.exception(
@@ -456,6 +457,12 @@ class ApplicationPage:
                 f"{self.parent_job.title}. Error - {e}"
             )
             self._update_application_status(application_id, "failed")
+
+            if not steps_identified_at_beginning:
+                self._update_steps_identification_status(
+                    is_application_feasible=False, remarks="Unknown exception"
+                )
+
             return None
         finally:
             # Close the driver after application
@@ -473,6 +480,39 @@ class ApplicationPage:
             SET application_status = '{status}'
             WHERE id = {application_id};
         """
+        execute_sql_query(query)
+
+    def _update_steps_identification_status(
+        self, is_application_feasible, remarks=None
+    ):
+        application_steps_query = f"""
+                                        select *
+                                        from jobs.application_steps
+                                        where job_id = {self.parent_job.id}
+                                        and is_active;
+                                   """
+        current_application_steps = get_sql_query_output(application_steps_query)
+        if current_application_steps:
+            query = f"""
+                        update jobs.application_steps
+                        set is_identification_complete = true,
+                            is_application_feasible = {"true" if is_application_feasible else "false"},
+                            remarks = {"'" + remarks + "'" if remarks else "null"},
+                        where job_id = {self.parent_job.id}
+                        and is_active;
+                     """
+        else:
+            query = f"""
+                        INSERT INTO jobs.application_steps
+                        (job_id, is_identification_complete, is_application_feasible, remarks)
+                        VALUES (
+                            {self.parent_job.id},
+                            true, 
+                            {"true" if is_application_feasible else "false"},
+                            {"'" + remarks + "'" if remarks else "null"}
+                        );
+                     """
+
         execute_sql_query(query)
 
     def _verify_application_submission(self):
@@ -496,6 +536,10 @@ class ApplicationPage:
                 ...,
                 description="Page content mentions / suggests that the job application submission was successful",
             )
+            failure_reason: Optional[str] = Field(
+                ...,
+                description="If is_submitted is false then what is reason for failure in short",
+            )
 
         submission_found, submission = get_gpt_response(
             constants.gpt["system_prompts"]["application_step_identification"],
@@ -513,15 +557,15 @@ class ApplicationPage:
             else:
                 logger.error(
                     f"Failed to submit application for user {self.parent_job.user.id} for job {self.parent_job.id} - "
-                    f"{self.parent_job.title}"
+                    f"{self.parent_job.title}\nReason - {submission.failure_reason}"
                 )
-            return submitted
+            return submitted, submission.failure_reason
         else:
             logger.error(
                 f"Could not verify submission status for user {self.parent_job.user.id} for job {self.parent_job.id} - "
                 f"{self.parent_job.title}"
             )
-            return None
+            return None, None
 
     # Identify job page components
     def _identify_application_steps(self):
@@ -533,14 +577,27 @@ class ApplicationPage:
         if self.head_step:
             self.run_steps()
 
-        while True:
+        max_try = 5
+        curr_try = 1
+        while curr_try <= max_try:
             elements = self._identify_current_page_elements()
             if elements:
-                elements_processed = self._act_on_current_page_elements(elements)
+                elements_processed, failure_reason = self._act_on_current_page_elements(
+                    elements
+                )
                 if elements_processed is not None:
-                    return elements_processed
+                    return elements_processed, failure_reason
+                else:
+                    logger.warn(
+                        f"No conclusion for identifying page elements after attempt {curr_try}/{max_try}\n"
+                        f"Reason - {failure_reason}"
+                    )
             else:
-                return False
+                return False, "Page elements not found"
+
+            curr_try += 1
+
+        return False, "No conclusion after multiple attempts"
 
     def _identify_current_page_elements(self):
         global driver
@@ -625,9 +682,10 @@ class ApplicationPage:
             return None
 
     def _act_on_current_page_elements(self, elements):
+        # Not feasible sections
         if elements.already_applied_alert.value:
             logger.warn(f"User has already applied to the job.")
-            return False
+            return False, "User already applied"
 
         if elements.job_not_available_alert.value:
             logger.warn(f"Job is not available anymore.")
@@ -640,8 +698,9 @@ class ApplicationPage:
             """
             execute_sql_query(update_query)
 
-            return False
+            return False, "Job not available"
 
+        # Feasible sections
         if elements.captcha.value:
             logger.warn(
                 f"Captcha is present on the page. Job title - {self.parent_job.url}. URL - {self.url}"
@@ -658,7 +717,7 @@ class ApplicationPage:
                 if latest_elements:
                     return self._act_on_current_page_elements(latest_elements)
 
-                return
+                return None, "Page elements not found post login"
 
         if elements.account_verification.value:
             is_verify_email_field_functional = self._identify_verify_email_field()
@@ -668,7 +727,7 @@ class ApplicationPage:
                 if latest_elements:
                     return self._act_on_current_page_elements(latest_elements)
 
-                return
+                return None, "Page elements not found post account verification"
 
         if (
             elements.start_application_button.value
@@ -681,7 +740,7 @@ class ApplicationPage:
                 if latest_elements:
                     return self._act_on_current_page_elements(latest_elements)
 
-                return
+                return None, "Page elements not found post starting application"
 
         # There are no application fields on the page and application data source is to be selected
         if (
@@ -697,7 +756,10 @@ class ApplicationPage:
                 if latest_elements:
                     return self._act_on_current_page_elements(latest_elements)
 
-                return
+                return (
+                    None,
+                    "Page elements not found post application data source selection",
+                )
 
         if elements.expand_collapse_section.value:
             pass
@@ -756,11 +818,14 @@ class ApplicationPage:
                 if latest_elements:
                     return self._act_on_current_page_elements(latest_elements)
 
-                return
+                return None, "Page elements not found post next page click"
 
         if elements.submit_application_button.value:
             self._identify_submit_application_button()
-            return True
+
+            return True, None
+
+        return None, None
 
     # Identify application fields
     def _identify_application_fields(
