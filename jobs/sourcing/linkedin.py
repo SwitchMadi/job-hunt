@@ -12,6 +12,7 @@ from utilities.constants import non_automatable_job_boards
 from utilities import time_ago_to_epoch
 from utilities.selenium import get_selenium_driver
 from utilities.logging import get_logger
+from jobs import ApplicationPage
 
 
 logger = get_logger(name="scrape_linkedin")
@@ -60,6 +61,7 @@ def extract_linkedin_jobs(jobs_url, scraped_linkedin_job_ids):
         logger.info(f"No element found - {e}")
         return []
 
+    non_feasible_domains = ApplicationPage.get_non_feasible_domains()
     jobs = []
     jobs_scraped = 0
     cur_page = 1
@@ -180,6 +182,7 @@ def extract_linkedin_jobs(jobs_url, scraped_linkedin_job_ids):
                             "is_non_automatable": any(
                                 domain in original_job_url
                                 for domain in non_automatable_job_boards
+                                + non_feasible_domains
                             ),
                         }
                     )

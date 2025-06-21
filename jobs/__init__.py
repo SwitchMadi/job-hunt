@@ -363,6 +363,55 @@ class ApplicationPage:
 
         return
 
+    @classmethod
+    def get_non_feasible_domains(cls):
+        non_feasible_domains_query = f"""
+            select distinct CASE
+                WHEN split_part(job_url, '/', 3) ~* '\.co\.uk$' THEN regexp_replace(split_part(job_url, '/', 3), '^.*?([^.]+\.(?:co\.uk))$', '\1')
+                WHEN split_part(job_url, '/', 3) ~* '\.ac\.uk$' THEN regexp_replace(split_part(job_url, '/', 3), '^.*?([^.]+\.(?:ac\.uk))$', '\1')
+                WHEN split_part(job_url, '/', 3) ~* '\.gov\.uk$' THEN regexp_replace(split_part(job_url, '/', 3), '^.*?([^.]+\.(?:gov\.uk))$', '\1')
+                WHEN split_part(job_url, '/', 3) ~* '\.com\.au$' THEN regexp_replace(split_part(job_url, '/', 3), '^.*?([^.]+\.(?:com\.au))$', '\1')
+                WHEN split_part(job_url, '/', 3) ~* '\.net\.au$' THEN regexp_replace(split_part(job_url, '/', 3), '^.*?([^.]+\.(?:net\.au))$', '\1')
+                WHEN split_part(job_url, '/', 3) ~* '\.gov\.au$' THEN regexp_replace(split_part(job_url, '/', 3), '^.*?([^.]+\.(?:gov\.au))$', '\1')
+                WHEN split_part(job_url, '/', 3) ~* '\.co\.in$' THEN regexp_replace(split_part(job_url, '/', 3), '^.*?([^.]+\.(?:co\.in))$', '\1')
+                WHEN split_part(job_url, '/', 3) ~* '\.gov\.in$' THEN regexp_replace(split_part(job_url, '/', 3), '^.*?([^.]+\.(?:gov\.in))$', '\1')
+                WHEN split_part(job_url, '/', 3) ~* '\.co\.jp$' THEN regexp_replace(split_part(job_url, '/', 3), '^.*?([^.]+\.(?:co\.jp))$', '\1')
+                WHEN split_part(job_url, '/', 3) ~* '\.ne\.jp$' THEN regexp_replace(split_part(job_url, '/', 3), '^.*?([^.]+\.(?:ne\.jp))$', '\1')
+                WHEN split_part(job_url, '/', 3) ~* '\.or\.jp$' THEN regexp_replace(split_part(job_url, '/', 3), '^.*?([^.]+\.(?:or\.jp))$', '\1')
+                WHEN split_part(job_url, '/', 3) ~* '\.co\.nz$' THEN regexp_replace(split_part(job_url, '/', 3), '^.*?([^.]+\.(?:co\.nz))$', '\1')
+                WHEN split_part(job_url, '/', 3) ~* '\.gov\.nz$' THEN regexp_replace(split_part(job_url, '/', 3), '^.*?([^.]+\.(?:gov\.nz))$', '\1')
+                ELSE regexp_replace(split_part(job_url, '/', 3), '^.*?([^.]+\.[^.]+)$', '\1')
+            END as "domain"
+            from jobs.application_steps t1
+            join jobs.jobs t2 
+            on t1.job_id = t2.id
+            where t1.remarks in ('Login required', 'Account verification required', 'Next page button present')
+        """
+        non_feasible_domains = get_sql_query_output(non_feasible_domains_query)
+        if not non_feasible_domains:
+            return []
+
+        return [domain["domain"] for domain in non_feasible_domains]
+
+    @classmethod
+    def is_domain_automatable(cls, url):
+        """Check if the job application URL is automatable"""
+        if not url:
+            return False
+
+        # Check if URL is in non-automatable job boards
+        for non_automatable_board in constants.non_automatable_job_boards:
+            if non_automatable_board in url:
+                return False
+
+        # Check if URL is a valid job application page
+        non_feasible_domains = cls.get_non_feasible_domains()
+        for domain in non_feasible_domains:
+            if domain in url:
+                return False
+
+        return True
+
     def apply(self):
         # Check if job was already successfully applied
         check_existing_query = f"""
@@ -397,6 +446,8 @@ class ApplicationPage:
 
         application_id = result["id"]
 
+        steps_identified_at_beginning = self.steps_identified
+
         if not self.is_application_feasible:
             logger.warn(
                 f"Application is not possible for job {self.parent_job.title}. URL - {self.url}"
@@ -404,7 +455,18 @@ class ApplicationPage:
             self._update_application_status(application_id, "failed")
             return
 
-        steps_identified_at_beginning = self.steps_identified
+        is_domain_automatable = self.is_domain_automatable(self.url)
+        if not is_domain_automatable:
+            logger.warn(
+                f"Domain {self.url} is not automatable for job {self.parent_job.title}."
+            )
+            if not steps_identified_at_beginning:
+                self._update_steps_identification_status(
+                    is_application_feasible=False,
+                    remarks="Domain not automatable",
+                )
+            return
+
         try:
             if not self.steps_identified:
                 try:
