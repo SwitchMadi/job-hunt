@@ -11,6 +11,7 @@ from utilities.selenium import (
     extract_iframe_urls,
     disable_browser_alerts,
     minify_html_for_gpt_prompt,
+    close_selenium_driver,
 )
 from utilities.gpt import get_gpt_response
 from utilities.logging import get_logger
@@ -427,6 +428,7 @@ class ApplicationPage:
                 f"Already successfully applied for job {self.parent_job.id} - {self.parent_job.title} by user "
                 f"{self.parent_job.user.id}"
             )
+            close_selenium_driver()
             return True
 
         # Create job application entry
@@ -442,6 +444,7 @@ class ApplicationPage:
                 f"Failed to create application entry for user {self.parent_job.user.id} "
                 f"for job {self.parent_job.id} - {self.parent_job.title}"
             )
+            close_selenium_driver()
             return None
 
         application_id = result["id"]
@@ -453,6 +456,7 @@ class ApplicationPage:
                 f"Application is not possible for job {self.parent_job.title}. URL - {self.url}"
             )
             self._update_application_status(application_id, "failed")
+            close_selenium_driver()
             return
 
         is_domain_automatable = self.is_domain_automatable(self.url)
@@ -465,6 +469,8 @@ class ApplicationPage:
                     is_application_feasible=False,
                     remarks="Domain not automatable",
                 )
+
+            close_selenium_driver()
             return
 
         try:
@@ -528,11 +534,7 @@ class ApplicationPage:
             return None
         finally:
             # Close the driver after application
-            global driver
-            if driver and type(driver) is not Exception:
-                driver.quit()
-
-            driver = None
+            close_selenium_driver()
 
     @staticmethod
     def _update_application_status(application_id, status):

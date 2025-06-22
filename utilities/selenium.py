@@ -27,6 +27,7 @@ import sys
 import glob
 import htmlmin
 import re
+import psutil
 
 
 driver = None
@@ -130,6 +131,36 @@ def get_selenium_driver():
             )
 
     return driver
+
+
+def close_selenium_driver():
+    global driver
+
+    if driver is not None and (
+        isinstance(driver, webdriver_wire.Chrome)
+        or isinstance(driver, webdriver.Chrome)
+        or isinstance(driver, uc.Chrome)
+    ):
+        try:
+            driver.quit()
+        except Exception as e:
+            logging.error(f"Error closing Selenium driver: {e}")
+        finally:
+            driver = None
+
+
+def kill_selenium_chrome():
+    config = yaml.safe_load(open("config.yml"))
+
+    for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+        try:
+            if proc.info["name"] and "chrome" in proc.info["name"].lower():
+                cmdline = " ".join(proc.info["cmdline"])
+                if f"user-data-dir={config['chrome_profile_path']}" in cmdline:
+                    proc.terminate()
+                    proc.wait(timeout=5)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
 
 
 def disable_browser_alerts():

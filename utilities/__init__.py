@@ -13,6 +13,7 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.backends import default_backend
+import multiprocessing
 
 
 dotenv.load_dotenv()
@@ -280,3 +281,43 @@ def remove_emoji(text):
         flags=re.UNICODE,
     )
     return emoji_pattern.sub(r"", text).strip()
+
+
+class TimeoutException(Exception):
+    pass
+
+
+def timeout(seconds):
+    multiprocessing.set_start_method("fork")
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            def target_func(q, *args, **kwargs):
+                try:
+                    result = func(*args, **kwargs)
+                    q.put((True, result))
+                except Exception as e:
+                    q.put((False, e))
+
+            q = multiprocessing.Queue()
+            p = multiprocessing.Process(
+                target=target_func, args=(q, *args), kwargs=kwargs
+            )
+            p.start()
+            p.join(seconds)
+            if p.is_alive():
+                p.terminate()
+                p.join()
+                raise TimeoutException(
+                    f"Function '{func.__name__}' timed out after {seconds} seconds."
+                )
+            success, payload = q.get()
+            if success:
+                return payload
+            else:
+                raise payload
+
+        return wrapper
+
+    return decorator

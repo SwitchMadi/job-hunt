@@ -48,6 +48,7 @@ pillow==11.1.0
 platformdirs==4.2.0
 proto-plus==1.23.0
 protobuf==4.25.3
+psutil==7.0.0
 psycopg2-binary==2.9.9
 pyasn1==0.6.0
 pyasn1_modules==0.4.0
