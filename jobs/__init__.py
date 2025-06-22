@@ -768,9 +768,6 @@ class ApplicationPage:
         if elements.account_verification.value:
             return False, "Account verification required"
 
-        if elements.next_button.value:
-            return False, "Next page button present"
-
         # Feasible sections
         if elements.captcha.value:
             logger.warn(
@@ -885,6 +882,8 @@ class ApplicationPage:
             is_next_page_button_functional = self._identify_next_page_button()
 
             if is_next_page_button_functional:
+                return False, "Next page button present"
+
                 latest_elements = self._identify_current_page_elements()
                 if latest_elements:
                     return self._act_on_current_page_elements(latest_elements)
