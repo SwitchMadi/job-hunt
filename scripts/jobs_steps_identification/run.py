@@ -23,7 +23,20 @@ for curr_job_id in range(2):
     try:
         identify_job_application_steps(curr_job_id)
     except TimeoutException as e:
-        logger.exception(e)
+        logger.warn(e)
+
+        from utilities.selenium import kill_selenium_chrome
+
+        kill_selenium_chrome()
+        logger.info("Selenium Chrome process killed.")
+
+        from jobs import ApplicationPage
+
+        ApplicationPage.update_steps_identification_status(
+            job_id=curr_job_id,
+            is_application_feasible=False,
+            remarks="Steps identification timed out",
+        )
     finally:
         from utilities.selenium import kill_selenium_chrome
 

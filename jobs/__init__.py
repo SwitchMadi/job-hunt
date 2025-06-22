@@ -465,7 +465,8 @@ class ApplicationPage:
                 f"Domain {self.url} is not automatable for job {self.parent_job.title}."
             )
             if not steps_identified_at_beginning:
-                self._update_steps_identification_status(
+                self.update_steps_identification_status(
+                    job_id=self.parent_job.id,
                     is_application_feasible=False,
                     remarks="Domain not automatable",
                 )
@@ -484,8 +485,10 @@ class ApplicationPage:
                     failure_reason = "Unknown exception"
                     raise e
                 finally:
-                    self._update_steps_identification_status(
-                        self.steps_identified, failure_reason
+                    self.update_steps_identification_status(
+                        job_id=self.parent_job.id,
+                        is_application_feasible=self.steps_identified,
+                        remarks=failure_reason,
                     )
 
                 if not self.steps_identified:
@@ -514,8 +517,10 @@ class ApplicationPage:
                 )
 
                 if not steps_identified_at_beginning:
-                    self._update_steps_identification_status(
-                        is_application_feasible=False, remarks=failure_reason
+                    self.update_steps_identification_status(
+                        job_id=self.parent_job.id,
+                        is_application_feasible=False,
+                        remarks=failure_reason,
                     )
 
             return application_submitted
@@ -527,8 +532,10 @@ class ApplicationPage:
             self._update_application_status(application_id, "failed")
 
             if not steps_identified_at_beginning:
-                self._update_steps_identification_status(
-                    is_application_feasible=False, remarks="Unknown exception"
+                self.update_steps_identification_status(
+                    job_id=self.parent_job.id,
+                    is_application_feasible=False,
+                    remarks="Unknown exception",
                 )
 
             return None
@@ -546,13 +553,14 @@ class ApplicationPage:
         """
         execute_sql_query(query)
 
-    def _update_steps_identification_status(
-        self, is_application_feasible, remarks=None
+    @classmethod
+    def update_steps_identification_status(
+        cls, job_id, is_application_feasible, remarks=None
     ):
         application_steps_query = f"""
                                         select *
                                         from jobs.application_steps
-                                        where job_id = {self.parent_job.id}
+                                        where job_id = {job_id}
                                         and is_active;
                                    """
         current_application_steps = get_sql_query_output(application_steps_query)
@@ -562,7 +570,7 @@ class ApplicationPage:
                         set is_identification_complete = true,
                             is_application_feasible = {"true" if is_application_feasible else "false"},
                             remarks = {"'" + remarks + "'" if remarks else "null"},
-                        where job_id = {self.parent_job.id}
+                        where job_id = {job_id}
                         and is_active;
                      """
         else:
@@ -570,7 +578,7 @@ class ApplicationPage:
                         INSERT INTO jobs.application_steps
                         (job_id, is_identification_complete, is_application_feasible, remarks)
                         VALUES (
-                            {self.parent_job.id},
+                            {job_id},
                             true, 
                             {"true" if is_application_feasible else "false"},
                             {"'" + remarks + "'" if remarks else "null"}
