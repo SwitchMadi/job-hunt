@@ -46,7 +46,7 @@ try:
     else:
         logger.info(f"Identifying steps for {len(jobs)} jobs.")
 
-        # jobs = [job["job_id"] for job in jobs]
+        jobs = [job["job_id"] for job in jobs]
         for curr_job_id in jobs:
             logger.info(f"Identifying steps for job ID: {curr_job_id}")
 
