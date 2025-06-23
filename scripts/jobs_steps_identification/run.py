@@ -33,7 +33,7 @@ try:
     steps_unidentified_jobs_query = """
         select distinct t1.id job_id
         from jobs.jobs t1
-        join jobs.application_steps t2
+        left join jobs.application_steps t2
         on t1.id = t2.job_id
         where t1.is_active
         and t1.job_posted_at >= EXTRACT(EPOCH FROM (CURRENT_DATE - INTERVAL '7 days'));
