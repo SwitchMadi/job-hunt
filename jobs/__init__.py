@@ -569,7 +569,7 @@ class ApplicationPage:
                         update jobs.application_steps
                         set is_identification_complete = true,
                             is_application_feasible = {"true" if is_application_feasible else "false"},
-                            remarks = {"'" + remarks + "'" if remarks else "null"},
+                            remarks = {"'" + remarks + "'" if remarks else "null"}
                         where job_id = {job_id}
                         and is_active;
                      """

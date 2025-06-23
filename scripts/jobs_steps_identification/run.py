@@ -1,44 +1,61 @@
-from utilities import timeout, TimeoutException
+import os
+import subprocess
+import sys
+
+from jobs import ApplicationPage
 from utilities.logging import get_logger
+from utilities.sql import get_sql_query_output
+from utilities.selenium import kill_selenium_chrome
 
 
-@timeout(10)
-def identify_job_application_steps(job_id):
-    from jobs import Job
-    from user import User
+os.environ["LOG_GROUP_STREAM_SUFFIX"] = "overall"
+logger = get_logger("jobs_steps_identification")
 
-    user = User(email="bhaskar2choudhary@gmail.com")
-    job = Job(
-        url=f"https://example.com/job-application-url-{job_id}",
-        title="Data Analyst, Staff",
-        user=user,
-        company="Qualcomm",
-    )
+steps_unidentified_jobs_query = """
+    select distinct t1.id job_id
+    from jobs.jobs t1
+    join jobs.application_steps t2
+    on t1.id = t2.job_id
+    where t1.is_active;
+"""
+jobs = get_sql_query_output(steps_unidentified_jobs_query)
+jobs = [35, 36]
+kill_selenium_chrome()
 
-    job.application_page.apply()
+if not jobs:
+    logger.warn("No jobs found for steps identification.")
+else:
+    logger.info(f"Identifying steps for {len(jobs)} jobs.")
 
+    # jobs = [job["job_id"] for job in jobs]
+    for curr_job_id in jobs:
+        logger.info(f"Identifying steps for job ID: {curr_job_id}")
 
-for curr_job_id in range(2):
-    logger = get_logger("jobs_steps_identification")
-    try:
-        identify_job_application_steps(curr_job_id)
-    except TimeoutException as e:
-        logger.warn(e)
-
-        from utilities.selenium import kill_selenium_chrome
-
-        kill_selenium_chrome()
-        logger.info("Selenium Chrome process killed.")
-
-        from jobs import ApplicationPage
-
-        ApplicationPage.update_steps_identification_status(
-            job_id=curr_job_id,
-            is_application_feasible=False,
-            remarks="Steps identification timed out",
+        python_executable = sys.executable
+        proc = subprocess.Popen(
+            [
+                python_executable,
+                "-m",
+                "scripts.jobs_steps_identification.identify_job_steps",
+                str(curr_job_id),
+            ]
         )
-    finally:
-        from utilities.selenium import kill_selenium_chrome
+        try:
+            proc.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            logger.warn(
+                f"Steps identification for job_id {curr_job_id} timed out and killed."
+            )
 
-        kill_selenium_chrome()
-        logger.info("Selenium Chrome process killed.")
+            kill_selenium_chrome()
+            logger.info("Selenium Chrome process killed.")
+
+            ApplicationPage.update_steps_identification_status(
+                job_id=curr_job_id,
+                is_application_feasible=False,
+                remarks="Steps identification timed out",
+            )
+        finally:
+            kill_selenium_chrome()
+            logger.info("Selenium Chrome process killed.")
