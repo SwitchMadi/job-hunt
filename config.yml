@@ -3,7 +3,7 @@ chromedriver: C:\Users\JobHunt\Desktop\job-hunt\chromedriver.exe
 selenium_driver_type: undetected # undetected, selenium_wire, default
 selenium_headless: false
 log_folder: C:\Users\JobHunt\Desktop\job-hunt\logs
-other_files_folder: /Users/bhaskar/Desktop/temporary/job-hunt-data
+other_files_folder: C:\Users\JobHunt\Desktop\job-hunt-data
 s3_bucket: job-hunt-storage
 scraping:
   linkedin:
