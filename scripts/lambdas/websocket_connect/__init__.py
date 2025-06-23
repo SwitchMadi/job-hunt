@@ -1,5 +1,5 @@
 from utilities.logging import get_logger
-from utilities.aws.dynamo import DynamoTable
+from utilities.aws.dynamo import WebSocketConnectionsTable
 from utilities.aws import send_lambda_response
 
 logger = get_logger(name="websocket_connect")
@@ -18,8 +18,8 @@ def lambda_handler(event, context):
             logger.error("Email not found in authorizer context")
             return {"statusCode": 401, "body": "Unauthorized"}
 
-        # Store connection mapping using DynamoTable
-        dynamo = DynamoTable("websocket-connections")
+        # Store connection mapping using WebSocketConnectionsTable
+        dynamo = WebSocketConnectionsTable()
         success = dynamo.put_connection(connection_id, email)
 
         if not success:

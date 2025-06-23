@@ -1,5 +1,5 @@
 from utilities.logging import get_logger
-from utilities.aws.dynamo import DynamoTable
+from utilities.aws.dynamo import WebSocketConnectionsTable
 from utilities.aws import send_lambda_response
 
 logger = get_logger(name="websocket_disconnect")
@@ -13,8 +13,8 @@ def lambda_handler(event, context):
     try:
         connection_id = event["requestContext"]["connectionId"]
 
-        # Remove connection mapping using DynamoTable
-        dynamo = DynamoTable("websocket-connections")
+        # Remove connection mapping using WebSocketConnectionsTable
+        dynamo = WebSocketConnectionsTable()
         success = dynamo.delete_connection(connection_id)
 
         if not success:

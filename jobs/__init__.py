@@ -39,6 +39,8 @@ from jobs.page_components.popup import Popup
 
 
 logger = get_logger(name="job")
+
+# TODO - driver should not be initialized at module level as importing this module will create a driver instance
 driver = get_selenium_driver()
 driver.set_page_load_timeout(15)
 

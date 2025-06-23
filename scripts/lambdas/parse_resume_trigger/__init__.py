@@ -1,7 +1,7 @@
 import json
 from utilities.logging import get_logger
 from utilities.aws import send_lambda_response, get_aws_client
-from utilities.aws.dynamo import DynamoTable
+from utilities.aws.dynamo import WebSocketConnectionsTable
 from user import User
 
 logger = get_logger(name="parse_resume_trigger")
@@ -20,7 +20,7 @@ def lambda_handler(event, context):
 
     try:
         # Get user's latest WebSocket connection
-        dynamo = DynamoTable("websocket-connections")
+        dynamo = WebSocketConnectionsTable()
         connection = dynamo.get_connections_by_user(email)
 
         if not connection:

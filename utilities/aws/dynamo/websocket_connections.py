@@ -1,20 +1,19 @@
-from utilities.aws import get_aws_client
+import time
+from . import BaseDynamoTable
 from utilities.logging import get_logger
 
+logger = get_logger(name="websocket_connections")
 
-logger = get_logger(name="dynamo")
 
+class WebSocketConnectionsTable(BaseDynamoTable):
+    """WebSocket connections table operations"""
 
-class DynamoTable:
-    def __init__(self, table_name):
-        self.client = get_aws_client("dynamodb")
-        self.table_name = table_name
+    def __init__(self):
+        super().__init__("websocket-connections")
 
     def put_connection(self, connection_id, user_id):
         """Store WebSocket connection mapping with timestamp"""
         try:
-            import time
-
             timestamp = int(time.time() * 1000)  # Current time in milliseconds
 
             self.client.put_item(
@@ -96,18 +95,3 @@ class DynamoTable:
                 f"Error verifying connection {connection_id} for user {user_id}: {e}"
             )
             return False
-
-    def get_item(self, key_dict):
-        """Get a specific item by keys"""
-        try:
-            formatted_key = {}
-            for key, value in key_dict.items():
-                formatted_key[key] = {"S": value}
-
-            response = self.client.get_item(
-                TableName=self.table_name, Key=formatted_key
-            )
-            return response.get("Item")
-        except Exception as e:
-            logger.exception(f"Error getting item with key {key_dict}: {e}")
-            return None

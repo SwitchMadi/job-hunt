@@ -29,6 +29,9 @@ Resources:
       Timeout: 900
       Layers:
         - !Ref JobHuntCommonLayer
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref OperationLocksTable
       Events:
         ScheduledEvent:
           Type: Schedule
@@ -92,6 +95,21 @@ Resources:
               KeyType: RANGE
           Projection:
             ProjectionType: ALL
+
+  # DynamoDB Table for Operation Locks
+  OperationLocksTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: operation_locks
+      AttributeDefinitions:
+        - AttributeName: operation_name
+          AttributeType: S
+      KeySchema:
+        - AttributeName: operation_name
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
 
   # WebSocket API
   ResumeParserWebSocket:
@@ -362,6 +380,8 @@ Resources:
       Layers:
         - !Ref JobHuntCommonLayer
       Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ConnectionsTable
         - Statement:
             Effect: Allow
             Action:
