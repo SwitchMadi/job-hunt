@@ -25,6 +25,7 @@ try:
         logger.info(
             "Another job steps identification process is already running. Exiting."
         )
+        kill_selenium_chrome()
         sys.exit(0)
 
     logger.info(f"Lock acquired for job steps identification. Lock ID: {lock_id}")
