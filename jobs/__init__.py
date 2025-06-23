@@ -69,7 +69,7 @@ class Job:
         self.is_active = job["is_active"]
 
         self.user = user
-        self.application_page = ApplicationPage(url=url, parent_job=self)
+        self.application_page = ApplicationPage(url=self.url, parent_job=self)
 
     @staticmethod
     def find_job_by_id(job_id):
