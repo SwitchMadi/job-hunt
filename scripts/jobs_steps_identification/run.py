@@ -19,7 +19,6 @@ steps_unidentified_jobs_query = """
     where t1.is_active;
 """
 jobs = get_sql_query_output(steps_unidentified_jobs_query)
-jobs = [35, 36]
 kill_selenium_chrome()
 
 if not jobs:
