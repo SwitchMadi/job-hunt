@@ -39,6 +39,39 @@ Resources:
             Schedule: 'cron(0 5 * * ? *)'  # 10:30 AM IST every day
             Name: JobScrapeTrigger
 
+  TriggerJobStepsIdentification:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      FunctionName: TriggerJobStepsIdentification
+      Handler: __init__.lambda_handler
+      Runtime: python3.10
+      CodeUri: /Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_job_steps_identification
+      Timeout: 900
+      Layers:
+        - !Ref JobHuntCommonLayer
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref OperationLocksTable
+        - Statement:
+            Effect: Allow
+            Action:
+              - ec2:RunInstances
+              - ec2:CreateTags
+              - ec2:DescribeInstances
+              - ec2:DescribeImages
+              - ec2:DescribeKeyPairs
+              - ec2:DescribeSecurityGroups
+              - ec2:DescribeSubnets
+              - ec2:DescribeVpcs
+              - iam:PassRole
+            Resource: '*'
+      Events:
+        ScheduledEvent:
+          Type: Schedule
+          Properties:
+            Schedule: 'rate(15 minutes)'  # Every 15 minutes
+            Name: JobStepsIdentificationTrigger
+
   ShareJobs:
     Type: 'AWS::Serverless::Function'
     Properties:

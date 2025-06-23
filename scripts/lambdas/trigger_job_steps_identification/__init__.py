@@ -1,0 +1,65 @@
+import json
+from utilities.logging import get_logger
+from utilities.aws.ec2 import EC2
+from utilities.aws.dynamo import OperationLocksTable
+
+logger = get_logger(name="trigger_job_steps_identification")
+
+
+def lambda_handler(event, context):
+    """
+    Lambda function to trigger job steps identification process.
+    Checks for existing lock before launching EC2 instance.
+    """
+    try:
+        # Check if job steps identification is already running
+        lock_table = OperationLocksTable()
+        operation_name = "job_steps_identification"
+        
+        if lock_table.is_locked(operation_name):
+            logger.info("Job steps identification is already running. Skipping trigger.")
+            return {
+                "statusCode": 200,
+                "body": json.dumps({
+                    "message": "Job steps identification already in progress",
+                    "skipped": True
+                })
+            }
+        
+        logger.info("No existing lock found. Triggering job steps identification process.")
+
+        script = r"""<script>
+            echo Current date and time >> C:\Users\JobHunt\Desktop\startup.log
+            echo %DATE% %TIME% >> C:\Users\JobHunt\Desktop\startup.log
+            </script>
+            <persist>true</persist>"""
+
+        # Launch EC2 instance to run job steps identification
+        EC2(
+            instance_pricing_model="on_demand",
+            ami_id="ami-06da3a257c7831814",
+            instance_type="t3a.large",
+            key_name="job-hunt",
+            security_group="sg-011a3786d569e6382",
+            user_data_script=script,
+        )
+        
+        logger.info("Successfully triggered job steps identification EC2 instance.")
+        
+        return {
+            "statusCode": 200,
+            "body": json.dumps({
+                "message": "Job steps identification process triggered successfully",
+                "triggered": True
+            })
+        }
+        
+    except Exception as e:
+        logger.exception(f"Error triggering job steps identification: {e}")
+        return {
+            "statusCode": 500,
+            "body": json.dumps({
+                "message": f"Failed to trigger job steps identification: {str(e)}",
+                "error": True
+            })
+        }

@@ -7,6 +7,7 @@ cp -r ~/Desktop/switchmadi/codebase/job-hunt/ ~/Desktop/SharedLayer/python
 
 cp ~/Desktop/switchmadi/codebase/job-hunt/config.yml ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/share_jobs/
 cp ~/Desktop/switchmadi/codebase/job-hunt/config.yml ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_job_scrape/
+cp ~/Desktop/switchmadi/codebase/job-hunt/config.yml ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_job_steps_identification/
 cp ~/Desktop/switchmadi/codebase/job-hunt/config.yml ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/authorization/
 cp ~/Desktop/switchmadi/codebase/job-hunt/config.yml ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/save_user_tokens/
 cp ~/Desktop/switchmadi/codebase/job-hunt/config.yml ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/preferred_jobs_count/
@@ -33,6 +34,7 @@ sam build
 sam deploy
 
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_job_scrape/config.yml
+rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_job_steps_identification/config.yml
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/share_jobs/config.yml
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/authorization/config.yml
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/save_user_tokens/config.yml
@@ -47,6 +49,7 @@ rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/websocket_disconnect/c
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/save_modified_resume/config.yml
 
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_job_scrape/requirements.txt
+rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_job_steps_identification/requirements.txt
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/share_jobs/requirements.txt
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/authorization/requirements.txt
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/save_user_tokens/requirements.txt
