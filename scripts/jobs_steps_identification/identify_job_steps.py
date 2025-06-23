@@ -14,11 +14,6 @@ from jobs import Job
 from user import User
 
 user = User(email="bhaskar2choudhary@gmail.com")
-job = Job(
-    url=f"https://example.com/job-application-url-{job_id}",
-    title="Data Analyst, Staff",
-    user=user,
-    company="Qualcomm",
-)
+job = Job(job_id=job_id, user=user)
 
 job.application_page.apply()

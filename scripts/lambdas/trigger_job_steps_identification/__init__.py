@@ -15,18 +15,24 @@ def lambda_handler(event, context):
         # Check if job steps identification is already running
         lock_table = OperationLocksTable()
         operation_name = "job_steps_identification"
-        
+
         if lock_table.is_locked(operation_name):
-            logger.info("Job steps identification is already running. Skipping trigger.")
+            logger.info(
+                "Job steps identification is already running. Skipping trigger."
+            )
             return {
                 "statusCode": 200,
-                "body": json.dumps({
-                    "message": "Job steps identification already in progress",
-                    "skipped": True
-                })
+                "body": json.dumps(
+                    {
+                        "message": "Job steps identification already in progress",
+                        "skipped": True,
+                    }
+                ),
             }
-        
-        logger.info("No existing lock found. Triggering job steps identification process.")
+
+        logger.info(
+            "No existing lock found. Triggering job steps identification process."
+        )
 
         script = r"""<script>
             echo Current date and time >> C:\Users\JobHunt\Desktop\startup.log
@@ -43,23 +49,27 @@ def lambda_handler(event, context):
             security_group="sg-011a3786d569e6382",
             user_data_script=script,
         )
-        
+
         logger.info("Successfully triggered job steps identification EC2 instance.")
-        
+
         return {
             "statusCode": 200,
-            "body": json.dumps({
-                "message": "Job steps identification process triggered successfully",
-                "triggered": True
-            })
+            "body": json.dumps(
+                {
+                    "message": "Job steps identification process triggered successfully",
+                    "triggered": True,
+                }
+            ),
         }
-        
+
     except Exception as e:
         logger.exception(f"Error triggering job steps identification: {e}")
         return {
             "statusCode": 500,
-            "body": json.dumps({
-                "message": f"Failed to trigger job steps identification: {str(e)}",
-                "error": True
-            })
+            "body": json.dumps(
+                {
+                    "message": f"Failed to trigger job steps identification: {str(e)}",
+                    "error": True,
+                }
+            ),
         }

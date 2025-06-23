@@ -46,18 +46,23 @@ driver.set_page_load_timeout(15)
 
 
 class Job:
-    def __init__(self, url, title=None, company=None, user=None):
-        self.url = url
-
-        job = Job.find_job_by_url(url)
-        if job is None:
-            self.hash_id = generate_hash(url)
-            self.title = title
-            self.company = company
-            self.save_to_db()
+    def __init__(self, job_id=None, url=None, title=None, company=None, user=None):
+        if job_id is not None:
+            job = Job.find_job_by_id(job_id)
+            if job is None:
+                raise ValueError(f"Job with id {job_id} not found in database")
+        elif url is not None:
             job = Job.find_job_by_url(url)
+            if job is None:
+                self.hash_id = generate_hash(url)
+                self.title = title
+                self.company = company
+                self.url = url
+                self.save_to_db()
+                job = Job.find_job_by_url(url)
 
         self.id = job["id"]
+        self.url = job["job_url"]
         self.hash_id = job["job_hash_id"]
         self.title = job["title"]
         self.company = job["company"]
@@ -65,6 +70,19 @@ class Job:
 
         self.user = user
         self.application_page = ApplicationPage(url=url, parent_job=self)
+
+    @staticmethod
+    def find_job_by_id(job_id):
+        job_query = f"""
+                        select *
+                        from jobs.jobs
+                        where id = '{job_id}'
+                    """
+        job = get_sql_query_output(job_query)
+        if job:
+            return job[0]
+        else:
+            return None
 
     @staticmethod
     def find_job_by_url(url):

@@ -60,12 +60,19 @@ try:
                 ]
             )
             try:
-                proc.wait(timeout=15)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                logger.warn(
-                    f"Steps identification for job_id {curr_job_id} timed out and killed."
-                )
+                proc.wait(timeout=10 * 60)  # Wait for 10 minutes
+            except Exception as e:
+                if e is subprocess.TimeoutExpired:
+                    proc.kill()
+                    logger.warn(
+                        f"Steps identification for job_id {curr_job_id} timed out and killed."
+                    )
+                    remark = "Steps identification timed out"
+                else:
+                    remark = f"Unknown exception"
+                    logger.exception(
+                        f"Error occurred while identifying steps for job_id {curr_job_id}: {e}"
+                    )
 
                 kill_selenium_chrome()
                 logger.info("Selenium Chrome process killed.")
@@ -73,7 +80,7 @@ try:
                 ApplicationPage.update_steps_identification_status(
                     job_id=curr_job_id,
                     is_application_feasible=False,
-                    remarks="Steps identification timed out",
+                    remarks=remark,
                 )
             finally:
                 kill_selenium_chrome()
