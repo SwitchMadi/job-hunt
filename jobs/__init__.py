@@ -648,7 +648,7 @@ class ApplicationPage:
             if submitted:
                 logger.info(
                     f"Successfully submitted application for user {self.parent_job.user.id} "
-                    f"for job {self.parent_job.id} - {self.parent_job.title}"
+                    f"for job {self.parent_job.id} - {self.parent_job.title}.\nProof - {submission.success_proof}"
                 )
             else:
                 logger.error(
