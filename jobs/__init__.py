@@ -1192,6 +1192,9 @@ class ApplicationPage:
                 )
                 self._act_on_job_fields(error_fields)
 
+            verification_functional = self._identify_verify_email_field()
+
+            if error_fields or verification_functional:
                 submit_application_button.proceed()
 
             self.update_steps(submit_application_button)
