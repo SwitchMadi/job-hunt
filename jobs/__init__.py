@@ -628,6 +628,10 @@ class ApplicationPage:
                 ...,
                 description="Page content mentions / suggests that the job application submission was successful",
             )
+            success_proof: Optional[str] = Field(
+                ...,
+                description="If is_submitted is true then what is proof of success in short",
+            )
             failure_reason: Optional[str] = Field(
                 ...,
                 description="If is_submitted is false then what is reason for failure in short",
@@ -938,7 +942,9 @@ class ApplicationPage:
             prompt_part = (
                 "While filling job application I clicked submit / next section button. There may be some "
                 "errors on the page / around job fields. Analyse the whole HTML very carefully for extracting all the "
-                "errors & their fields. Strictly ignore the fields where there is no error."
+                "errors & their fields. Strictly ignore the fields where there is no error. Very carefully note that "
+                "if a field is required, that doesn't mean that it has an error. It should have some error message to "
+                "be considered as error."
             )
         else:
             prompt_part = (
@@ -984,7 +990,9 @@ class ApplicationPage:
                 )
                 error: str | None = Field(
                     None,
-                    description="The error message shown for this field.",
+                    description="The error message shown for this field. Very carefully note that "
+                    "if a field is required, that doesn't mean that it has an error. It should have some error message to "
+                    "be considered as error.",
                 )
 
         else:
@@ -1192,9 +1200,14 @@ class ApplicationPage:
                 )
                 self._act_on_job_fields(error_fields)
 
-            verification_functional = self._identify_verify_email_field()
-
-            if error_fields or verification_functional:
                 submit_application_button.proceed()
 
             self.update_steps(submit_application_button)
+
+            verification_functional = self._identify_verify_email_field()
+            if verification_functional:
+                submit_application_button = SubmitApplication(
+                    parent_application_page=self
+                )
+                submit_application_button.proceed()
+                self.update_steps(submit_application_button)
