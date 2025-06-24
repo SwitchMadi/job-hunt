@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 import dotenv
 import yaml
 import os
+import platform
 
 from jobs.page_components import (
     PageComponent,
@@ -156,7 +157,11 @@ class ResumeUpload(PageComponent):
         s3 = S3Bucket(bucket_name=config["s3_bucket"])
 
         file_name = self.parent_application_page.parent_job.user.resume.split("/")[-1]
-        file_local_path = f"{config['other_files_folder']}/{file_name}"
+        current_os = platform.system()
+        if current_os == "Windows":
+            file_local_path = f"{config['other_files_folder']}\\{file_name}"
+        else:
+            file_local_path = f"{config['other_files_folder']}/{file_name}"
 
         success = s3.fetch_data(
             file_s3_path=self.parent_application_page.parent_job.user.resume,
