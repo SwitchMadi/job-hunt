@@ -894,7 +894,7 @@ class VerifyAccount(PageComponent):
 
         class EmailVerificationInfo(BaseModel):
             verification_link: str = Field(..., description="Email verification link")
-            verification_otp: int = Field(
+            verification_otp: str = Field(
                 ..., description="Email verification OTP/code"
             )
 
