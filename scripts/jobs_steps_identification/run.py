@@ -9,7 +9,6 @@ from utilities.selenium import kill_selenium_chrome
 from utilities.aws.dynamo import OperationLocksTable
 
 
-os.environ["LOG_GROUP_STREAM_SUFFIX"] = "overall"
 logger = get_logger("jobs_steps_identification")
 
 # Initialize lock manager
