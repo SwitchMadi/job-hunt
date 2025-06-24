@@ -77,9 +77,7 @@ class TextInput(PageComponent):
             if not self.answer:
                 return answer_input_successful
 
-            if (self.category != "otp_textbox") and not self.category.endswith(
-                ("- month", "- day", "- year")
-            ):
+            if not self.category.endswith(("- month", "- day", "- year")):
                 clear_text_field(self.x_path, title=self.title)
 
             element = get_active_element_after_click(self.x_path, title=self.title)
