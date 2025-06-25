@@ -51,14 +51,17 @@ def extract_linkedin_jobs(jobs_url, scraped_linkedin_job_ids):
             by=By.CLASS_NAME, value="jobs-search-results-list__subtitle"
         ).text
         jobs_count = int(jobs_count.split()[0].replace(",", ""))
-        jobs_side_panel = driver.find_element(
-            by=By.CLASS_NAME, value="jobs-search-results-list"
+
+        jobs_elements = driver.find_elements(
+            By.XPATH, "//li[contains(@class, 'scaffold-layout__list')]"
         )
-        jobs_list = driver.find_element(
-            by=By.CLASS_NAME, value="scaffold-layout__list-container"
-        )
+        if not jobs_elements:
+            logger.warn("No jobs found on the page.")
+            return []
+
+        jobs_container = jobs_elements[0].find_element(By.XPATH, "./.. /..")
     except NoSuchElementException as e:
-        logger.info(f"No element found - {e}")
+        logger.exception(f"No element found - {e}")
         return []
 
     non_feasible_domains = ApplicationPage.get_non_feasible_domains()
@@ -70,12 +73,12 @@ def extract_linkedin_jobs(jobs_url, scraped_linkedin_job_ids):
         jobs_scraped <= min(jobs_count, config["scraping"]["linkedin"]["max_job_count"])
     ) and continue_scraping:
         try:
-            for job in jobs_list.find_elements(By.XPATH, "./*"):
+            for job in jobs_elements:
                 try:
                     # Scroll the jobs side panel to the current job
                     driver.execute_script(
                         "arguments[0].scrollTop = arguments[1].offsetTop;",
-                        jobs_side_panel,
+                        jobs_container,
                         job,
                     )
 
@@ -200,15 +203,15 @@ def extract_linkedin_jobs(jobs_url, scraped_linkedin_job_ids):
             continue_scraping = False
             try:
                 pagination_section = driver.find_element(
-                    by=By.CSS_SELECTOR,
-                    value=".artdeco-pagination__pages.artdeco-pagination__pages--number",
+                    By.XPATH,
+                    "//div[contains(@class, 'jobs-search-results-list__pagination')]",
                 )
             except NoSuchElementException:
                 logger.info(f"Pagination not found. Stopping to scrape further.")
                 continue
 
             ignore_more_pages_button = True
-            for page in pagination_section.find_elements(By.XPATH, "./*"):
+            for page in pagination_section.find_elements(By.XPATH, ".//li"):
                 if page.text == str(cur_page):
                     ignore_more_pages_button = False
                 if (page.text == str(cur_page + 1)) or (
