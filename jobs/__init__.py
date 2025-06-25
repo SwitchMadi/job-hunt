@@ -538,7 +538,7 @@ class ApplicationPage:
 
             status = "submitted" if application_submitted else "failed"
             remarks = success_proof if application_submitted else failure_reason
-            self._update_application_status(application_id, status, remark)
+            self._update_application_status(application_id, status, remarks)
 
             if not application_submitted:
                 logger.error(
