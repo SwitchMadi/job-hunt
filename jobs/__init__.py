@@ -475,7 +475,7 @@ class ApplicationPage:
             logger.warn(
                 f"Application is not possible for job {self.parent_job.title}. URL - {self.url}"
             )
-            self._update_application_status(application_id, "failed")
+            self._update_application_status(application_id, "failed", "Application not possible")
             close_selenium_driver()
             return
 
@@ -515,21 +515,22 @@ class ApplicationPage:
                     logger.exception(
                         f"Could not identify application steps for job {self.parent_job.title}. URL - {self.url}"
                     )
-                    self._update_application_status(application_id, "failed")
+                    self._update_application_status(application_id, "failed", failure_reason)
                     return
             else:
                 self.run_steps()
 
             # Verify submission status and update application
-            application_submitted, failure_reason = (
+            application_submitted, success_proof, failure_reason = (
                 self._verify_application_submission()
             )
             if application_submitted is None:
-                self._update_application_status(application_id, "unknown")
+                self._update_application_status(application_id, "unknown", None)
                 return None
 
             status = "submitted" if application_submitted else "failed"
-            self._update_application_status(application_id, status)
+            remarks = success_proof if application_submitted else failure_reason
+            self._update_application_status(application_id, status, remark)
 
             if not application_submitted:
                 logger.error(
@@ -549,7 +550,7 @@ class ApplicationPage:
                 f"Error while applying for user {self.parent_job.user.id} for job {self.parent_job.id} - "
                 f"{self.parent_job.title}. Error - {e}"
             )
-            self._update_application_status(application_id, "failed")
+            self._update_application_status(application_id, "failed", "Unknown exception")
 
             if not steps_identified_at_beginning:
                 self.update_steps_identification_status(
@@ -564,11 +565,12 @@ class ApplicationPage:
             close_selenium_driver()
 
     @staticmethod
-    def _update_application_status(application_id, status):
+    def _update_application_status(application_id, status, remarks):
         """Update job application status in database"""
         query = f"""
             UPDATE users.job_applications
-            SET application_status = '{status}'
+            SET application_status = '{status}',
+                remarks = {"'" + remarks + "'" if remarks else "null"}
             WHERE id = {application_id};
         """
         execute_sql_query(query)
@@ -655,13 +657,13 @@ class ApplicationPage:
                     f"Failed to submit application for user {self.parent_job.user.id} for job {self.parent_job.id} - "
                     f"{self.parent_job.title}\nReason - {submission.failure_reason}"
                 )
-            return submitted, submission.failure_reason
+            return submitted, submission.success_proof, submission.failure_reason
         else:
             logger.error(
                 f"Could not verify submission status for user {self.parent_job.user.id} for job {self.parent_job.id} - "
                 f"{self.parent_job.title}"
             )
-            return None, None
+            return None, None, None
 
     # Identify job page components
     def _identify_application_steps(self):
