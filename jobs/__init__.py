@@ -1,9 +1,9 @@
 import time
 from typing import Optional
-
 from pydantic import BaseModel, Field
 from enum import Enum
 import json
+import yaml
 
 from utilities import constants, generate_hash, retry, clean_text_edges
 from utilities.selenium import (
@@ -39,6 +39,7 @@ from jobs.page_components.search_field import SearchField
 from jobs.page_components.popup import Popup
 
 
+config = yaml.safe_load(open("config.yml"))
 logger = get_logger(name="job")
 
 # TODO - driver should not be initialized at module level as importing this module will create a driver instance
@@ -436,7 +437,7 @@ class ApplicationPage:
 
     def apply(self):
         global driver
-        
+
         # Check if job was already successfully applied
         check_existing_query = f"""
             SELECT id, application_status
@@ -478,7 +479,9 @@ class ApplicationPage:
             logger.warn(
                 f"Application is not possible for job {self.parent_job.title}. URL - {self.url}"
             )
-            self._update_application_status(application_id, "failed", "Application not possible")
+            self._update_application_status(
+                application_id, "failed", "Application not possible"
+            )
             close_selenium_driver()
             return
 
@@ -518,7 +521,9 @@ class ApplicationPage:
                     logger.exception(
                         f"Could not identify application steps for job {self.parent_job.title}. URL - {self.url}"
                     )
-                    self._update_application_status(application_id, "failed", failure_reason)
+                    self._update_application_status(
+                        application_id, "failed", failure_reason
+                    )
                     return
             else:
                 self.run_steps()
@@ -553,7 +558,9 @@ class ApplicationPage:
                 f"Error while applying for user {self.parent_job.user.id} for job {self.parent_job.id} - "
                 f"{self.parent_job.title}. Error - {e}"
             )
-            self._update_application_status(application_id, "failed", "Unknown exception")
+            self._update_application_status(
+                application_id, "failed", "Unknown exception"
+            )
 
             if not steps_identified_at_beginning:
                 self.update_steps_identification_status(
@@ -566,14 +573,22 @@ class ApplicationPage:
         finally:
             # Upload page screenshot to S3
             if driver:
-                screenshot_filename = f"jobId-{self.parent_job.id}--userId-{self.parent_job.user.id}.png"
+                screenshot_filename = (
+                    f"jobId-{self.parent_job.id}--userId-{self.parent_job.user.id}.png"
+                )
                 driver.save_screenshot(screenshot_filename)
 
                 s3 = S3Bucket(bucket_name=config["s3_bucket"])
-                file_s3_path = f"user_data/applications/screenshots/{screenshot_filename}"
-                s3.upload_data(file_local_path=screenshot_filename, file_s3_path=file_s3_path)
+                file_s3_path = (
+                    f"user_data/applications/screenshots/{screenshot_filename}"
+                )
+                s3.upload_data(
+                    file_local_path=screenshot_filename, file_s3_path=file_s3_path
+                )
             else:
-                logger.warn("Selenium driver is not initialized, cannot take screenshot.")
+                logger.warn(
+                    "Selenium driver is not initialized, cannot take screenshot."
+                )
 
             # Close the driver after application
             close_selenium_driver()
