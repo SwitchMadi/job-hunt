@@ -16,6 +16,7 @@ from utilities.selenium import (
 from utilities.gpt import get_gpt_response
 from utilities.logging import get_logger
 from utilities.sql import get_sql_query_output, execute_sql_query
+from utilities.aws.s3 import S3Bucket
 from jobs.page_components import ApplicationField
 from jobs.page_components.application_data_source import ApplicationDataSource
 from jobs.page_components.cookies_consent import CookiesConsent
@@ -434,6 +435,8 @@ class ApplicationPage:
         return True
 
     def apply(self):
+        global driver
+        
         # Check if job was already successfully applied
         check_existing_query = f"""
             SELECT id, application_status
@@ -561,6 +564,17 @@ class ApplicationPage:
 
             return None
         finally:
+            # Upload page screenshot to S3
+            if driver:
+                screenshot_filename = f"jobId-{self.parent_job.id}--userId-{self.parent_job.user.id}.png"
+                driver.save_screenshot(screenshot_filename)
+
+                s3 = S3Bucket(bucket_name=config["s3_bucket"])
+                file_s3_path = f"user_data/applications/screenshots/{screenshot_filename}"
+                s3.upload_data(file_local_path=screenshot_filename, file_s3_path=file_s3_path)
+            else:
+                logger.warn("Selenium driver is not initialized, cannot take screenshot.")
+
             # Close the driver after application
             close_selenium_driver()
 

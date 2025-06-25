@@ -21,6 +21,7 @@ class S3Bucket:
 
     def upload_data(self, file_s3_path, file_local_path):
         try:
+            logger.info(f"Uploading {file_local_path} to S3 bucket {self.bucket_name} at {file_s3_path}...")
             self.client.upload_file(file_local_path, self.bucket_name, file_s3_path)
             return True
         except Exception as e:
