@@ -7,13 +7,15 @@ if not job_id:
     sys.exit(1)
 
 import os
+import yaml
 
 os.environ["LOG_GROUP_STREAM_SUFFIX"] = f"job_id-{job_id}"
+config = yaml.safe_load(open("config.yml"))
 
 from jobs import Job
 from user import User
 
-user = User(email="bhaskar2choudhary@gmail.com")
+user = User(email=config["user_email"])
 job = Job(job_id=job_id, user=user)
 
 job.application_page.apply()
