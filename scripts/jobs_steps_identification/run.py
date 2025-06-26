@@ -70,7 +70,7 @@ try:
                     )
                     remark = "Steps identification timed out"
                 else:
-                    remark = str(e)
+                    remark = str(e).replace("'", "''")
                     logger.exception(
                         f"Error occurred while identifying steps for job_id {curr_job_id}: {e}"
                     )

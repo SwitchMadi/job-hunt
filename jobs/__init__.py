@@ -525,7 +525,7 @@ class ApplicationPage:
                     )
                 except Exception as e:
                     self.steps_identified = False
-                    failure_reason = str(e)
+                    failure_reason = str(e).replace("'", "''")
                     raise e
                 finally:
                     self.update_steps_identification_status(
@@ -575,7 +575,7 @@ class ApplicationPage:
                 f"Error while applying for user {self.parent_job.user.id} for job {self.parent_job.id} - "
                 f"{self.parent_job.title}. Error - {e}"
             )
-            remarks = str(e)
+            remarks = str(e).replace("'", "''")
             self._update_application_status(application_id, "failed", remarks)
 
             if not steps_identified_at_beginning:
