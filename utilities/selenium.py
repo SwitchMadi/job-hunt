@@ -1694,23 +1694,27 @@ def get_unique_element_by_xpath(xpath, title=None):
     elements = driver.find_elements(By.XPATH, xpath)
     if len(elements) == 1:
         return elements[0]
-    elif len(elements) > 1 and title:
-        element_identified, user_input_element = find_input_block_for_title(title)
-        if element_identified:
-            element = user_input_element.find_elements(By.XPATH, f".{xpath}")
-            if len(element) == 1:
-                return element[0]
+    elif len(elements) > 1:
+        if title:
+            element_identified, user_input_element = find_input_block_for_title(title)
+            if element_identified:
+                element = user_input_element.find_elements(By.XPATH, f".{xpath}")
+                if len(element) == 1:
+                    return element[0]
+                else:
+                    logging.warning(
+                        f"Multiple elements found for XPath '{xpath}' under title '{title}'."
+                    )
+                    return None
             else:
                 logging.warning(
-                    f"Multiple elements found for XPath '{xpath}' under title '{title}'."
+                    f"Multiple elements found for XPath '{xpath}' but no unique input block identified under title "
+                    f"'{title}'."
                 )
                 return None
         else:
-            logging.warning(
-                f"Multiple elements found for XPath '{xpath}' but no unique input block identified under title "
-                f"'{title}'."
-            )
-            return None
+            logging.warning(f"Multiple elements found for XPath '{xpath}'. Returning first match.")
+            return elements[0]
     else:
         logging.warning(f"No elements found for XPath '{xpath}'.")
         return None
