@@ -1713,7 +1713,9 @@ def get_unique_element_by_xpath(xpath, title=None):
                 )
                 return None
         else:
-            logging.warning(f"Multiple elements found for XPath '{xpath}'. Returning first match.")
+            logging.warning(
+                f"Multiple elements found for XPath '{xpath}'. Returning first match."
+            )
             return elements[0]
     else:
         logging.warning(f"No elements found for XPath '{xpath}'.")
