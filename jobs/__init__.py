@@ -1109,11 +1109,6 @@ class ApplicationPage:
             )
             return []
 
-        logger.info(
-            f"Identified following {len(initial_fields)} job fields for {self.parent_job.title}. URL - {self.url}-\n"
-            f"{dict(initial_fields)}"
-        )
-
         return initial_fields
 
     def _act_on_job_fields(self, job_fields):
