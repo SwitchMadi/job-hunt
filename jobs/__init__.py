@@ -827,6 +827,13 @@ class ApplicationPage:
             response_format=WebPageElements,
         )
         if elements_found:
+            elements_present = [
+                attr for attr in dict(elements) if getattr(elements, attr).value
+            ]
+            logger.info(
+                f"Identified following current page elements for {self.parent_job.title}. URL - {self.url}-\n"
+                f"{elements_present}"
+            )
             return elements
         else:
             logger.error(
@@ -1101,6 +1108,11 @@ class ApplicationPage:
                 f"Couldn't extract job fields for {self.parent_job.title}. URL - {self.url}"
             )
             return []
+
+        logger.info(
+            f"Identified following {len(initial_fields)} job fields for {self.parent_job.title}. URL - {self.url}-\n"
+            f"{dict(initial_fields)}"
+        )
 
         return initial_fields
 
