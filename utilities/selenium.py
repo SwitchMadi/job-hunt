@@ -1714,9 +1714,18 @@ def get_unique_element_by_xpath(xpath, title=None):
                 return None
         else:
             logging.warning(
-                f"Multiple elements found for XPath '{xpath}'. Returning first match."
+                f"Multiple elements found for XPath '{xpath}'. Returning first visible element."
             )
-            return elements[0]
+            for el in elements:
+                if el.tag_name == "input":
+                    return el
+                elif is_element_visible(element=el):
+                    return el
+
+            logging.warning(
+                f"None of the elements found for XPath '{xpath}' are visible."
+            )
+            return None
     else:
         logging.warning(f"No elements found for XPath '{xpath}'.")
         return None
