@@ -35,9 +35,12 @@ class SubmitApplication(PageComponent):
 
     def proceed(self, retry=False):
         if not self.component_identified:
-            return self._identify()
+            self._identify()
+        else:
+            self.field_component.proceed()
 
-        self.field_component.proceed()
+        self._switch_to_active_tab()
+        return
 
     def _identify(self, retry=False):
         global driver
@@ -118,6 +121,11 @@ class SubmitApplication(PageComponent):
                 f"Couldn't extract submit application button for {self.parent_application_page.parent_job.title}. "
                 f"URL - {self.parent_application_page.url}"
             )
+
+    @staticmethod
+    def _switch_to_active_tab():
+        global driver
+        driver.switch_to.window(driver.window_handles[-1])
 
     def _delete_downloaded_resume(self):
         cur_application_step = self.parent_application_page.head_step
