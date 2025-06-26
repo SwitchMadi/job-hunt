@@ -677,11 +677,13 @@ class ApplicationPage:
             )
             success_proof: Optional[str] = Field(
                 ...,
-                description="If is_submitted is true then what is proof of success in short",
+                description="If is_submitted is true then what is proof of success in short, which you based your "
+                "decision on",
             )
             failure_reason: Optional[str] = Field(
                 ...,
-                description="If is_submitted is false then what is reason for failure in short",
+                description="If is_submitted is false then what is reason for failure in short, which you based your "
+                "decision on",
             )
 
         submission_found, submission = get_gpt_response(
