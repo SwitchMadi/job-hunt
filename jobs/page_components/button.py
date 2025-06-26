@@ -79,6 +79,18 @@ class Button(PageComponent):
                 self.is_component_functional = False
                 return
 
+            driver.execute_script(
+                """
+                const element = arguments[0];
+                const rect = element.getBoundingClientRect();
+                const elementTop = rect.top + window.pageYOffset;
+                const viewportHeight = window.innerHeight;
+                const offsetToCenter = elementTop - (viewportHeight / 2) + (rect.height / 2) + 100;
+                window.scrollTo({top: offsetToCenter, behavior: 'auto'});
+            """,
+                element,
+            )
+
             if element.tag_name != "input" and not is_element_visible(element=element):
                 logger.warning(
                     f"Element with XPath {self.x_path} not found. "
@@ -94,18 +106,6 @@ class Button(PageComponent):
                     )
                     self.is_component_functional = False
                     return
-
-            driver.execute_script(
-                """
-                const element = arguments[0];
-                const rect = element.getBoundingClientRect();
-                const elementTop = rect.top + window.pageYOffset;
-                const viewportHeight = window.innerHeight;
-                const offsetToCenter = elementTop - (viewportHeight / 2) + (rect.height / 2) + 100;
-                window.scrollTo({top: offsetToCenter, behavior: 'auto'});
-            """,
-                element,
-            )
 
             # Create action chains for more natural movement
             actions = ActionChains(driver)
