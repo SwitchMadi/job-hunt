@@ -8,7 +8,7 @@ s3_bucket: job-hunt-storage
 scraping:
   linkedin:
     login_pause: false
-    max_job_count: 1500
+    max_job_count: 250
     jobs_urls:
       - https://www.linkedin.com/jobs/search/?f_TPR=r86400&geoId=102713980&keywords=data%20analyst&origin=JOB_SEARCH_PAGE_JOB_FILTER&refresh=true&sortBy=DD
 startup_input: C:\Users\JobHunt\Desktop\startup_input.yml
