@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from enum import Enum
 import json
 import yaml
+from selenium.webdriver.support.ui import WebDriverWait
 
 from utilities import constants, generate_hash, retry, clean_text_edges
 from utilities.selenium import (
@@ -303,7 +304,12 @@ class ApplicationPage:
         global driver
         driver.get(self.url)
         disable_browser_alerts()
-        time.sleep(2)
+        
+        # Wait for page load to complete
+        WebDriverWait(driver, 10).until(
+            lambda d: d.execute_script("return document.readyState") == "complete"
+        )
+        time.sleep(5)
 
         # Get the total height of the page
         total_height = driver.execute_script("return document.body.scrollHeight")
@@ -321,7 +327,13 @@ class ApplicationPage:
         for iframe_url in iframe_urls:
             driver.get(iframe_url)
             disable_browser_alerts()
-            time.sleep(2)
+            
+            # Wait for page load to complete
+            WebDriverWait(driver, 10).until(
+                lambda d: d.execute_script("return document.readyState") == "complete"
+            )
+            time.sleep(5)
+            
             htmls[f"iframe_{iframe_urls.index(iframe_url)}"] = {
                 "url": iframe_url,
                 "page_source": driver.page_source,
@@ -368,7 +380,12 @@ class ApplicationPage:
         logger.info("Re-doing all steps...")
         driver.get(self.url)
         disable_browser_alerts()
-        time.sleep(2)
+        
+        # Wait for page load to complete
+        WebDriverWait(driver, 10).until(
+            lambda d: d.execute_script("return document.readyState") == "complete"
+        )
+        time.sleep(5)
 
         next_step = self.head_step
         while True:
@@ -699,7 +716,12 @@ class ApplicationPage:
         global driver
         driver.get(self.url)
         disable_browser_alerts()
-        time.sleep(2)
+        
+        # Wait for page load to complete
+        WebDriverWait(driver, 10).until(
+            lambda d: d.execute_script("return document.readyState") == "complete"
+        )
+        time.sleep(5)
 
         if self.head_step:
             self.run_steps()
