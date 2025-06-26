@@ -36,6 +36,7 @@ try:
         on t1.id = t2.job_id
         where t1.is_active
         and t2.id is null
+        and not t1.linkedin_easy_apply
         and t1.job_posted_at >= EXTRACT(EPOCH FROM (CURRENT_DATE - INTERVAL '7 days'));
     """
     jobs = get_sql_query_output(steps_unidentified_jobs_query)
