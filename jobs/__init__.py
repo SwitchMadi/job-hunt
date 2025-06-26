@@ -5,6 +5,7 @@ from enum import Enum
 import json
 import yaml
 from selenium.webdriver.support.ui import WebDriverWait
+import pyautogui
 
 from utilities import constants, generate_hash, retry, clean_text_edges
 from utilities.selenium import (
@@ -587,12 +588,13 @@ class ApplicationPage:
 
             return None
         finally:
-            # Upload page screenshot to S3
-            if driver:
+            # Upload screenshot to S3
+            try:
+                screenshot = pyautogui.screenshot()
                 screenshot_filename = (
                     f"jobId-{self.parent_job.id}--userId-{self.parent_job.user.id}.png"
                 )
-                driver.save_screenshot(screenshot_filename)
+                screenshot.save(screenshot_filename)
 
                 s3 = S3Bucket(bucket_name=config["s3_bucket"])
                 file_s3_path = (
@@ -601,9 +603,10 @@ class ApplicationPage:
                 s3.upload_data(
                     file_local_path=screenshot_filename, file_s3_path=file_s3_path
                 )
-            else:
+            except Exception as e:
                 logger.warn(
-                    "Selenium driver is not initialized, cannot take screenshot."
+                    f"Failed to upload screenshot for job {self.parent_job.id} - "
+                    f"{self.parent_job.title}. Error - {e}"
                 )
 
             # Close the driver after application
