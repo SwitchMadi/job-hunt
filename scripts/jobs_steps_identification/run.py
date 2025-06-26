@@ -63,7 +63,7 @@ try:
             try:
                 proc.wait(timeout=10 * 60)  # Wait for 10 minutes
             except Exception as e:
-                if e is subprocess.TimeoutExpired:
+                if isinstance(e, subprocess.TimeoutExpired):
                     proc.kill()
                     logger.warn(
                         f"Steps identification for job_id {curr_job_id} timed out and killed."
