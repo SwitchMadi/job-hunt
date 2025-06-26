@@ -525,7 +525,7 @@ class ApplicationPage:
                     )
                 except Exception as e:
                     self.steps_identified = False
-                    failure_reason = "Unknown exception"
+                    failure_reason = str(e)
                     raise e
                 finally:
                     self.update_steps_identification_status(
@@ -575,15 +575,14 @@ class ApplicationPage:
                 f"Error while applying for user {self.parent_job.user.id} for job {self.parent_job.id} - "
                 f"{self.parent_job.title}. Error - {e}"
             )
-            self._update_application_status(
-                application_id, "failed", "Unknown exception"
-            )
+            remarks = str(e)
+            self._update_application_status(application_id, "failed", remarks)
 
             if not steps_identified_at_beginning:
                 self.update_steps_identification_status(
                     job_id=self.parent_job.id,
                     is_application_feasible=False,
-                    remarks="Unknown exception",
+                    remarks=remarks,
                 )
 
             return None
