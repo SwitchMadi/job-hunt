@@ -73,6 +73,11 @@ def extract_linkedin_jobs(jobs_url, scraped_linkedin_job_ids):
         jobs_scraped <= min(jobs_count, config["scraping"]["linkedin"]["max_job_count"])
     ) and continue_scraping:
         try:
+            jobs_elements = driver.find_elements(
+                By.XPATH, "//li[contains(@class, 'scaffold-layout__list')]"
+            )
+            jobs_container = jobs_elements[0].find_element(By.XPATH, "./.. /..")
+
             for job in jobs_elements:
                 try:
                     # Scroll the jobs side panel to the current job
