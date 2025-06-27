@@ -860,11 +860,11 @@ class ApplicationPage:
 
             return False, "Job not available"
 
-        if elements.mandatory_account_login_signup.value:
-            return False, "Login required"
-
-        if elements.account_verification.value:
-            return False, "Account verification required"
+        # if elements.mandatory_account_login_signup.value:
+        #     return False, "Login required"
+        #
+        # if elements.account_verification.value:
+        #     return False, "Account verification required"
 
         # Feasible sections
         if elements.captcha.value:
@@ -980,7 +980,7 @@ class ApplicationPage:
             is_next_page_button_functional = self._identify_next_page_button()
 
             if is_next_page_button_functional:
-                return False, "Next page button present"
+                # return False, "Next page button present"
 
                 latest_elements = self._identify_current_page_elements()
                 if latest_elements:
