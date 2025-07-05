@@ -56,6 +56,7 @@ def get_logger(
             "log_group": cloudwatch_log_group,
             "stream_name": f"{cloudwatch_log_group}-{log_group_suffix if log_group_suffix else today}",
             "boto3_client": boto3_logs_client,
+            "send_interval": 2,
         }
         handlers.append("cloudwatch")
     else:
