@@ -1731,3 +1731,12 @@ def get_unique_element_by_xpath(xpath, title=None):
     else:
         logging.warning(f"No elements found for XPath '{xpath}'.")
         return None
+
+
+def revoke_optional_permissions(url: str):
+    """Revoke optional permissions (like geolocation, camera, etc.) for a given origin URL."""
+    global driver
+
+    driver.execute_cdp_cmd(
+        "Browser.grantPermissions", {"origin": url, "permissions": []}
+    )

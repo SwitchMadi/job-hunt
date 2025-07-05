@@ -13,6 +13,7 @@ from utilities.selenium import (
     disable_browser_alerts,
     minify_html_for_gpt_prompt,
     close_selenium_driver,
+    revoke_optional_permissions,
 )
 from utilities.gpt import get_gpt_response
 from utilities.logging import get_logger
@@ -302,6 +303,8 @@ class ApplicationPage:
 
     def identify_original_application_page(self):
         global driver
+
+        revoke_optional_permissions(self.url)
         driver.get(self.url)
         disable_browser_alerts()
 
@@ -325,6 +328,7 @@ class ApplicationPage:
         iframe_urls = extract_iframe_urls(driver.page_source)
         iframe_urls = list(set(iframe_urls))
         for iframe_url in iframe_urls:
+            revoke_optional_permissions(iframe_url)
             driver.get(iframe_url)
             disable_browser_alerts()
 
@@ -378,6 +382,7 @@ class ApplicationPage:
 
     def run_steps(self, stop_step=None):
         logger.info("Re-doing all steps...")
+        revoke_optional_permissions(self.url)
         driver.get(self.url)
         disable_browser_alerts()
 
@@ -716,6 +721,8 @@ class ApplicationPage:
     # Identify job page components
     def _identify_application_steps(self):
         global driver
+
+        revoke_optional_permissions(self.url)
         driver.get(self.url)
         disable_browser_alerts()
 
