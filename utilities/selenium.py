@@ -57,6 +57,7 @@ def get_selenium_driver():
                 "--disable-blink-features=AutomationControlled"
             )  # disables detection feature
             options.add_argument("--disable-popup-blocking")
+            options.add_argument("--deny-permission-prompts")
 
             options.add_argument(
                 f"--user-data-dir={config['chrome_profile_path']}"
@@ -88,6 +89,7 @@ def get_selenium_driver():
             options.add_argument("--disable-blink-features=AutomationControlled")
             options.add_argument("--deny-permission-prompts")
             options.add_argument("--disable-popup-blocking")
+            options.add_argument("--deny-permission-prompts")
 
             user_agent = (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
