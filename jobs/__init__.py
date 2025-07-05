@@ -5,9 +5,8 @@ from enum import Enum
 import json
 import yaml
 from selenium.webdriver.support.ui import WebDriverWait
-import pyautogui
 
-from utilities import constants, generate_hash, retry, clean_text_edges
+from utilities import constants, generate_hash, retry, clean_text_edges, take_screenshot
 from utilities.selenium import (
     get_selenium_driver,
     extract_iframe_urls,
@@ -590,11 +589,10 @@ class ApplicationPage:
         finally:
             # Upload screenshot to S3
             try:
-                screenshot = pyautogui.screenshot()
                 screenshot_filename = (
                     f"jobId-{self.parent_job.id}--userId-{self.parent_job.user.id}.png"
                 )
-                screenshot.save(screenshot_filename)
+                take_screenshot(filename=screenshot_filename)
 
                 s3 = S3Bucket(bucket_name=config["s3_bucket"])
                 file_s3_path = (
@@ -605,7 +603,7 @@ class ApplicationPage:
                 )
             except Exception as e:
                 logger.warn(
-                    f"Failed to upload screenshot for job {self.parent_job.id} - "
+                    f"Failed to take / upload screenshot for job {self.parent_job.id} - "
                     f"{self.parent_job.title}. Error - {e}"
                 )
 

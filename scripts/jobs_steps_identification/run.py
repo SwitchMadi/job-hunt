@@ -1,13 +1,18 @@
-import os
 import subprocess
 import sys
+import yaml
 
 from jobs import ApplicationPage
+from user import User
+from utilities import take_screenshot
 from utilities.logging import get_logger
 from utilities.sql import get_sql_query_output
 from utilities.selenium import kill_selenium_chrome
 from utilities.aws.dynamo import OperationLocksTable
+from utilities.aws.s3 import S3Bucket
 
+
+config = yaml.safe_load(open("config.yml"))
 
 logger = get_logger("jobs_steps_identification")
 
@@ -43,7 +48,7 @@ try:
     kill_selenium_chrome()
 
     if not jobs:
-        logger.warn("No jobs found for steps identification.")
+        logger.warning("No jobs found for steps identification.")
     else:
         logger.info(f"Identifying steps for {len(jobs)} jobs.")
 
@@ -73,6 +78,25 @@ try:
                     remark = str(e).replace("'", "''")
                     logger.exception(
                         f"Error occurred while identifying steps for job_id {curr_job_id}: {e}"
+                    )
+
+                try:
+                    user = User(email=config["user_email"])
+
+                    screenshot_filename = f"jobId-{curr_job_id}--userId-{user.id}.png"
+                    take_screenshot(filename=screenshot_filename)
+
+                    s3 = S3Bucket(bucket_name=config["s3_bucket"])
+                    file_s3_path = (
+                        f"user_data/applications/screenshots/{screenshot_filename}"
+                    )
+                    s3.upload_data(
+                        file_local_path=screenshot_filename, file_s3_path=file_s3_path
+                    )
+                except Exception as e:
+                    logger.warn(
+                        f"Failed to take / upload screenshot for job {curr_job_id} - "
+                        f"Error - {e}"
                     )
 
                 kill_selenium_chrome()
