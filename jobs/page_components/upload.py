@@ -12,6 +12,8 @@ from jobs.page_components import PageComponent, logger, get_page_component_class
 from utilities.selenium import get_selenium_driver
 
 
+pyautogui.FAILSAFE = False
+
 driver = get_selenium_driver()
 driver.set_page_load_timeout(15)
 
