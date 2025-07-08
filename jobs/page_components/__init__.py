@@ -1191,6 +1191,7 @@ class ApplicationField:
 
             for x_path in correct_x_path.possible_x_paths:
                 if element_exists(x_path):
+                    logger.info(f"Found correct x_path - {x_path}")
                     return x_path
 
         logger.error(
