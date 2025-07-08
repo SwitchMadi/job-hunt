@@ -182,6 +182,12 @@ def disable_browser_alerts():
     return True
 
 
+def switch_to_active_tab():
+    global driver
+
+    driver.switch_to.window(driver.window_handles[-1])
+
+
 def extract_iframe_urls(html_content):
     # Parse the HTML content with BeautifulSoup
     soup = BeautifulSoup(html_content, "html.parser")

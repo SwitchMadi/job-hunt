@@ -6,7 +6,12 @@ from jobs.page_components import PageComponent, get_page_component_class_name, l
 from jobs.page_components.button import Button
 from utilities import constants
 from utilities.gpt import get_gpt_response
-from utilities.selenium import get_selenium_driver, minify_html_for_gpt_prompt
+from utilities.selenium import (
+    get_selenium_driver,
+    minify_html_for_gpt_prompt,
+    disable_browser_alerts,
+    switch_to_active_tab,
+)
 
 driver = get_selenium_driver()
 driver.set_page_load_timeout(15)
@@ -33,6 +38,9 @@ class Popup(PageComponent):
 
         if self.field_component:
             self.field_component.proceed()
+
+            switch_to_active_tab()
+            disable_browser_alerts()
 
             if self.previous_step == "resume_upload":
                 time.sleep(10)
@@ -96,6 +104,9 @@ class Popup(PageComponent):
                 if self.field_component.is_component_functional:
                     self.is_component_functional = True
                     self.component_identified = True
+
+                    switch_to_active_tab()
+                    disable_browser_alerts()
                 elif not retry:
                     self._identify(retry=True)
                 else:

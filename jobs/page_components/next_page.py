@@ -12,6 +12,8 @@ from utilities.selenium import (
     get_selenium_driver,
     minify_html_for_gpt_prompt,
     is_element_visible,
+    disable_browser_alerts,
+    switch_to_active_tab,
 )
 
 driver = get_selenium_driver()
@@ -34,6 +36,9 @@ class NextPage(PageComponent):
             return self._identify()
 
         self.field_component.proceed()
+
+        switch_to_active_tab()
+        disable_browser_alerts()
 
     def _identify(self, retry=False):
         global driver
@@ -84,6 +89,9 @@ class NextPage(PageComponent):
             if self.field_component.is_component_functional:
                 self.is_component_functional = True
                 self.component_identified = True
+
+                switch_to_active_tab()
+                disable_browser_alerts()
             elif not retry:
                 self._identify(retry=True)
             else:
