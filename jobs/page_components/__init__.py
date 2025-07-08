@@ -1147,6 +1147,12 @@ class ApplicationField:
     ):
         global driver
 
+        logger.info(
+            f"Extracting correct x_path for following incorrect x_path - {prev_x_path}\n"
+            f"Job Title - {job_title}\n"
+            f"Job URL - {job_url}"
+        )
+
         user_prompt = (
             f"Following HTML page is job application webpage for {job_title}. "
             f"HTML: {html if html else minify_html_for_gpt_prompt(driver.page_source)}\n"
@@ -1174,6 +1180,15 @@ class ApplicationField:
             response_format=CorrectXPath,
         )
         if correct_x_path_found:
+            x_paths = "\n".join(
+                f"{i + 1}. {x_path}"
+                for i, x_path in enumerate(correct_x_path.possible_x_paths)
+            )
+            logger.info(
+                f"Found {len(correct_x_path.possible_x_paths)} possible correct XPaths for the element.\n"
+                f"Possible XPaths -\n{x_paths}"
+            )
+
             for x_path in correct_x_path.possible_x_paths:
                 if element_exists(x_path):
                     return x_path
