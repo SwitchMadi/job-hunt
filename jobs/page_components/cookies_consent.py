@@ -89,6 +89,13 @@ class CookiesConsent(PageComponent):
                 else:
                     button.x_path = correct_x_path
 
+            if not is_element_visible(button.x_path):
+                logger.warn(
+                    f"Button to accept cookies consent is not visible for {self.parent_application_page.parent_job.title}. "
+                    f"URL - {self.parent_application_page.url}"
+                )
+                return
+
             self.field_component = Button(
                 x_path=button.x_path,
                 button_type="accept_cookies",
