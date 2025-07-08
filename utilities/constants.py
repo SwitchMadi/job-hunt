@@ -7,4 +7,12 @@ gpt = {
         "resume_parser": "You're a tool which helps in extracting information out of resume summary.",
     }
 }
-non_automatable_job_boards = ["instahyre.com"]
+non_automatable_job_boards = [
+    "instahyre.com",
+    "upwork.com",
+    "freelancer.com",
+    "fiverr.com",
+    "toptal.com",
+    "guru.com",
+    "peopleperhour.com",
+]
