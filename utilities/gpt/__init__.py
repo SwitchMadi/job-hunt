@@ -1,9 +1,11 @@
+import json
 import os
 import dotenv
 from openai import OpenAI, RateLimitError
 from httpx import HTTPStatusError
 import time
 import yaml
+from enum import Enum
 
 from utilities.logging import get_logger
 
@@ -40,6 +42,13 @@ def _update_token_usage(prompt_tokens, completion_tokens, total_tokens):
         f"Output: {_cumulative_completion_tokens}, "
         f"Total: {_cumulative_total_tokens}"
     )
+
+
+class EnumEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Enum):
+            return obj.value
+        return super().default(obj)
 
 
 def get_gpt_response(
@@ -84,7 +93,10 @@ def get_gpt_response(
                 )
                 return False, resp.refusal
             else:
-                logger.debug(f"GPT responded with structured output - \n{resp.parsed}")
+                logger.info(
+                    f"GPT responded with structured output - \n%s",
+                    json.dumps(resp.parsed.dict(), indent=2, cls=EnumEncoder),
+                )
                 return True, resp.parsed
         else:
             completion = client.chat.completions.create(**payload)

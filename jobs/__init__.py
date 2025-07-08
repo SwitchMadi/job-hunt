@@ -835,10 +835,6 @@ class ApplicationPage:
             elements_present = [
                 attr for attr in dict(elements) if getattr(elements, attr).value
             ]
-            logger.info(
-                f"Identified following current page elements for {self.parent_job.title}. URL - {self.url}-\n"
-                f"{elements_present}"
-            )
             return elements
         else:
             logger.error(
