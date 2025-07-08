@@ -832,9 +832,6 @@ class ApplicationPage:
             response_format=WebPageElements,
         )
         if elements_found:
-            elements_present = [
-                attr for attr in dict(elements) if getattr(elements, attr).value
-            ]
             return elements
         else:
             logger.error(
@@ -909,11 +906,7 @@ class ApplicationPage:
 
                 return None, "Page elements not found post starting application"
 
-        # There are no application fields on the page and application data source is to be selected
-        if (
-            elements.select_application_data_source.value
-            and not elements.application_fields.value
-        ):
+        if elements.select_application_data_source.value:
             is_manual_input_functional = (
                 self._extract_application_data_source_options_details()
             )
@@ -921,6 +914,15 @@ class ApplicationPage:
             if is_manual_input_functional:
                 latest_elements = self._identify_current_page_elements()
                 if latest_elements:
+
+                    class IsElementPresent(Enum):
+                        true = True
+                        false = False
+
+                    latest_elements.select_application_data_source = (
+                        IsElementPresent.false
+                    )
+
                     return self._act_on_current_page_elements(latest_elements)
 
                 return (
