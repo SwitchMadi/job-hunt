@@ -9,6 +9,7 @@ import time
 import platform
 
 from jobs.page_components import PageComponent, logger, get_page_component_class_name
+from jobs.page_components.button import Button
 from utilities.selenium import get_selenium_driver
 
 
@@ -40,11 +41,12 @@ class Upload(PageComponent):
             )
 
         try:
-            element = driver.find_element(By.XPATH, self.x_path)
-            driver.execute_script(
-                "arguments[0].scrollIntoView({block: 'center'});", element
+            upload_button = Button(
+                x_path=self.x_path,
+                button_type="upload",
+                parent_application_page=None,
             )
-            element.click()
+            upload_button.proceed()
             time.sleep(2)
 
             self._type_file_path_cleanly()
