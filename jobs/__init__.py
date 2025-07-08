@@ -666,9 +666,11 @@ class ApplicationPage:
         time.sleep(3)  # Wait for page to load completely
 
         user_prompt = (
-            f"Following HTML page is shown after submitting job application for {self.parent_job.title} "
+            f"Following HTML page is job application webpage for {self.parent_job.title} "
             f"at a company called {self.parent_job.company}.\n"
             f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
+            f"I clicked a button which was for submitting the job application. Submission may have been successful or "
+            f"may have failed. Above HTML is the page content after trying to click the submit button. "
             f"Analyse the whole HTML very carefully to determine if application was submitted successfully."
         )
 
@@ -679,17 +681,18 @@ class ApplicationPage:
         class ApplicationSubmission(BaseModel):
             is_submitted: SubmissionStatus = Field(
                 ...,
-                description="Page content mentions / suggests that the job application submission was successful",
+                description="Whether application was successfully submitted or not. If it was not submitted then "
+                "this should be false.",
             )
             success_proof: Optional[str] = Field(
                 ...,
-                description="If is_submitted is true then what is proof of success in short, which you based your "
-                "decision on",
+                description="If is_submitted is true then what is proof of successful submission, on which you based your "
+                "decision.",
             )
             failure_reason: Optional[str] = Field(
                 ...,
-                description="If is_submitted is false then what is reason for failure in short, which you based your "
-                "decision on",
+                description="If is_submitted is false then what is reason for failure in submission, on which you based your "
+                "decision",
             )
 
         submission_found, submission = get_gpt_response(
