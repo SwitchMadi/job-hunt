@@ -13,7 +13,6 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.backends import default_backend
-import pyautogui
 
 
 dotenv.load_dotenv()
@@ -288,6 +287,8 @@ def take_screenshot(filename=None):
     Takes a screenshot and saves it to the specified filename.
     If no filename is provided, it generates a random one.
     """
+    import pyautogui
+
     if not filename:
         filename = f"screenshot_{int(time.time())}.png"
 
