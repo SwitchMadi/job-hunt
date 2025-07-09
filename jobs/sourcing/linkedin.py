@@ -58,8 +58,6 @@ def extract_linkedin_jobs(jobs_url, scraped_linkedin_job_ids):
         if not jobs_elements:
             logger.warn("No jobs found on the page.")
             return []
-
-        jobs_container = jobs_elements[0].find_element(By.XPATH, "./.. /..")
     except NoSuchElementException as e:
         logger.exception(f"No element found - {e}")
         return []
@@ -76,15 +74,12 @@ def extract_linkedin_jobs(jobs_url, scraped_linkedin_job_ids):
             jobs_elements = driver.find_elements(
                 By.XPATH, "//li[contains(@class, 'scaffold-layout__list')]"
             )
-            jobs_container = jobs_elements[0].find_element(By.XPATH, "./.. /..")
 
             for job in jobs_elements:
                 try:
-                    # Scroll the jobs side panel to the current job
+                    # Scroll the job into view
                     driver.execute_script(
-                        "arguments[0].scrollTop = arguments[1].offsetTop;",
-                        jobs_container,
-                        job,
+                        "arguments[0].scrollIntoView({block: 'nearest'});", job
                     )
 
                     job.click()
