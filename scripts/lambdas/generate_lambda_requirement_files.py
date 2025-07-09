@@ -163,6 +163,6 @@ for name, resource in resources.items():
         generate_lambda_requirements(
             entry_file=os.path.join(lambda_folder, handler_file),
             project_root="/Users/bhaskar/Desktop/switchmadi/codebase/job-hunt",
-            reference_file="/Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/requirements.txt",
+            reference_file="/Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/requirements-mac.txt",
             output_folder=lambda_folder,
         )
