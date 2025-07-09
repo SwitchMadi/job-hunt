@@ -43,7 +43,7 @@ def lambda_handler(event, context):
         # Launch EC2 instance to run job steps identification
         EC2(
             instance_pricing_model="on_demand",
-            ami_id="ami-0d1243098f0b13989",
+            ami_id="ami-036698c602420547e",
             instance_type="t3a.2xlarge",
             key_name="job-hunt",
             security_group="sg-011a3786d569e6382",

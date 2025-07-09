@@ -40,7 +40,7 @@ def lambda_handler(event, context):
         # Launch EC2 instance to run job scraping
         EC2(
             instance_pricing_model="on_demand",
-            ami_id="ami-06da3a257c7831814",
+            ami_id="ami-09143636f3b7a0e2a",
             instance_type="t3a.2xlarge",
             key_name="job-hunt",
             security_group="sg-011a3786d569e6382",
