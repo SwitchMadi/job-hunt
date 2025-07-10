@@ -163,6 +163,18 @@ def extract_linkedin_jobs(jobs_url, scraped_linkedin_job_ids):
                             driver.switch_to.window(main_window_handle)
                         else:
                             logger.warn("No apply buttons found. Skipping job.")
+                            from utilities import take_screenshot
+                            filename = take_screenshot()
+
+                            from utilities.aws.s3 import S3Bucket
+                            s3 = S3Bucket(bucket_name=config["s3_bucket"])
+                            file_s3_path = (
+                                f"temp/{filename}"
+                            )
+                            s3.upload_data(
+                                file_local_path=filename, file_s3_path=file_s3_path
+                            )
+
                             continue
 
                     top_card_text = driver.find_element(
