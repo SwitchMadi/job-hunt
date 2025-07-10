@@ -21,6 +21,7 @@ class EC2:
         security_group=None,
         iam_fleet_role=None,
         user_data_script=None,
+        instance_name=None,
     ):
         self.client = get_aws_client("ec2")
         if self_identify_instance:
@@ -42,6 +43,7 @@ class EC2:
             self.security_group = security_group
             self.iam_fleet_role = iam_fleet_role
             self.user_data_script = user_data_script
+            self.instance_name = instance_name
 
             if instance_pricing_model == "spot":
                 self.launch_spot_instance()
@@ -59,11 +61,11 @@ class EC2:
                         "InstanceType": self.instance_type,
                         "KeyName": self.key_name,
                         "SecurityGroups": [{"GroupName": self.security_group}],
-                        "UserData": base64.b64encode(
-                            self.user_data_script.encode("utf-8")
-                        )
-                        .decode("utf-8")
-                        .strip(),
+                        "UserData": (
+                            base64.b64encode(self.user_data_script.encode("utf-8"))
+                            .decode("utf-8")
+                            .strip()
+                        ),
                     },
                 ],
                 "TargetCapacity": 1,
@@ -93,6 +95,13 @@ class EC2:
             f"Spot instance request fulfilled. instance_id - {self.instance_id}"
         )
 
+        # Set instance name if provided
+        if self.instance_name:
+            self.client.create_tags(
+                Resources=[self.instance_id],
+                Tags=[{"Key": "Name", "Value": self.instance_name}],
+            )
+
         return True
 
     def launch_on_demand_instance(self):
@@ -107,6 +116,14 @@ class EC2:
         )
 
         self.instance_id = response["Instances"][0]["InstanceId"]
+
+        # Set instance name if provided
+        if self.instance_name:
+            self.client.create_tags(
+                Resources=[self.instance_id],
+                Tags=[{"Key": "Name", "Value": self.instance_name}],
+            )
+
         return True
 
     def stop_instance(self):
