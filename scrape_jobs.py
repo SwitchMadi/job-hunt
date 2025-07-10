@@ -4,6 +4,7 @@ from sqlalchemy.types import Integer, Boolean
 from datetime import datetime
 import yaml
 import time
+import sys
 from concurrent.futures import ThreadPoolExecutor
 
 from jobs.sourcing.linkedin import extract_linkedin_jobs
@@ -12,12 +13,27 @@ from utilities import generate_hash, unzip_directory
 from utilities.sql import get_sql_connection, get_sql_query_output, execute_sql_query
 from utilities.logging import get_logger
 from utilities.aws.s3 import S3Bucket
+from utilities.aws.dynamo import OperationLocksTable
 from utilities.selenium import get_selenium_driver
 
 logger = get_logger(name="scrape_jobs")
 config = yaml.safe_load(open("config.yml"))
 
+# Initialize lock manager
+lock_table = OperationLocksTable()
+operation_name = "job_scrape"
+lock_id = None
+
 try:
+    # Attempt to acquire lock
+    lock_id = lock_table.acquire_lock(operation_name)
+
+    if not lock_id:
+        logger.info("Another job scraping process is already running. Exiting.")
+        sys.exit(0)
+
+    logger.info(f"Lock acquired for job scraping. Lock ID: {lock_id}")
+
     user_email = None
     while user_email is None:
         time.sleep(1)
@@ -180,3 +196,12 @@ try:
     driver.quit()
 except Exception as e:
     logger.exception(f"Unexpected error occurred - {e}")
+
+finally:
+    # Always release the lock, even if an error occurred
+    if lock_id:
+        try:
+            lock_table.release_lock(operation_name, lock_id)
+            logger.info(f"Lock released for job scraping. Lock ID: {lock_id}")
+        except Exception as e:
+            logger.exception(f"Error releasing lock: {e}")
