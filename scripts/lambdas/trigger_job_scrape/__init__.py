@@ -45,6 +45,7 @@ def lambda_handler(event, context):
             key_name="job-hunt",
             security_group="sg-011a3786d569e6382",
             user_data_script=script,
+            instance_name="jobs-scraping",
         )
 
         logger.info("Successfully triggered job scraping EC2 instance.")

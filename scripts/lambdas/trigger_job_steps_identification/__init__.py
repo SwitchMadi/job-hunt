@@ -48,6 +48,7 @@ def lambda_handler(event, context):
             key_name="job-hunt",
             security_group="sg-011a3786d569e6382",
             user_data_script=script,
+            instance_name="job-steps-identification",
         )
 
         logger.info("Successfully triggered job steps identification EC2 instance.")
