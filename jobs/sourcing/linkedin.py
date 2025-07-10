@@ -97,7 +97,7 @@ def extract_linkedin_jobs(jobs_url, scraped_linkedin_job_ids):
                         continue
 
                     linkedin_job_url = f"https://www.linkedin.com/jobs/view/{job_id}"
-                    logger.info(f"Job collected - {linkedin_job_url}")
+                    logger.info(f"Job to be collected - {linkedin_job_url}")
 
                     job_description = driver.find_element(
                         by=By.CLASS_NAME, value="jobs-search__job-details--wrapper"
@@ -162,6 +162,7 @@ def extract_linkedin_jobs(jobs_url, scraped_linkedin_job_ids):
                             is_reposted_job = True
                             driver.switch_to.window(main_window_handle)
                         else:
+                            logger.warn("No apply buttons found. Skipping job.")
                             continue
 
                     top_card_text = driver.find_element(
@@ -174,6 +175,7 @@ def extract_linkedin_jobs(jobs_url, scraped_linkedin_job_ids):
                     post_time_text = " ".join(post_time_text.split()[-3:])
                     job_posted_at = time_ago_to_epoch(post_time_text)
 
+                    logger.info(f"Job collected - {linkedin_job_url}")
                     jobs.append(
                         {
                             "job_url": original_job_url,
