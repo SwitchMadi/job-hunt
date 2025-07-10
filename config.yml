@@ -10,17 +10,6 @@ scraping:
     login_pause: false
     max_job_count: 1000
     jobs_urls:
-      - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=102713980&keywords=engineering%20manager&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
-      - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=102713980&keywords=golang&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
-      - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=102713980&keywords=python&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
-      - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=102713980&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
-      - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=102713980&keywords=backend&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
-      - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=105015875&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
-      - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=101165590&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
-      - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=101282230&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
-      - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=105646813&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
-      - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=105072130&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
-      - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=102890719&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
       - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=100364837&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
       - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=103350119&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
       - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=104738515&keywords=software%20development&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
