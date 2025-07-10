@@ -66,8 +66,8 @@ rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/save_modified_resume/r
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_job_scrape/job-hunt-420615-0ce7f4f42a30.json
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/share_jobs/job-hunt-420615-0ce7f4f42a30.json
 
-rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_job_scrape/client_secret_604979190363-ei70huqc4iirglc66t3vhc94fl96f07l.apps.googleusercontent.com.json
-rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/share_jobs/client_secret_604979190363-ei70huqc4iirglc66t3vhc94fl96f07l.apps.googleusercontent.com.json
+rm -f ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_job_scrape/client_secret_604979190363-ei70huqc4iirglc66t3vhc94fl96f07l.apps.googleusercontent.com.json
+rm -f ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/share_jobs/client_secret_604979190363-ei70huqc4iirglc66t3vhc94fl96f07l.apps.googleusercontent.com.json
 
 rm -rf .aws-sam
 rm -rf ~/Desktop/SharedLayer
