@@ -76,6 +76,9 @@ try:
 
         jobs = extract_linkedin_jobs(jobs_url, scraped_linkedin_job_ids)
         if not jobs:
+            logger.warn(
+                f"No jobs found on {jobs_url} or all jobs have already been scraped."
+            )
             continue
 
         df_jobs = pd.DataFrame(jobs)
