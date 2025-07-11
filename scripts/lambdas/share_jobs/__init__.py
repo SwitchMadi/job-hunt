@@ -2,6 +2,10 @@ from utilities.sql import get_sql_query_output
 from utilities.logging import get_logger
 from user import User
 
+# imports for lambda requirements.txt
+import pandas as pd
+from utilities.google_services.sheet import Sheet
+
 
 logger = get_logger(name="share_jobs")
 
