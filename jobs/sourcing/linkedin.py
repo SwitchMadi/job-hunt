@@ -9,9 +9,10 @@ from urllib.parse import urlparse, parse_qs
 import yaml
 
 from utilities.constants import non_automatable_job_boards
-from utilities import time_ago_to_epoch
+from utilities import time_ago_to_epoch, take_screenshot
 from utilities.selenium import get_selenium_driver
 from utilities.logging import get_logger
+from utilities.aws.s3 import S3Bucket
 from jobs import ApplicationPage
 
 
@@ -20,6 +21,8 @@ logger = get_logger(name="scrape_linkedin")
 
 def extract_linkedin_jobs(jobs_url, scraped_linkedin_job_ids):
     config = yaml.safe_load(open("config.yml"))
+
+    s3 = S3Bucket(bucket_name=config["s3_bucket"])
 
     driver = get_selenium_driver()
     driver.set_page_load_timeout(300)
@@ -97,7 +100,6 @@ def extract_linkedin_jobs(jobs_url, scraped_linkedin_job_ids):
                         continue
 
                     linkedin_job_url = f"https://www.linkedin.com/jobs/view/{job_id}"
-                    logger.info(f"Job to be collected - {linkedin_job_url}")
 
                     job_description = driver.find_element(
                         by=By.CLASS_NAME, value="jobs-search__job-details--wrapper"
@@ -163,14 +165,10 @@ def extract_linkedin_jobs(jobs_url, scraped_linkedin_job_ids):
                             driver.switch_to.window(main_window_handle)
                         else:
                             logger.warn("No apply buttons found. Skipping job.")
-                            from utilities import take_screenshot
+
                             filename = take_screenshot()
 
-                            from utilities.aws.s3 import S3Bucket
-                            s3 = S3Bucket(bucket_name=config["s3_bucket"])
-                            file_s3_path = (
-                                f"temp/{filename}"
-                            )
+                            file_s3_path = f"jobs-scraping/failures/{filename}"
                             s3.upload_data(
                                 file_local_path=filename, file_s3_path=file_s3_path
                             )

@@ -9,6 +9,7 @@ import functools
 import os
 import base64
 import hashlib
+import pytz
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives import padding
@@ -290,7 +291,10 @@ def take_screenshot(filename=None):
     import pyautogui
 
     if not filename:
-        filename = f"screenshot_{int(time.time())}.png"
+        ist = pytz.timezone("Asia/Kolkata")
+        filename = (
+            f"screenshot_{datetime.datetime.now(ist).strftime('%Y-%m-%d_%H-%M-%S')}.png"
+        )
 
     screenshot = pyautogui.screenshot()
     screenshot.save(filename)
