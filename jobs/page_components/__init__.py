@@ -90,6 +90,10 @@ class ApplicationField:
     def _identify_x_path(self, retry=False, prev_x_path=None):
         global driver
 
+        logger.info(
+            f"Identifying x_path for application field {self.title} & {self.category}..."
+        )
+
         user_input_element = None
         try:
             element_identified, user_input_element = find_input_block_for_title(
