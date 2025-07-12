@@ -78,6 +78,9 @@ class StartApplication(PageComponent):
         else:
             self.field_component.proceed()
 
+            if self.next_step_component:
+                self.next_step_component.proceed()
+
         switch_to_active_tab()
         disable_browser_alerts()
 
