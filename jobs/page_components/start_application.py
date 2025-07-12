@@ -6,6 +6,7 @@ from jobs.page_components import (
     PageComponent,
     get_page_component_class_name,
     ApplicationField,
+    logger,
 )
 from jobs.page_components.button import Button
 from utilities import constants
@@ -105,9 +106,13 @@ class StartApplication(PageComponent):
                 element_text = element.text or ""
 
                 if (
-                    "submit" in button.x_path
+                    "submit" in button.x_path.lower()
                     or "submit" in element_text.strip().lower()
                 ):
+                    logger.warn(
+                        f"Start application button is actually submit button for "
+                        f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+                    )
                     return
 
                 self.field_component = Button(
