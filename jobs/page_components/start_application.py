@@ -17,6 +17,8 @@ from utilities.selenium import (
     is_element_visible,
     disable_browser_alerts,
     switch_to_active_tab,
+    element_exists,
+    get_element_xpath,
 )
 
 driver = get_selenium_driver()
@@ -30,9 +32,40 @@ class StartApplication(PageComponent):
         self.field_component = None
         self.component_identified = False
 
+        self._previous_start_button_x_paths = None
+
         self.next = None
         self.prev = None
         self.is_component_functional = False
+
+    @property
+    def previous_start_button_x_paths(self):
+        global driver
+
+        if self._previous_start_button_x_paths is not None:
+            return self._previous_start_button_x_paths
+
+        _previous_start_button_x_paths = []
+        cur_application_step = self.parent_application_page.head_step
+        while cur_application_step:
+            if isinstance(cur_application_step, StartApplication):
+                if (
+                    hasattr(cur_application_step, "field_component")
+                    and cur_application_step.field_component
+                ):
+                    curr_x_path = cur_application_step.field_component.x_path
+                    if element_exists(curr_x_path):
+                        # append the current x_path to the list
+                        _previous_start_button_x_paths.append(curr_x_path)
+
+                        # append full x_path of the element
+                        elm = driver.find_element(By.XPATH, curr_x_path)
+                        _previous_start_button_x_paths.append(get_element_xpath(elm))
+
+            cur_application_step = cur_application_step.next
+
+        self._previous_start_button_x_paths = _previous_start_button_x_paths
+        return _previous_start_button_x_paths
 
     def proceed(self, retry=False):
         if not self.component_identified:
@@ -52,12 +85,13 @@ class StartApplication(PageComponent):
             f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title}."
             f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
             f"As a first step in the job application, I have to start application by clicking some button. Give XPath "
-            f"of the UI element clicking which I can start the job application. Be very careful about following "
+            f"of the visible UI element clicking which I can start the job application. Be very careful about following "
             f"criteria -\n"
-            f"The button should have word like start or something similar to start. It can be just one word like "
-            f"'Apply' as well also but definitely not 'Apply with <some_platform_like_linkedin_etc>' kind of text. It's"
-            f" not next step or submit application button or some other button also. If there is not any start "
-            f"application kind of button you can find then don't return XPath."
+            f"The button should have word like start, apply or something similar clicking which can seemingly start the "
+            f"job application . It can be just one word like 'Apply' as well also but definitely not 'Apply with "
+            f"<some_platform_like_linkedin_etc>' kind of text. It's not next step or submit application button or some "
+            f"other button also. If there is not any start application kind of button you can find then don't return "
+            f"XPath. If there are multiple start application buttons then prioritize the visible button."
         )
 
         class IsStartApplicationButtonPresent(Enum):
@@ -68,13 +102,13 @@ class StartApplication(PageComponent):
             is_start_application_button_present: IsStartApplicationButtonPresent = (
                 Field(
                     ...,
-                    description="Does start application button exist based on prompt criteria?",
+                    description="Does a visible start application button exist based on prompt criteria?",
                 )
             )
             x_path: str = Field(
                 ...,
-                description="XPath of the button to start the job application which can be used in selenium chrome "
-                "driver to search the button. Don't use HTML hierarchy to construct XPath.",
+                description="XPath of the visible button to start the job application which can be used in selenium "
+                "chrome driver to search the button. Don't use HTML hierarchy to construct XPath.",
             )
 
         button_found, button = get_gpt_response(
@@ -102,6 +136,20 @@ class StartApplication(PageComponent):
                     else:
                         button.x_path = correct_x_path
 
+                # check if the same button was already identified in previous steps
+                elm = driver.find_element(By.XPATH, button.x_path)
+                full_x_path = get_element_xpath(elm)
+
+                if (
+                    button.x_path in self.previous_start_button_x_paths
+                    or full_x_path in self.previous_start_button_x_paths
+                ):
+                    logger.warn(
+                        f"Start application button already identified in previous steps for "
+                        f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+                    )
+                    return
+
                 element = driver.find_element(By.XPATH, button.x_path)
                 element_text = element.text or ""
 
@@ -110,7 +158,7 @@ class StartApplication(PageComponent):
                     or "submit" in element_text.strip().lower()
                 ):
                     logger.warn(
-                        f"Start application button is actually submit button for "
+                        f"Start application button actually seems to be submit button for "
                         f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
                     )
                     return
