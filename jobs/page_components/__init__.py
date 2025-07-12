@@ -936,7 +936,7 @@ class ApplicationField:
         validation_prompt = type_specific_prompts[html_type]
 
         user_prompt = (
-            f"In am HTML of job application webpage for {job_title} "
+            f"In an HTML of job application webpage for {job_title} "
             f"there is a field with title {field_title} at XPath {field_x_path}.\n"
             f"When this field was clicked or typed in, javascript mutation observer observed that following elements "
             f"were added or modified in the DOM -\n{observed_elements_html}\n"

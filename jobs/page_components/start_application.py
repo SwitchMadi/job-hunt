@@ -19,6 +19,10 @@ from utilities.selenium import (
     switch_to_active_tab,
     element_exists,
     get_element_xpath,
+    start_dom_mutation_observer,
+    get_observed_elements,
+    stop_dom_mutation_observer,
+    is_stale,
 )
 
 driver = get_selenium_driver()
@@ -30,6 +34,7 @@ class StartApplication(PageComponent):
         self.parent_application_page = parent_application_page
 
         self.field_component = None
+        self.next_step_component = None
         self.component_identified = False
 
         self._previous_start_button_x_paths = None
@@ -163,6 +168,9 @@ class StartApplication(PageComponent):
                     )
                     return
 
+                original_tab = driver.current_window_handle
+                start_dom_mutation_observer()
+
                 self.field_component = Button(
                     x_path=button.x_path,
                     button_type="start_application",
@@ -173,6 +181,19 @@ class StartApplication(PageComponent):
                 if self.field_component.is_component_functional:
                     self.is_component_functional = True
                     self.component_identified = True
+
+                    switch_to_active_tab()
+                    current_tab = driver.current_window_handle
+
+                    if current_tab != original_tab:
+                        logger.info(
+                            "Switched to new tab after clicking start application button."
+                        )
+                        stop_dom_mutation_observer()
+                        return
+                    else:
+                        observed_elements = get_observed_elements()
+                        self._identify_step_after_start_application(observed_elements)
                 else:
                     raise Exception(
                         f"Couldn't extract start application button for {self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
@@ -184,10 +205,129 @@ class StartApplication(PageComponent):
                 f"Couldn't extract start application button for {self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
             )
 
+    def _identify_step_after_start_application(self, observed_elements):
+        global driver
+
+        observed_elements = [
+            el
+            for el in observed_elements
+            if not is_stale(el) and is_element_visible(element=el)
+        ]
+
+        if not observed_elements:
+            logger.warn(
+                f"No new elements observed after clicking start application button for "
+                f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+            )
+            return
+
+        observed_elements_html = "\n".join(
+            f"{i + 1}. Element {i + 1} - {minify_html_for_gpt_prompt(el.get_attribute('outerHTML'))}"
+            for i, el in enumerate(observed_elements)
+        )
+
+        user_prompt = (
+            f"In an HTML of job application webpage for {self.parent_application_page.parent_job.title}, "
+            f"I clicked on following button to start job application -\n"
+            f"{self.field_component.x_path}\n"
+            f"On clicks, I have set up a DOM mutation observer to observe any new elements that appear/change in the "
+            f"DOM. After clicking the button, following new elements appeared in the DOM -\n"
+            f"{observed_elements_html}\n"
+            f"Based on the observed elements, there can be following scenarios for next action to continue job "
+            f"application -\n"
+            f"1. Start application hasn't triggered completely and I need to click on some other button too to start "
+            f"the application.\n"
+            f"2. A pop up has appeared for taking some consent and I need to accept to continue further.\n"
+            f"3. Job application related form fields have appeared and I need to start answering the question.\n\n"
+            f"If it's scenario 1 or 2, then give XPath of the button that I need to click to continue job application, "
+            f"otherwise don't return any xpath. Also remember that if there are multiple valid buttons then return "
+            f"XPath of the visible button which is for manual application rather than using any social platforms "
+            f"like Linkedin, Indeed etc."
+        )
+
+        # define enum for next step
+        class NextStep(Enum):
+            click_another_button_to_start_application = (
+                "click_another_button_to_start_application"
+            )
+            accept_some_consent_popup = "accept_some_consent_popup"
+            fill_form_fields = "fill_form_fields"
+
+        class NextSteps(BaseModel):
+            next_step: NextStep = Field(
+                ...,
+                description="What is the next step to continue job application after clicking start application button?",
+            )
+            next_step_button_x_path: str = Field(
+                ...,
+                description="XPath of the another button to click to start job application or to accept some consent "
+                "popup. Don't use HTML hierarchy to construct XPath.",
+            )
+
+        next_step_found, next_steps = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=NextSteps,
+        )
+        if next_step_found:
+            if next_steps.next_step in [
+                NextStep.click_another_button_to_start_application,
+                NextStep.accept_some_consent_popup,
+            ]:
+                if not is_element_visible(next_steps.next_step_button_x_path):
+                    if (
+                        next_steps.next_step
+                        == NextStep.click_another_button_to_start_application
+                    ):
+                        prompt = "The x_path that we are trying to extract is of button to click to start job application."
+                    else:
+                        prompt = "The x_path that we are trying to extract is of button to accept consent popup."
+
+                    correct_x_path = ApplicationField.extract_correct_x_path(
+                        prev_x_path=next_steps.next_step_button_x_path,
+                        prompt=prompt,
+                        job_title=self.parent_application_page.parent_job.title,
+                        job_url=self.parent_application_page.url,
+                    )
+                    if not correct_x_path:
+                        raise Exception(
+                            f"Couldn't extract next step button XPath for "
+                            f"{self.parent_application_page.parent_job.title}. "
+                            f"URL - {self.parent_application_page.parent_job.url}"
+                        )
+                    else:
+                        next_steps.next_step_button_x_path = correct_x_path
+
+                self.next_step_component = Button(
+                    x_path=next_steps.next_step_button_x_path,
+                    button_type=next_steps.next_step.value,
+                    parent_application_page=self.parent_application_page,
+                )
+
+                self.next_step_component.proceed()
+                if not self.next_step_component.is_component_functional:
+                    logger.warn(
+                        f"Next step button {next_steps.next_step_button_x_path} is not functional for "
+                        f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+                    )
+            elif next_steps.next_step == NextStep.fill_form_fields:
+                logger.info(
+                    f"Next step is to fill form fields after clicking start application button for "
+                    f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+                )
+        else:
+            logger.warn(
+                f"No next step found after clicking start application button for "
+                f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+            )
+
     def to_dict(self):
         return {
             "class": self.__class__.__name__,
             "field_component": self.field_component.to_dict(),
+            "next_step_component": (
+                self.next_step_component.to_dict() if self.next_step_component else None
+            ),
             "next": self.next.to_dict() if self.next else None,
         }
 
@@ -204,6 +344,15 @@ class StartApplication(PageComponent):
             input_dict=input_dict["field_component"],
             parent_application_page=parent_application_page,
         )
+
+        if input_dict["next_step_component"]:
+            next_step_component_class = get_page_component_class_name(
+                class_name=input_dict["next_step_component"]["class"]
+            )
+            instance.next_step_component = next_step_component_class.from_dict(
+                input_dict=input_dict["next_step_component"],
+                parent_application_page=parent_application_page,
+            )
 
         instance.component_identified = True
 

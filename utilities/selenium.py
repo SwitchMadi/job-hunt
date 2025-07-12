@@ -401,16 +401,26 @@ def get_observed_elements(timeout=3, poll_frequency=0.25):
         time.sleep(poll_frequency)
 
     # Disconnect the observer from JS.
+    stop_dom_mutation_observer()
+
+    return elements
+
+
+def stop_dom_mutation_observer():
+    """
+    Stops the DOM MutationObserver and clears the observed elements.
+    """
+    global driver
+
     driver.execute_script(
         """
-        if(window.__observer) {
-            window.__observer.disconnect(); 
-            window.__observer = null; 
+        if (window.__observer) {
+            window.__observer.disconnect();
+            window.__observer = null;
         }
         window.__observedElements = [];
     """
     )
-    return elements
 
 
 def get_element_xpath(element, xpath_type="full"):
