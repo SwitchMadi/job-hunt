@@ -7,6 +7,7 @@ import time
 import yaml
 from enum import Enum
 
+from utilities import get_call_trace
 from utilities.logging import get_logger
 
 dotenv.load_dotenv()
@@ -17,6 +18,21 @@ config = yaml.safe_load(open("config.yml"))
 _cumulative_prompt_tokens = 0
 _cumulative_completion_tokens = 0
 _cumulative_total_tokens = 0
+
+
+def _log_call_trace():
+    """Log the call trace of the function that called this function."""
+    stack = get_call_trace()
+
+    trace = []
+    for frame in stack[
+        :-3
+    ]:  # Exclude the last 3 frames which are likely from this module
+        module = frame["module"]
+        func_name = frame["function"]
+        trace.append(f"{module}.{func_name}")
+
+    logger.info(f"GPT call trace: {' -> '.join(trace)}")
 
 
 def _update_token_usage(prompt_tokens, completion_tokens, total_tokens):
@@ -54,6 +70,8 @@ class EnumEncoder(json.JSONEncoder):
 def get_gpt_response(
     system_prompt, user_prompt, response_format=None, sleep_time=1, images=[]
 ):
+    _log_call_trace()
+
     try:
         user_content = [{"type": "text", "text": user_prompt}]
 

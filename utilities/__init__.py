@@ -10,6 +10,7 @@ import os
 import base64
 import hashlib
 import pytz
+import inspect
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives import padding
@@ -300,3 +301,23 @@ def take_screenshot(filename=None):
     screenshot.save(filename)
 
     return filename
+
+
+def get_call_trace():
+    stack = inspect.stack()
+
+    trace = []
+    for frame_info in reversed(stack):
+        module = inspect.getmodule(frame_info.frame)
+        module_name = module.__name__ if module else ""
+        func_name = frame_info.function
+        trace.append(
+            {
+                "module": module_name,
+                "function": func_name,
+                "line": frame_info.lineno,
+                "file": frame_info.filename,
+            }
+        )
+
+    return trace
