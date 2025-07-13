@@ -48,13 +48,14 @@ class CookiesConsent(PageComponent):
             f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title}."
             f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
             f"The webpage has some prompt visible regarding cookies consent. Analyse the whole HTML very carefully and "
-            f"provide XPath of the button to accept to all cookies."
+            f"provide XPath of the button to accept to all cookies. If there are multiple such buttons, provide the "
+            f"XPath of visible button that is most likely to be clicked by the user."
         )
 
         class ConsentAcceptanceButton(BaseModel):
             x_path: str = Field(
                 ...,
-                description="For the cookies consent, XPath of the button to accept to all cookies which can be used in"
+                description="For the cookies consent, XPath of the visible button to accept to all cookies which can be used in"
                 " selenium chrome driver to search the button. Don't use HTML hierarchy to construct XPath"
                 ".",
             )
