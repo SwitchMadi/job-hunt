@@ -6,7 +6,6 @@ from selenium.common import (
     TimeoutException,
 )
 from selenium.webdriver import ActionChains
-from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
@@ -16,6 +15,7 @@ from utilities.selenium import (
     is_element_visible,
     generalize_xpath_attributes,
     get_unique_element_by_xpath,
+    element_exists,
 )
 
 
@@ -70,6 +70,13 @@ class Button(PageComponent):
         global driver
 
         try:
+            if (
+                self.x_path.startswith("/")
+                and not self.x_path.startswith("//")
+                and not element_exists(self.x_path)
+            ):
+                self.x_path = "/" + self.x_path
+
             element = get_unique_element_by_xpath(self.x_path, self.title)
             if not element:
                 logger.warning(

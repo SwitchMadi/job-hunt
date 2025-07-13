@@ -11,6 +11,7 @@ from utilities.selenium import (
     get_active_element_after_click,
     start_dom_mutation_observer,
     get_unique_element_by_xpath,
+    element_exists,
 )
 
 
@@ -48,6 +49,13 @@ class TextInput(PageComponent):
 
         answer_input_successful = False
         try:
+            if (
+                self.x_path.startswith("/")
+                and not self.x_path.startswith("//")
+                and not element_exists(self.x_path)
+            ):
+                self.x_path = "/" + self.x_path
+
             element = get_unique_element_by_xpath(self.x_path, self.title)
             if not element:
                 logger.warning(
