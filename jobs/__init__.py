@@ -106,7 +106,7 @@ class Job:
         job_create_query = f"""
             insert into jobs.jobs
             (job_hash_id, job_url, title, company)
-            values ('{self.hash_id}', '{self.url}', '{self.title}', '{self.company}')
+            values ('{self.hash_id}', '{self.url}', '{self.title.replace("'", "''")}', '{self.company.replace("'", "''")}')
         """
         return execute_sql_query(job_create_query)
 
