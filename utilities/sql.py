@@ -95,4 +95,4 @@ def execute_sql_query(query, con=None, return_result=False):
         if close_con:
             con.close()
         logger.exception(f"Error while executing SQL query - {query}\nError - {e}")
-        return False
+        raise e
