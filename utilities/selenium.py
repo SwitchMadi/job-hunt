@@ -454,50 +454,87 @@ def get_element_xpath(element, xpath_type="full"):
         elif xpath_type == "relative":
             return driver.execute_script(
                 """
-            function getElementXPath(elt) {
-                function isUnique(xpath) {
-                    return document.evaluate(xpath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null).snapshotLength === 1;
-                }
-    
-                function getIndex(elt) {
-                    var i = 1;
-                    var sib = elt.previousSibling;
-                    while (sib) {
-                        if (sib.nodeType === 1 && sib.tagName === elt.tagName) i++;
-                        sib = sib.previousSibling;
+                function getElementFullXPath(element) {
+                    if (element.id !== '')
+                        return 'id("' + element.id + '")';
+                    if (element === document.documentElement)
+                        return element.tagName.toLowerCase();
+        
+                    var ix = 0;
+                    var siblings = element.parentNode.childNodes;
+                    for (var i = 0; i < siblings.length; i++) {
+                        var sibling = siblings[i];
+                        if (sibling === element)
+                            return getElementXPath(element.parentNode) + '/' + element.tagName.toLowerCase() + '[' + (ix + 1) + ']';
+                        if (sibling.nodeType === 1 && sibling.tagName === element.tagName)
+                            ix++;
                     }
-                    return i;
-                }
-    
-                function getPath(elt) {
-                    if (elt == document.body || elt == document.documentElement) return null;
-    
-                    var segments = [];
-                    while (elt && elt.nodeType === 1 && elt !== document.body && elt !== document.documentElement) {
-                        var tag = elt.tagName.toLowerCase();
-    
-                        // Prefer id if it's unique
-                        if (elt.id) {
-                            var xpath = '//' + tag + '[@id="' + elt.id + '"]';
-                            if (isUnique(xpath)) return xpath;
+                };
+                
+                function getElementXPath(element) {
+                    function isUnique(xpathExpression) {
+                        return document.evaluate(
+                            xpathExpression,
+                            document,
+                            null,
+                            XPathResult.ORDERED_NODE_SNAPSHOT_TYPE,
+                            null
+                        ).snapshotLength === 1;
+                    }
+                
+                    function getIndex(node) {
+                        var index = 1;
+                        var sibling = node.previousSibling;
+                        while (sibling) {
+                            if (sibling.nodeType === 1 && sibling.tagName === node.tagName) {
+                                index++;
+                            }
+                            sibling = sibling.previousSibling;
                         }
-    
-                        var index = getIndex(elt);
-                        segments.unshift(tag + '[' + index + ']');
-    
-                        var testXpath = '//' + segments.join('/');
-                        if (isUnique(testXpath)) return testXpath;
-    
-                        elt = elt.parentNode;
+                        return index;
                     }
-                    return '/' + segments.join('/');
+                
+                    function buildPath(startNode) {
+                        var segments = [];
+                        var currentNode = startNode;
+                
+                        // keep climbing up through html/body as well
+                        while (currentNode && currentNode.nodeType === 1) {
+                            var tagName = currentNode.tagName.toLowerCase();
+                
+                            // ID shortcut, but include any child segments so we still point to the original element
+                            if (currentNode.id) {
+                                var idBasedPath = '//' + tagName + '[@id="' + currentNode.id + '"]';
+                                if (isUnique(idBasedPath)) {
+                                    if (segments.length) {
+                                        return idBasedPath + '/' + segments.join('/');
+                                    }
+                                    return idBasedPath;
+                                }
+                            }
+                
+                            // positional segment
+                            var position = getIndex(currentNode);
+                            segments.unshift(tagName + '[' + position + ']');
+                
+                            // try a //path
+                            var partialPath = '//' + segments.join('/');
+                            if (isUnique(partialPath)) {
+                                return partialPath;
+                            }
+                
+                            currentNode = currentNode.parentNode;
+                        }
+                
+                        // full xpath fallback
+                        return getElementFullXPath(startNode);
+                    }
+                
+                    return buildPath(element);
                 }
     
-                return getPath(arguments[0]);
-            }
-    
-            return getElementXPath(arguments[0]);
-            """,
+                return getElementXPath(arguments[0]);
+                """,
                 element,
             )
         else:
