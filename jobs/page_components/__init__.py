@@ -484,6 +484,15 @@ class ApplicationField:
                     options=self.options,
                     parent_application_page=self.parent_application_page,
                 )
+            elif self.html_type == "date_field":
+                from jobs.page_components.date_field import DateField
+
+                return DateField(
+                    title=self.title,
+                    question=self.question,
+                    category=self.category,
+                    parent_application_page=self.parent_application_page,
+                )
 
             return None
         else:
@@ -512,6 +521,12 @@ class ApplicationField:
             is_search_field = SearchField.validate_search_field(x_path, field_title)
             if is_search_field:
                 return "search_field", None
+
+            is_calendar_widget_present = self.validate_calendar_widget(
+                x_path, field_title, text_to_click=self.title_to_click
+            )
+            if is_calendar_widget_present:
+                return "date_field", None
 
             is_container_present, container_x_path = self.validate_options_container(
                 x_path, field_title, job_title, text_to_click=self.title_to_click
@@ -641,6 +656,44 @@ class ApplicationField:
 
         simulate_empty_area_click(text_to_click=text_to_click or field_title)
         return False, None
+
+    @classmethod
+    def validate_calendar_widget(cls, x_path, field_title, text_to_click=None):
+        simulate_empty_area_click(text_to_click=text_to_click or field_title)
+
+        start_dom_mutation_observer()
+
+        from jobs import Button
+
+        try:
+            element_button = Button(
+                x_path=x_path,
+                button_type="calendar",
+                title=field_title,
+                parent_application_page=None,
+            )
+            element_button.proceed()
+        except (ElementClickInterceptedException, ElementNotInteractableException):
+            element_button = Button(
+                x_path=find_clickable_parent_xpath(x_path),
+                button_type="calendar",
+                title=field_title,
+                parent_application_page=None,
+            )
+            element_button.proceed()
+
+        observed_elements = get_observed_elements()
+
+        is_calendar_widget_present = False
+        if observed_elements:
+            from jobs.page_components.date_field import DateField
+
+            is_calendar_widget_present = DateField.identify_calendar_using_regex(
+                observed_elements
+            )
+
+        simulate_empty_area_click(text_to_click=text_to_click or field_title)
+        return is_calendar_widget_present
 
     @classmethod
     def get_field_value(cls, field_category, user):
