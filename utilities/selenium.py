@@ -747,23 +747,39 @@ def simulate_empty_area_click(text_to_click=None):
 
             driver.execute_script(
                 """
-                const element = arguments[0];
-                const rect = element.getBoundingClientRect();
-                const elementTop = rect.top + window.pageYOffset;
-                const viewportHeight = window.innerHeight;
-                const offsetToCenter = elementTop - (viewportHeight / 2) + (rect.height / 2) + 100;
-                window.scrollTo({top: offsetToCenter, behavior: 'auto'});
+              // 1. Make sure the element (and its left‑edge) is in view
+              arguments[0].scrollIntoView({block: 'center', inline: 'center'});
+
+              // 2. Use the element's bounding box in viewport coordinates
+              const rect = arguments[0].getBoundingClientRect();
+              // 2px to the left of its left edge, vertically centered
+              const clickX = rect.left -2;
+              const clickY = rect.top + rect.height / 2;
+
+              // 3. Grab whatever's actually under that point
+              const target = document.elementFromPoint(clickX, clickY);
+              if (!target) {
+                throw new Error(`No element at viewport coords (${clickX}, ${clickY})`);
+              }
+
+              // 4. Synthesize and dispatch a click event
+              const clickEvent = new MouseEvent('click', {
+                view: window,
+                bubbles: true,
+                cancelable: true,
+                clientX: clickX,
+                clientY: clickY
+              });
+              target.dispatchEvent(clickEvent);
             """,
                 element,
             )
-
-            element.click()
         except (NoSuchElementException, InvalidSelectorException):
             logging.warning(f"Element with text '{text_to_click}' not found.")
         except ElementClickInterceptedException:
             element = driver.find_element(By.XPATH, xpath)
             actions = ActionChains(driver)
-            actions.move_to_element(element).click().perform()
+            actions.move_to_element_with_offset(element, -35, 0).click().perform()
 
     return
 
