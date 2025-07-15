@@ -101,11 +101,34 @@ class DateField(PageComponent):
 
             observed_elements = get_observed_elements()
             observed_elements = [el for el in observed_elements if not is_stale(el)]
+
+            # if no elements observed, retry clicking using date component xpath
+            if not observed_elements and self.components.get("date", {}).get("xpath"):
+                start_dom_mutation_observer()
+                button = Button(
+                    x_path=self.components["date"]["xpath"],
+                    button_type="date",
+                    parent_application_page=self.parent_application_page,
+                )
+                button.proceed()
+
+                observed_elements = get_observed_elements()
+                observed_elements = [el for el in observed_elements if not is_stale(el)]
+
             if observed_elements:
-                is_regex_op_successful = self._identify_calendar_using_regex(
+                is_regex_op_successful = DateField.identify_calendar_using_regex(
                     observed_elements
                 )
                 if not is_regex_op_successful:
+                    simulate_empty_area_click(text_to_click=self.title)
+
+                    start_dom_mutation_observer()
+                    button.proceed()
+                    observed_elements = get_observed_elements()
+                    observed_elements = [
+                        el for el in observed_elements if not is_stale(el)
+                    ]
+
                     self._identify_calendar_using_llm(observed_elements)
 
         if self.components.get("date", {}).get("xpath") and element_exists(
@@ -127,8 +150,8 @@ class DateField(PageComponent):
         simulate_empty_area_click(text_to_click=self.title)
         return False
 
-    @staticmethod
-    def _identify_calendar_using_regex(observed_elements):
+    @classmethod
+    def identify_calendar_using_regex(cls, observed_elements):
         global driver
 
         DAY_NUMBERS = {str(i) for i in range(1, 28)}
@@ -161,12 +184,18 @@ class DateField(PageComponent):
             if DAY_NUMBERS.issubset(words):
                 logger.debug("All days 1–27 detected")
                 try:
-                    el.find_element(By.XPATH, ".//*[text()='27']").click()
-                    logger.debug("Clicked on date 27.")
+                    specific_date = el.find_element(By.XPATH, ".//*[text()='27']")
+                    specific_date.click()
+                    logger.info("Clicked on date 27.")
                     return True
                 except NoSuchElementException:
-                    logger.debug("Date 27 found in text but not clickable.")
+                    logger.warn("Date 27 not found in text.")
                     return False
+                except Exception as e:
+                    logger.warn(
+                        f"Error clicking date 27: {e} but element found with text - {el.text}"
+                    )
+                    return True
 
             # Case 2: All month names found
             lower_words = {
@@ -180,30 +209,38 @@ class DateField(PageComponent):
                         ".//*[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'jan')]",
                     )
                     jan_el.click()
-                    logger.debug("Clicked on Jan.")
+                    logger.info("Clicked on Jan.")
                 except NoSuchElementException:
-                    logger.debug("Month 'Jan' not clickable.")
+                    logger.warn("Month 'Jan' not clickable.")
                     return False
 
                 # After clicking Jan, recheck for days
                 if el.is_displayed():
-                    try:
-                        outer_html_after = el.get_attribute("outerHTML")
-                        text_after = re.sub(r"<.*?>", " ", outer_html_after)
-                        words_after = set(re.findall(r"\b\w+\b", text_after))
-                        if DAY_NUMBERS.issubset(words_after):
-                            el.find_element(By.XPATH, ".//*[text()='27']").click()
-                            logger.debug("Clicked on date 27 after month selection.")
+                    outer_html_after = el.get_attribute("outerHTML")
+                    text_after = re.sub(r"<.*?>", " ", outer_html_after)
+                    words_after = set(re.findall(r"\b\w+\b", text_after))
+                    if DAY_NUMBERS.issubset(words_after):
+                        try:
+                            specific_date = el.find_element(
+                                By.XPATH, ".//*[text()='27']"
+                            )
+                            specific_date.click()
+                            logger.info("Clicked on date 27 after month selection.")
                             return True
-                        else:
-                            logger.debug("Days not detected after month selection.")
+                        except NoSuchElementException:
+                            logger.warn("Date 27 not found in text.")
                             return False
-                    except NoSuchElementException:
-                        logger.debug("Date 27 not clickable after month selection.")
+                        except Exception as e:
+                            logger.warn(
+                                f"Error clicking date 27: {e} but element found with text - {el.text}"
+                            )
+                            return True
+                    else:
+                        logger.warn("Days not detected after month selection.")
                         return False
 
-        logger.debug("No calendar widget identified.")
-        return True
+        logger.info("No calendar widget identified.")
+        return False
 
     def _identify_calendar_using_llm(
         self, observed_elements, retry=False, prev_xpath=None
