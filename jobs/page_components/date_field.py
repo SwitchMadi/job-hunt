@@ -4,6 +4,7 @@ from typing import Optional
 from enum import Enum
 import re
 from selenium.common.exceptions import NoSuchElementException
+from datetime import date
 
 from jobs import ApplicationField, Button
 from jobs.page_components import PageComponent, logger, get_page_component_class_name
@@ -150,11 +151,27 @@ class DateField(PageComponent):
         simulate_empty_area_click(text_to_click=self.title)
         return False
 
-    @classmethod
-    def identify_calendar_using_regex(cls, observed_elements):
-        global driver
-
+    @staticmethod
+    def _element_has_day_numbers(el):
+        """Check if the element contains all day numbers from 1 to 27."""
         DAY_NUMBERS = {str(i) for i in range(1, 28)}
+
+        try:
+            outer_html = el.get_attribute("outerHTML")
+            # Extract and tokenize text
+            text_content = re.sub(r"<.*?>", " ", outer_html)
+            words = set(re.findall(r"\b\w+\b", text_content))
+            if DAY_NUMBERS.issubset(words):
+                return True
+        except Exception as e:
+            logger.warn(
+                f"Error getting outerHTML for potential calendar widget element: {str(e)}"
+            )
+            return False
+
+    @staticmethod
+    def _element_has_month_names(el):
+        """Check if the element contains all day months from Jan to Dec."""
         MONTH_NAMES = {
             "Jan",
             "Feb",
@@ -170,74 +187,100 @@ class DateField(PageComponent):
             "Dec",
         }
 
-        for el in observed_elements:
-            try:
-                outer_html = el.get_attribute("outerHTML")
-            except Exception:
-                continue
-
+        try:
+            outer_html = el.get_attribute("outerHTML")
             # Extract and tokenize text
             text_content = re.sub(r"<.*?>", " ", outer_html)
             words = set(re.findall(r"\b\w+\b", text_content))
-
-            # Case 1: All days 1–27 are found
-            if DAY_NUMBERS.issubset(words):
-                logger.debug("All days 1–27 detected")
-                try:
-                    specific_date = el.find_element(By.XPATH, ".//*[text()='27']")
-                    specific_date.click()
-                    logger.info("Clicked on date 27.")
-                    return True
-                except NoSuchElementException:
-                    logger.warn("Date 27 not found in text.")
-                    return False
-                except Exception as e:
-                    logger.warn(
-                        f"Error clicking date 27: {e} but element found with text - {el.text}"
-                    )
-                    return True
-
-            # Case 2: All month names found
             lower_words = {
                 w[:3].capitalize() for w in words if w.isalpha() and len(w) >= 3
             }
             if MONTH_NAMES.issubset(lower_words):
-                logger.debug("All months Jan–Dec detected")
+                return True
+        except Exception as e:
+            logger.warn(
+                f"Error getting outerHTML for potential calendar widget element: {str(e)}"
+            )
+            return False
+
+    @staticmethod
+    def _click_date_element(el, day):
+        """Helper method to click on a specific date element."""
+        try:
+            specific_date = el.find_element(By.XPATH, ".//*[text()='27']")
+
+            # finding calendar parent element with all days
+            parent = specific_date.find_element(By.XPATH, "./..")
+            while not DateField._element_has_day_numbers(parent):
                 try:
-                    jan_el = el.find_element(
-                        By.XPATH,
-                        ".//*[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'jan')]",
+                    parent = parent.find_element(By.XPATH, "./..")
+                except Exception as e:
+                    logger.warn(
+                        f"Parent element of 27th date not found while traversing up - {str(e)}"
                     )
-                    jan_el.click()
-                    logger.info("Clicked on Jan.")
-                except NoSuchElementException:
-                    logger.warn("Month 'Jan' not clickable.")
                     return False
 
-                # After clicking Jan, recheck for days
-                if el.is_displayed():
-                    outer_html_after = el.get_attribute("outerHTML")
-                    text_after = re.sub(r"<.*?>", " ", outer_html_after)
-                    words_after = set(re.findall(r"\b\w+\b", text_after))
-                    if DAY_NUMBERS.issubset(words_after):
-                        try:
-                            specific_date = el.find_element(
-                                By.XPATH, ".//*[text()='27']"
-                            )
-                            specific_date.click()
-                            logger.info("Clicked on date 27 after month selection.")
-                            return True
-                        except NoSuchElementException:
-                            logger.warn("Date 27 not found in text.")
-                            return False
-                        except Exception as e:
-                            logger.warn(
-                                f"Error clicking date 27: {e} but element found with text - {el.text}"
-                            )
-                            return True
-                    else:
-                        logger.warn("Days not detected after month selection.")
-                        return False
+            try:
+                specific_date = el.find_element(By.XPATH, f".//*[text()='{day:02d}']")
+            except NoSuchElementException:
+                specific_date = el.find_element(By.XPATH, f".//*[text()='{day}']")
+
+            specific_date.click()
+            logger.info(f"Clicked on date {day}.")
+            return True
+        except NoSuchElementException:
+            logger.warn(f"Date 27 or {day} not found in text.")
+            return False
+        except Exception as e:
+            logger.warn(
+                f"Error clicking date 27 or {day}: {e} but element found with text - {el.text}"
+            )
+            return True
+
+    @staticmethod
+    def _get_date_values():
+        """Get the current date values for day and month."""
+        today = date.today()
+        day, month = today.day, today.month
+        if day == month and day > 1:
+            day -= 1
+
+        month_name = today.strftime("%b").lower()
+
+        return day, month, month_name
+
+    @classmethod
+    def identify_calendar_using_regex(cls, observed_elements):
+        global driver
+
+        day, month, month_name = cls._get_date_values()
+
+        for el in observed_elements:
+            # Case 1: All days 1–27 are found
+            if cls._element_has_day_numbers(el):
+                logger.info("All days 1–27 detected")
+                return cls._click_date_element(el, day)
+
+            # Case 2: All month names found
+            if cls._element_has_month_names(el):
+                logger.info("All months Jan–Dec detected")
+                try:
+                    month_el = el.find_element(
+                        By.XPATH,
+                        f".//*[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '{month_name}')]",
+                    )
+                    month_el.click()
+                    logger.info(f"Clicked on {month_name}.")
+                except NoSuchElementException:
+                    logger.warn(f"Month '{month_name}' not clickable.")
+                    return False
+
+                # After clicking month name, recheck for days
+                if el.is_displayed() and cls._element_has_day_numbers(el):
+                    return cls._click_date_element(el, day)
+                else:
+                    logger.warn("Days not detected after month selection.")
+                    return False
 
         logger.info("No calendar widget identified.")
         return False
