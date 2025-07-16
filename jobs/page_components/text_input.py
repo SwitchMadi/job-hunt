@@ -97,6 +97,24 @@ class TextInput(PageComponent):
                 for letter in str(self.answer):
                     active_element = driver.switch_to.active_element
                     active_element.send_keys(f"{letter}")
+
+                if self.category == "date_field":
+                    actual_value = element.get_attribute("value") or element.text or ""
+                    if not actual_value or (
+                        not str(self.answer)
+                        .strip()
+                        .lower()
+                        .startswith(actual_value.strip().lower())
+                    ):
+                        # Force set using JavaScript if value doesn't match
+                        driver.execute_script(
+                            "arguments[0].value = arguments[1]; "
+                            "arguments[0].dispatchEvent(new Event('input', { bubbles: true })); "
+                            "arguments[0].dispatchEvent(new Event('change', { bubbles: true }));",
+                            element,
+                            str(self.answer),
+                        )
+
                 answer_input_successful = True
             else:
                 try:
