@@ -161,7 +161,7 @@ class DateField(PageComponent):
     def _replace_day_in_date(date_str: str, day: int, month: int) -> str:
         """
         Replace occurrences of `day` in `date_str` according to:
-        
+
         1. If day == 1 and month == 1:
         a) Look for "01" as a whole number (not part of e.g. "2001").
             - If there's exactly one occurrence, replace it with "27" and return.
@@ -177,31 +177,31 @@ class DateField(PageComponent):
         # Case 1: day = 1, month = 1
         if day == 1 and month == 1:
             # a) leading-zero pattern
-            p0 = r'(?<!\d)01(?!\d)'
+            p0 = r"(?<!\d)01(?!\d)"
             zero_hits = re.findall(p0, date_str)
             if len(zero_hits) > 1:
                 return date_str
             if len(zero_hits) == 1:
-                return re.sub(p0, '27', date_str)
+                return re.sub(p0, "27", date_str)
 
             # b) no-leading-zero pattern
-            p1 = r'(?<!\d)1(?!\d)'
+            p1 = r"(?<!\d)1(?!\d)"
             one_hits = re.findall(p1, date_str)
             if len(one_hits) == 1:
-                return re.sub(p1, '27', date_str)
+                return re.sub(p1, "27", date_str)
             return date_str
 
         # Case 2: day != 1
         # a) try with leading zero
         day_zero = f"{day:02d}"
-        p0 = rf'(?<!\d){day_zero}(?!\d)'
+        p0 = rf"(?<!\d){day_zero}(?!\d)"
         if re.search(p0, date_str):
-            return re.sub(p0, '27', date_str)
+            return re.sub(p0, "27", date_str)
 
         # b) try without leading zero
-        p = rf'(?<!\d){day}(?!\d)'
+        p = rf"(?<!\d){day}(?!\d)"
         if re.search(p, date_str):
-            return re.sub(p, '27', date_str)
+            return re.sub(p, "27", date_str)
 
         # c) nothing found
         return date_str
@@ -353,7 +353,7 @@ class DateField(PageComponent):
             self.has_calendar_button = False
             simulate_empty_area_click()
             return None
-        
+
         day, _, _ = self._get_date_values()
 
         user_prompt = (
