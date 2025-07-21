@@ -8,11 +8,10 @@ s3_bucket: job-hunt-storage
 scraping:
   linkedin:
     login_pause: false
-    max_job_count: 250
+    max_job_count: 350
     jobs_urls:
-      - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=100811329&keywords=engineering%20manager&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
-      - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=100811329&keywords=principal%20engineer&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
-      - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=100811329&keywords=software&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=92000000&keywords=staff%20software%20engineer&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?f_F=it%2Ceng&f_E=3%2C4%2C5%2C6&f_JT=F&f_TPR=r86400&geoId=92000000&keywords=lead%20backend%20engineer&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true&sortBy=R
 startup_input: C:\Users\JobHunt\Desktop\startup_input.yml
 openai_model: gpt-4o-mini-2024-07-18
 user_email: bhaskar2choudhary@gmail.com
