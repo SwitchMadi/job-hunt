@@ -28,6 +28,8 @@ import glob
 import htmlmin
 import re
 import psutil
+import json
+from urllib.parse import urlparse, parse_qsl
 
 
 driver = None
@@ -52,6 +54,19 @@ def get_selenium_driver():
                 options.add_argument(
                     "--start-maximized"
                 )  # open Browser in maximized mode
+
+            options.set_capability("goog:chromeOptions", {"w3c": False})
+
+            # Tell ChromeDriver to collect performance logs
+            options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
+
+            # Enable network in perfLoggingPrefs
+            options.add_experimental_option(
+                "perfLoggingPrefs",
+                {
+                    "enableNetwork": True,
+                },
+            )
 
             options.add_argument(
                 "--disable-blink-features=AutomationControlled"
@@ -965,6 +980,9 @@ def start_network_observer():
     """
     )
 
+    # Clear any previously captured requests from chromedriver performance logs
+    driver.get_log("performance")
+
 
 def stop_network_observer():
     global driver
@@ -987,7 +1005,31 @@ def stop_network_observer():
 def get_observed_network_calls():
     global driver
 
-    return driver.execute_script("return window.capturedRequests || [];")
+    js_captured_requests = driver.execute_script(
+        "return window.capturedRequests || [];"
+    )
+
+    # chromedriver captures network logs in a different format
+    logs = driver.get_log("performance")
+    events = [json.loads(e["message"])["message"] for e in logs]
+
+    # filter for the actual request payloads
+    driver_captured_requests = []
+    for ev in events:
+        if ev["method"] == "Network.requestWillBeSent":
+            req = ev["params"]["request"]
+
+            # add your decodedQueryParams field
+            parsed = urlparse(req["url"])
+            req["decodedQueryParams"] = dict(parse_qsl(parsed.query))
+
+            if req["method"] == "POST":
+                req["body"] = req["postData"]
+                del req["postData"]
+
+            driver_captured_requests.append(req)
+
+    return js_captured_requests + driver_captured_requests
 
 
 def clear_text_field(x_path, title=None, skip_all_sections=False):
