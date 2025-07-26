@@ -85,13 +85,13 @@ class TextInput(PageComponent):
             if not self.answer:
                 return answer_input_successful
 
+            if start_mutation_observer:
+                start_dom_mutation_observer(timeout=1500)
+
             if not self.category.endswith(("- month", "- day", "- year")):
                 clear_text_field(self.x_path, title=self.title)
 
             element = get_active_element_after_click(self.x_path, title=self.title)
-
-            if start_mutation_observer:
-                start_dom_mutation_observer(timeout=1500)
 
             if self.category in ["otp_textbox", "date_field"]:
                 for letter in str(self.answer):
