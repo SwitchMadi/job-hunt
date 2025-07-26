@@ -93,7 +93,7 @@ class Button(PageComponent):
                 const elementTop = rect.top + window.pageYOffset;
                 const viewportHeight = window.innerHeight;
                 const offsetToCenter = elementTop - (viewportHeight / 2) + (rect.height / 2) + 100;
-                window.scrollTo({top: offsetToCenter, behavior: 'auto'});
+                window.scrollTo({top: offsetToCenter, behavior: 'instant'});
             """,
                 element,
             )
@@ -123,7 +123,7 @@ class Button(PageComponent):
                 WebDriverWait(driver, 5).until(EC.element_to_be_clickable(element))
                 element.click()
             elif (element.tag_name == "input") or (
-                self.button_type == "dropdown_option"
+                self.button_type in ["dropdown_option", "upload"]
             ):
                 actions = ActionChains(driver)
                 actions.move_to_element(element).click().perform()
