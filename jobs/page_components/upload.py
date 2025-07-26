@@ -10,8 +10,10 @@ import platform
 
 from jobs.page_components import PageComponent, logger, get_page_component_class_name
 from jobs.page_components.button import Button
-from utilities.selenium import get_selenium_driver
-
+from utilities.selenium import (
+    get_selenium_driver,
+    get_element_xpath,
+)
 
 pyautogui.FAILSAFE = False
 
@@ -41,6 +43,37 @@ class Upload(PageComponent):
             )
 
         try:
+            element = driver.find_element(By.XPATH, self.x_path)
+            size = element.size
+            if not size or size["width"] <= 1 or size["height"] <= 1:
+                logger.warn(
+                    f"Element with x_path {self.x_path} is not visible or has zero size. Finding sibling button..."
+                )
+                element_siblings = element.find_elements(
+                    By.XPATH, "./preceding-sibling::* | ./following-sibling::*"
+                )
+                right_sibling_found = False
+                for sibling in element_siblings:
+                    if (
+                        sibling.tag_name == "button"
+                        and sibling.is_displayed()
+                        and sibling.size["width"] > 1
+                        and sibling.size["height"] > 1
+                    ):
+                        self.x_path = get_element_xpath(sibling, xpath_type="relative")
+                        right_sibling_found = True
+                        logger.warn(
+                            f"Using sibling element with x_path {self.x_path} for upload."
+                        )
+                        break
+
+                if not right_sibling_found:
+                    parent = element.find_element(By.XPATH, "./..")
+                    self.x_path = get_element_xpath(parent, xpath_type="relative")
+                    logger.warn(
+                        f"No suitable sibling button found. Using parent element with x_path {self.x_path} for upload."
+                    )
+
             upload_button = Button(
                 x_path=self.x_path,
                 button_type="upload",
