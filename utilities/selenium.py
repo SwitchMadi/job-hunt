@@ -764,7 +764,7 @@ def simulate_empty_area_click(text_to_click=None):
             driver.execute_script(
                 """
               // 1. Make sure the element (and its left‑edge) is in view
-              arguments[0].scrollIntoView({block: 'center', inline: 'center'});
+              arguments[0].scrollIntoView({block: 'center', inline: 'center', behavior: 'instant'});
 
               // 2. Use the element's bounding box in viewport coordinates
               const rect = arguments[0].getBoundingClientRect();
