@@ -580,7 +580,7 @@ class ApplicationPage:
                 f"Error while applying for user {self.parent_job.user.id} for job {self.parent_job.id} - "
                 f"{self.parent_job.title}. Error - {e}"
             )
-            remarks = str(e).replace("'", "''")
+            remarks = str(e)
             self._update_application_status(application_id, "failed", remarks)
 
             if not steps_identified_at_beginning:
@@ -621,7 +621,7 @@ class ApplicationPage:
         query = f"""
             UPDATE users.job_applications
             SET application_status = '{status}',
-                remarks = {"'" + remarks + "'" if remarks else "null"}
+                remarks = {"'" + remarks.replace("'", "''") + "'" if remarks else "null"}
             WHERE id = {application_id};
         """
         execute_sql_query(query)
@@ -642,7 +642,7 @@ class ApplicationPage:
                         update jobs.application_steps
                         set is_identification_complete = true,
                             is_application_feasible = {"true" if is_application_feasible else "false"},
-                            remarks = {"'" + remarks + "'" if remarks else "null"}
+                            remarks = {"'" + remarks.replace("'", "''") + "'" if remarks else "null"}
                         where job_id = {job_id}
                         and is_active;
                      """
@@ -654,7 +654,7 @@ class ApplicationPage:
                             {job_id},
                             true, 
                             {"true" if is_application_feasible else "false"},
-                            {"'" + remarks + "'" if remarks else "null"}
+                            {"'" + remarks.replace("'", "''") + "'" if remarks else "null"}
                         );
                      """
 
