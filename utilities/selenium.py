@@ -769,7 +769,7 @@ def simulate_empty_area_click(text_to_click=None):
               // 2. Use the element's bounding box in viewport coordinates
               const rect = arguments[0].getBoundingClientRect();
               // 2px to the left of its left edge, vertically centered
-              const clickX = rect.left -2;
+              const clickX = rect.left - 2;
               const clickY = rect.top + rect.height / 2;
 
               // 3. Grab whatever's actually under that point
@@ -1039,6 +1039,7 @@ def clear_text_field(x_path, title=None, skip_all_sections=False):
 
     global driver
 
+    simulate_empty_area_click()
     input_field = get_active_element_after_click(x_path, title=title)
 
     value = input_field.get_attribute("value") or input_field.text or ""
@@ -1087,6 +1088,7 @@ def clear_text_field(x_path, title=None, skip_all_sections=False):
             pass
 
     if is_stale(input_field):
+        simulate_empty_area_click()
         input_field = get_active_element_after_click(x_path, title=title)
 
     # Directly set the value to empty and dispatch an input event
@@ -1103,8 +1105,6 @@ def get_active_element_after_click(x_path, title=None):
     """
 
     global driver
-
-    simulate_empty_area_click()
 
     element = get_unique_element_by_xpath(x_path, title=title)
     driver.execute_script(

@@ -12,6 +12,7 @@ from utilities.selenium import (
     start_dom_mutation_observer,
     get_unique_element_by_xpath,
     element_exists,
+    simulate_empty_area_click,
 )
 
 
@@ -85,11 +86,13 @@ class TextInput(PageComponent):
             if not self.answer:
                 return answer_input_successful
 
-            if start_mutation_observer:
-                start_dom_mutation_observer(timeout=1500)
-
             if not self.category.endswith(("- month", "- day", "- year")):
                 clear_text_field(self.x_path, title=self.title)
+
+            simulate_empty_area_click(text_to_click=self.title)
+
+            if start_mutation_observer:
+                start_dom_mutation_observer(timeout=1500)
 
             element = get_active_element_after_click(self.x_path, title=self.title)
 
