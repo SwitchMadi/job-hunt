@@ -56,6 +56,18 @@ try:
         for curr_job_id in jobs:
             logger.info(f"Identifying steps for job ID: {curr_job_id}")
 
+            # Uploading screenshot before starting the identification process
+            user = User(email=config["user_email"])
+
+            screenshot_filename = f"jobId-{curr_job_id}--userId-{user.id}--start.png"
+            take_screenshot(filename=screenshot_filename)
+
+            s3 = S3Bucket(bucket_name=config["s3_bucket"])
+            file_s3_path = f"user_data/applications/screenshots/{screenshot_filename}"
+            s3.upload_data(
+                file_local_path=screenshot_filename, file_s3_path=file_s3_path
+            )
+
             python_executable = sys.executable
             proc = subprocess.Popen(
                 [
