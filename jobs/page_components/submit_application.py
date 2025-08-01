@@ -106,8 +106,6 @@ class SubmitApplication(PageComponent):
                     )
                     time.sleep(5)
 
-                    self._delete_downloaded_resume()
-
                 elif not retry:
                     self._identify(retry=True)
                 else:
@@ -122,21 +120,6 @@ class SubmitApplication(PageComponent):
                 f"Couldn't extract submit application button for {self.parent_application_page.parent_job.title}. "
                 f"URL - {self.parent_application_page.url}"
             )
-
-    def _delete_downloaded_resume(self):
-        cur_application_step = self.parent_application_page.head_step
-        while cur_application_step:
-            if isinstance(cur_application_step, ResumeUpload):
-                try:
-                    os.remove(cur_application_step.resume_file_path)
-                except FileNotFoundError:
-                    pass
-
-                return
-
-            cur_application_step = cur_application_step.next
-
-        return
 
     def to_dict(self):
         return {

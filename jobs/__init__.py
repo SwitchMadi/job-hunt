@@ -592,6 +592,9 @@ class ApplicationPage:
 
             return None
         finally:
+            # Delete downloaded resume if any
+            self._delete_downloaded_resume()
+            
             # Upload screenshot to S3
             try:
                 screenshot_filename = (
@@ -720,6 +723,21 @@ class ApplicationPage:
                 f"{self.parent_job.title}"
             )
             return None, None, None
+    
+    def _delete_downloaded_resume(self):
+        cur_application_step = self.head_step
+        while cur_application_step:
+            if isinstance(cur_application_step, ResumeUpload):
+                try:
+                    os.remove(cur_application_step.resume_file_path)
+                except FileNotFoundError:
+                    pass
+
+                return
+
+            cur_application_step = cur_application_step.next
+
+        return
 
     # Identify job page components
     def _identify_application_steps(self):
