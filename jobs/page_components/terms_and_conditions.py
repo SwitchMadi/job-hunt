@@ -1,19 +1,16 @@
 from pydantic import BaseModel, Field
+from enum import Enum
 
 from jobs.page_components import (
     PageComponent,
     get_page_component_class_name,
-    logger,
     ApplicationField,
 )
-from jobs.page_components.button import Button
 from utilities import constants
 from utilities.gpt import get_gpt_response
 from utilities.selenium import (
     get_selenium_driver,
     minify_html_for_gpt_prompt,
-    is_element_visible,
-    find_input_block_for_title,
 )
 
 driver = get_selenium_driver()
@@ -21,10 +18,10 @@ driver.set_page_load_timeout(15)
 
 
 class TermsAndConditions(PageComponent):
-    def __init__(self, parent_application_page, field_info=None):
+    def __init__(self, parent_application_page):
         self.parent_application_page = parent_application_page
-        self.field_info = field_info
 
+        self.tnc_fields = []
         self.field_component = None
         self.component_identified = False
 
@@ -36,96 +33,82 @@ class TermsAndConditions(PageComponent):
         if not self.component_identified:
             return self._identify()
 
-        self.field_component.proceed()
+        for tnc_field in self.tnc_fields:
+            tnc_field.proceed()
 
     def _identify(self, retry=False):
         global driver
 
-        user_input_element = None
-        try:
-            element_identified, user_input_element = find_input_block_for_title(
-                self.field_info.field_title
-            )
-            if not element_identified:
-                logger.warn(
-                    f"Input block for title {self.field_info.field_title} not identified in job "
-                    f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
-                )
-        except Exception as e:
-            logger.warn(
-                f"Error while finding input block for title {self.field_info.field_title} in job "
-                f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}. "
-                f"Error: {e.msg if hasattr(e, 'msg') else str(e)}"
-            )
-
-        if user_input_element:
-            minified_html = minify_html_for_gpt_prompt(
-                user_input_element.get_attribute("outerHTML")
-            )
-        else:
-            minified_html = minify_html_for_gpt_prompt(driver.page_source)
-
         user_prompt = (
             f"Following HTML is of job application webpage for {self.parent_application_page.parent_job.title}."
-            f"HTML: {minified_html}\n"
-            f"The webpage has TnC field for applying to the job. Following is info about the TnC field -\n"
-            f"Field title - {self.field_info.field_title}\n"
-            f"Field category - {self.field_info.field_category}\n"
-            f"Analyse the whole HTML very carefully for extracting XPath of clickable TnC field to accept the terms. It is usually a checkbox "
-            f"or a button."
+            f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
+            f"The webpage has one or more TnC or consent fields for applying to the job. Consent can be of different "
+            f"types like privacy policy, terms of service, data processing related, marketing / promotional related etc. "
+            f"Strictly ignore cookies consent popups for this assessment. "
+            f"Analyse the whole HTML very carefully for extracting details of all TnC or consent fields to accept the "
+            f"terms or give consent."
         )
 
-        class TnCField(BaseModel):
-            x_path: str = Field(
+        class FieldCategory(Enum):
+            PRIVACY_POLICY_ACCEPTANCE = "privacy_policy_acceptance"
+            TERMS_OF_SERVICE_AGREEMENT = "terms_of_service_agreement"
+            DATA_PROCESSING_CONSENT = "data_processing_consent"
+            MARKETING_EMAIL_OPT_IN = "marketing_email_opt_in"
+            THIRD_PARTY_DATA_SHARING = "third_party_data_sharing"
+            BACKGROUND_CHECK_AUTHORIZATION = "background_check_authorization"
+            DEMOGRAPHIC_DATA_COLLECTION = "demographic_data_collection"
+            INTERVIEW_RECORDING_CONSENT = "interview_recording_consent"
+            AUTOMATED_SCREENING_CONSENT = "automated_screening_consent"
+
+        class TnCFieldInfo(BaseModel):
+            field_title: str = Field(
                 ...,
-                description="XPath of clickable TnC field (to accept the terms) which can be used in selenium chrome driver to search the field. Don't "
-                "use HTML hierarchy to construct XPath.",
+                description="TnC or consent field's exact title / question mentioned on the webpage, without any "
+                "modification whatsoever. Just pick what's in HTML and respond as it is, not matter how long it is.",
+            )
+            field_question: str = Field(
+                ...,
+                description="If TnC or consent title on its own is not self explanatory so modify it, so that it "
+                "makes sense as a question. Otherwise respond same as field title.",
+            )
+            field_category: FieldCategory = Field(
+                ...,
+                description="Category of the TnC or consent field. It can be one of the following: "
+                "privacy_policy_acceptance, terms_of_service_agreement, data_processing_consent, "
+                "marketing_email_opt_in, third_party_data_sharing, background_check_authorization, "
+                "cookie_consent, demographic_data_collection, interview_recording_consent, "
+                "automated_screening_consent. Strictly ignore cookies consent popups for this assessment.",
             )
 
-        tnc_field_found, tnc_field = get_gpt_response(
+        class TnCFields(BaseModel):
+            tnc_fields: list[TnCFieldInfo]
+
+        tnc_field_found, tnc_fields = get_gpt_response(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
-            response_format=TnCField,
+            response_format=TnCFields,
         )
         if tnc_field_found:
-            if not is_element_visible(tnc_field.x_path):
-                prompt = "The x_path that we are trying to extract is of T&C field checkbox / button."
-                correct_x_path = ApplicationField.extract_correct_x_path(
-                    prev_x_path=tnc_field.x_path,
-                    prompt=prompt,
-                    job_title=self.parent_application_page.parent_job.title,
-                    job_url=self.parent_application_page.url,
+            for tnc_field in tnc_fields.tnc_fields:
+                application_field = ApplicationField(
+                    parent_application_page=self.parent_application_page,
+                    title=tnc_field.field_title,
+                    question=tnc_field.field_question,
+                    category=tnc_field.field_category.value,
                 )
-                if not correct_x_path:
-                    raise Exception(
-                        f"Couldn't extract T&C field XPath for "
-                        f"{self.parent_application_page.parent_job.title}. "
-                        f"URL - {self.parent_application_page.parent_job.url}"
-                    )
-                else:
-                    tnc_field.x_path = correct_x_path
-
-            if self.parent_application_page.component_x_path_exists(tnc_field.x_path):
-                logger.warn(
-                    f"Page component with following x_path already exists - {tnc_field.x_path}"
-                )
-                return
-
-            self.field_component = Button(
-                x_path=tnc_field.x_path,
-                button_type="tnc_consent",
-                parent_application_page=self.parent_application_page,
-            )
-
-            self.field_component.proceed()
-            if self.field_component.is_component_functional:
-                self.is_component_functional = True
-                self.component_identified = True
-            else:
-                raise Exception(
-                    f"Couldn't extract TnC field for {self.parent_application_page.parent_job.title}. "
-                    f"URL - {self.parent_application_page.url}"
-                )
+                application_field_component = application_field.get_field_component()
+                if application_field_component:
+                    application_field_component.proceed()
+                    if application_field_component.is_component_functional:
+                        self.is_component_functional = True
+                        self.component_identified = True
+                        self.tnc_fields.append(application_field_component)
+                    else:
+                        raise Exception(
+                            f"Couldn't proceed on one of the TnC fields with title {tnc_field.field_title} for "
+                            f"job title {self.parent_application_page.parent_job.title}. "
+                            f"URL - {self.parent_application_page.url}"
+                        )
         else:
             raise Exception(
                 f"Couldn't extract TnC field for {self.parent_application_page.parent_job.title}. "
@@ -135,7 +118,7 @@ class TermsAndConditions(PageComponent):
     def to_dict(self):
         return {
             "class": self.__class__.__name__,
-            "field_component": self.field_component.to_dict(),
+            "tnc_fields": [field.to_dict() for field in self.tnc_fields],
             "next": self.next.to_dict() if self.next else None,
         }
 
@@ -145,13 +128,15 @@ class TermsAndConditions(PageComponent):
             parent_application_page=parent_application_page,
         )
 
-        field_component_class = get_page_component_class_name(
-            class_name=input_dict["field_component"]["class"]
-        )
-        instance.field_component = field_component_class.from_dict(
-            input_dict=input_dict["field_component"],
-            parent_application_page=parent_application_page,
-        )
+        for field in input_dict["tnc_fields"]:
+            field_component_class = get_page_component_class_name(
+                class_name=field["class"]
+            )
+            field_component = field_component_class.from_dict(
+                input_dict=field,
+                parent_application_page=parent_application_page,
+            )
+            instance.tnc_fields.append(field_component)
 
         instance.component_identified = True
 

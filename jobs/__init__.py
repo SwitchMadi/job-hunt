@@ -1146,7 +1146,7 @@ class ApplicationPage:
                 if not self.phone_info_identified:
                     self._identify_phone_fields(job_field.field_title)
             elif job_field.field_category.value == "tnc":
-                self._identify_tnc_field(job_field)
+                self._identify_tnc_field()
             elif job_field.field_category.value == "work_experience":
                 if self.work_experience_section_identified:
                     continue
@@ -1205,10 +1205,8 @@ class ApplicationPage:
         return login_step.is_component_functional
 
     @retry()
-    def _identify_tnc_field(self, job_field):
-        tnc_field_step = TermsAndConditions(
-            parent_application_page=self, field_info=job_field
-        )
+    def _identify_tnc_field(self):
+        tnc_field_step = TermsAndConditions(parent_application_page=self)
         tnc_field_step.proceed()
         self.update_steps(tnc_field_step)
 
