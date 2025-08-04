@@ -331,7 +331,11 @@ class DateField(PageComponent):
                     return False
 
                 # After clicking month name, recheck for days
-                if el.is_displayed() and cls._element_has_day_numbers(el):
+                if (
+                    (not is_stale(el))
+                    and el.is_displayed()
+                    and cls._element_has_day_numbers(el)
+                ):
                     return cls._click_date_element(el, day)
                 else:
                     logger.warn("Days not detected after month selection.")
