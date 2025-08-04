@@ -1814,12 +1814,62 @@ def get_unique_element_by_xpath(xpath, title=None):
         if title:
             element_identified, user_input_element = find_input_block_for_title(title)
             if element_identified:
-                element = user_input_element.find_elements(By.XPATH, f".{xpath}")
-                if len(element) == 1:
-                    return element[0]
+                elements = user_input_element.find_elements(By.XPATH, f".{xpath}")
+                if len(elements) == 1:
+                    return elements[0]
+                elif len(elements) == 0:
+                    logging.warning(
+                        f"No element found for XPath '{xpath}' under title '{title}'. Trying with title element's parent..."
+                    )
+                    max_try = 3
+                    cur_try = 1
+                    cur_text = user_input_element.text.strip()
+                    parent_element = user_input_element.find_element(By.XPATH, "..")
+                    while (
+                        (cur_try <= max_try)
+                        and parent_element
+                        and (parent_element.text.strip() == cur_text)
+                    ):
+                        elements = parent_element.find_elements(By.XPATH, f".{xpath}")
+                        if len(elements) == 1:
+                            return elements[0]
+                        elif len(elements) > 1:
+                            logging.warning(
+                                f"Multiple elements found for XPath '{xpath}' under title '{title}' even after trying "
+                                f"parent elements. Returning first visible element."
+                            )
+
+                            for el in elements:
+                                if el.tag_name == "input":
+                                    return el
+                                elif is_element_visible(element=el):
+                                    return el
+
+                            logging.warning(
+                                f"None of the elements found for XPath '{xpath}' are visible."
+                            )
+                            return None
+
+                        parent_element = parent_element.find_element(By.XPATH, "..")
+                        cur_try += 1
+
+                    logging.warning(
+                        f"Could not find a unique element for XPath '{xpath}' under title '{title}' even after trying parent elements."
+                    )
+                    return None
                 else:
                     logging.warning(
-                        f"Multiple elements found for XPath '{xpath}' under title '{title}'."
+                        f"Multiple elements found for XPath '{xpath}' under title '{title}'. Returning first visible element."
+                    )
+
+                    for el in elements:
+                        if el.tag_name == "input":
+                            return el
+                        elif is_element_visible(element=el):
+                            return el
+
+                    logging.warning(
+                        f"None of the elements found for XPath '{xpath}' under title '{title}' are visible."
                     )
                     return None
             else:
