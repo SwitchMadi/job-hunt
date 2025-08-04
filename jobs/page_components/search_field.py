@@ -370,6 +370,9 @@ class SearchField(PageComponent):
 
         self._search_phrases = list(dict.fromkeys(original_answer_phrases))
 
+        # Add single character vowels to the search phrases as fallback phrases in case nothing works
+        self._search_phrases = self._search_phrases + ["a", "e", "i", "o", "u"]
+
         return self._search_phrases
 
     def to_dict(self):
