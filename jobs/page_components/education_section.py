@@ -909,7 +909,7 @@ class EducationSection(PageComponent):
                 parent_application_page=self.parent_application_page,
                 title=field,
                 question=field,
-                category="other",
+                category="education",
             )
             application_field_component = application_field.get_field_component()
             if application_field_component:
