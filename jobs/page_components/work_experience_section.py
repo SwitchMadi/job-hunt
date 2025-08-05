@@ -68,6 +68,18 @@ class WorkExperienceSection(PageComponent):
                 "work_experience", []
             )
         )
+        if not user_work_experience:
+            logger.warn(
+                f"No work experience information found in user resume for job - "
+                f"{self.parent_application_page.parent_job.title}, url - {self.parent_application_page.url}"
+            )
+            return None
+
+        # TODO: in future, we can support multiple education sections
+        user_work_experience = user_work_experience[
+            :1
+        ]  # limiting to only work experience section
+
         curr_work_experience_index = 0
         while user_work_experience and (
             curr_work_experience_index < len(user_work_experience)
@@ -90,7 +102,9 @@ class WorkExperienceSection(PageComponent):
                 curr_work_experience_index += 1
                 curr_node = curr_node.next
 
-            if curr_node is None:
+            if curr_node is None and curr_work_experience_index < len(
+                user_work_experience
+            ):
                 curr_node = self._identify_add_work_experience_button()
 
             if curr_node and not isinstance(curr_node, WorkExperience):
@@ -165,10 +179,25 @@ class WorkExperienceSection(PageComponent):
     ):
         global driver
 
-        field_details_prompt = "\n\n".join(
-            f"field_id - {i + 1}. field_title - {field.field_title} | field_category - {field.field_category}"
-            for i, field in enumerate(self.work_experience_fields)
-        )
+        field_details_prompts = []
+        for i, field in enumerate(self.work_experience_fields):
+            field_title = None
+            if hasattr(field, "title"):
+                field_title = field.title
+            elif hasattr(field, "field_title"):
+                field_title = field.field_title
+
+            field_category = "education"
+            if hasattr(field, "category"):
+                field_category = field.category
+            elif hasattr(field, "field_category"):
+                field_category = field.field_category
+
+            field_details_prompts.append(
+                f"field_id - {i + 1}. field_title - {field_title} | field_category - {field_category}"
+            )
+
+        field_details_prompt = "\n\n".join(field_details_prompts)
 
         if observed_elements:
             observed_elements_html = "\n".join(
@@ -801,7 +830,7 @@ class WorkExperienceSection(PageComponent):
             f"{self.parent_application_page.parent_job.title} at {self.parent_application_page.parent_job.company}.\n"
             f"Work Experience Fields:\n{field_titles_text}\n\n"
             f"Analyze these fields and determine:\n"
-            f"1. Whether these fields collectively are comprehensive enough to gather a candidate's "
+            f"1. Whether these fields COLLECTIVELY are comprehensive enough to gather a candidate's "
             f"specific work experience details in a thorough manner\n"
             f"2. For each individual field, whether it is genuinely intended to collect comprehensive "
             f"work experience information or seems like a random/standalone question\n\n"
@@ -823,6 +852,10 @@ class WorkExperienceSection(PageComponent):
                 ...,
                 description="Boolean flag indicating whether this specific field is genuinely intended "
                 "to collect comprehensive work experience information, not just a random work-related question.",
+            )
+            reason_for_comprehensiveness: str = Field(
+                ...,
+                description="Reasoning for why this field is considered comprehensive or not.",
             )
 
         class WorkExperienceFieldsAnalysis(BaseModel):
