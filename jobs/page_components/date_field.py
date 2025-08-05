@@ -597,9 +597,10 @@ class DateField(PageComponent):
             f"Please analyze the HTML to help identify how date can be entered and return following info -\n"
             f"1. Whether there is a calendar widget button present\n"
             f"2. If date components (month or day or year or all) have separate interactive input elements\n"
-            f"3. XPath of calendar button if present\n"
-            f"4. XPaths of separate date component interactive input elements if present\n"
-            f"5. XPath of date input or date box (where selected date is / will be shown) element\n"
+            f"3. If the whole input HTML is for just 1 date component like month or day or year then return which one\n"
+            f"4. XPath of calendar button if present\n"
+            f"5. XPaths of separate date component interactive input elements if present\n"
+            f"6. XPath of date input or date box (where selected date is / will be shown) element\n"
         )
 
         class FieldHtmlType(Enum):
@@ -633,6 +634,12 @@ class DateField(PageComponent):
                 description=f"Whether date field has separate interactive input elements for date components for field "
                 f"{self.title}",
             )
+            input_html_is_for_single_component: bool = Field(
+                ...,
+                description=f"Whether the whole input HTML is for just 1 date component like month or day or year "
+                f"for field {self.title}. If this is True, then only one of the following will be present - "
+                f"month_component, year_component, day_component. If true then send details in respective field.",
+            )
             calendar_button_xpath: Optional[str] = Field(
                 None,
                 description=f"XPath of interactive button that opens calendar widget for field {self.title}. Only "
@@ -647,19 +654,19 @@ class DateField(PageComponent):
             month_component: Optional[DateComponent] = Field(
                 None,
                 description=f"Interactive month input component for field {self.title}. It may exist only if separate "
-                f"components exist. Don't assume that it's present because has_separate_components is True."
-                f" Look for solid proof of month field being present.",
+                f"components exist or input_html_is_for_single_component is true. Don't assume that it's present "
+                f"because has_separate_components is True. Look for solid proof of month field being present.",
             )
             year_component: Optional[DateComponent] = Field(
                 None,
                 description=f"Interactive year input component for field {self.title}. It may exist only if separate "
-                f"components exist. Don't assume that it's present because has_separate_components is True."
+                f"components exist or input_html_is_for_single_component is true. Don't assume that it's present because has_separate_components is True."
                 f" Look for solid proof of year field being present.",
             )
             day_component: Optional[DateComponent] = Field(
                 None,
                 description=f"Interactive day input component for field {self.title}. It may exist only if separate "
-                f"components exist. Don't assume that it's present because has_separate_components is True."
+                f"components exist or input_html_is_for_single_component is true. Don't assume that it's present because has_separate_components is True."
                 f" Look for solid proof of day field being present.",
             )
             date_field: Optional[DateComponent] = Field(
