@@ -698,7 +698,12 @@ class DateField(PageComponent):
                         )
 
             # Validate separate component xpaths if provided
-            if input_data.has_separate_components:
+            if input_data.has_separate_components or (
+                input_data.month_component
+                or input_data.year_component
+                or input_data.day_component
+            ):
+                input_data.has_separate_components = True
                 for component, xpath in [
                     (
                         "month",
@@ -895,11 +900,11 @@ class DateField(PageComponent):
         if components_found:
             # Remove components based on GPT response
             if not components_data.is_month_xpath_correct:
-                self.components.month = {}
+                self.components["month"] = {}
             if not components_data.is_year_xpath_correct:
-                self.components.year = {}
+                self.components["year"] = {}
             if not components_data.is_day_xpath_correct:
-                self.components.day = {}
+                self.components["day"] = {}
 
             logger.info(
                 "Removed following duplicate components based on GPT response:\n"
