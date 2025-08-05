@@ -148,7 +148,8 @@ class WorkExperienceSection(PageComponent):
             f"Updating new work experience fields in db for job - "
             f"{self.parent_application_page.parent_job.title}, url - {self.parent_application_page.url}"
         )
-        self.parent_application_page.update_steps(self, inplace=True)
+        # TODO : Uncomment this when we support multiple education sections
+        # self.parent_application_page.update_steps(step=self, inplace=True)
 
         return
 
