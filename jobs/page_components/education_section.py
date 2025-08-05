@@ -66,6 +66,16 @@ class EducationSection(PageComponent):
         user_education = self.parent_application_page.parent_job.user.parsed_resume.get(
             "education", []
         )
+        if not user_education:
+            logger.warn(
+                f"No education information found in user resume for job - "
+                f"{self.parent_application_page.parent_job.title}, url - {self.parent_application_page.url}"
+            )
+            return None
+
+        # TODO: in future, we can support multiple education sections
+        user_education = user_education[:1]  # limiting to only education section
+
         curr_education_index = 0
         while user_education and (curr_education_index < len(user_education)):
             if curr_node is None:
@@ -818,6 +828,10 @@ class EducationSection(PageComponent):
                 ...,
                 description="Boolean flag indicating whether this specific field is genuinely intended "
                 "to collect comprehensive education qualification information, not just a random education-related question.",
+            )
+            reason_for_comprehensiveness: str = Field(
+                ...,
+                description="Reasoning for why this field is considered comprehensive or not.",
             )
 
         class EducationQualificationFieldsAnalysis(BaseModel):
