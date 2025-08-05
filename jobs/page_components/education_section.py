@@ -84,7 +84,7 @@ class EducationSection(PageComponent):
                 curr_education_index += 1
                 curr_node = curr_node.next
 
-            if curr_node is None:
+            if curr_node is None and curr_education_index < len(user_education):
                 curr_node = self._identify_add_education_button()
 
             if curr_node and not isinstance(curr_node, Education):
@@ -157,10 +157,25 @@ class EducationSection(PageComponent):
     ):
         global driver
 
-        field_details_prompt = "\n\n".join(
-            f"field_id - {i + 1}. field_title - {field.field_title} | field_category - {field.field_category}"
-            for i, field in enumerate(self.education_fields)
-        )
+        field_details_prompts = []
+        for i, field in enumerate(self.education_fields):
+            field_title = None
+            if hasattr(field, "title"):
+                field_title = field.title
+            elif hasattr(field, "field_title"):
+                field_title = field.field_title
+
+            field_category = "education"
+            if hasattr(field, "category"):
+                field_category = field.category
+            elif hasattr(field, "field_category"):
+                field_category = field.field_category
+
+            field_details_prompts.append(
+                f"field_id - {i + 1}. field_title - {field_title} | field_category - {field_category}"
+            )
+
+        field_details_prompt = "\n\n".join(field_details_prompts)
 
         if observed_elements:
             observed_elements_html = "\n".join(
@@ -783,14 +798,12 @@ class EducationSection(PageComponent):
             f"{self.parent_application_page.parent_job.title} at {self.parent_application_page.parent_job.company}.\n"
             f"Education Qualification Fields:\n{field_titles_text}\n\n"
             f"Analyze these fields and determine:\n"
-            f"1. Whether these fields collectively are comprehensive enough to gather a candidate's "
+            f"1. Whether these fields COLLECTIVELY are comprehensive enough to gather a candidate's "
             f"specific education qualification details in a thorough manner\n"
             f"2. For each individual field, whether it is genuinely intended to collect comprehensive "
             f"education qualification information or seems like a random/standalone question\n\n"
             f"Consider comprehensive education qualification fields to typically include things like:\n"
-            f"- Company name, job title, employment dates, location\n"
-            f"- Job responsibilities, achievements, skills used\n"
-            f"- Employment type, industry, etc.\n\n"
+            f"- College name, degree, major, location, start date, completion date etc.\n\n"
             f"Fields that seem random or not intended for comprehensive education qualification gathering might be:\n"
             f"- Single generic questions about education\n"
             f"- Isolated questions without context of building a complete educational history"
