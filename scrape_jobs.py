@@ -1,7 +1,5 @@
 from utilities import take_screenshot
 from utilities.aws.s3 import S3Bucket
-from utilities.logging import get_logger
-logger = get_logger(name="scrape_jobs")
 
 screenshot_filename = f"scraping_screenshot_1.png"
 take_screenshot(filename=screenshot_filename)
@@ -11,11 +9,6 @@ file_s3_path = f"jobs-scraping/failures/{screenshot_filename}"
 s3.upload_data(
     file_local_path=screenshot_filename, file_s3_path=file_s3_path
 )
-for i in range(30):
-    logger.info(f"Waiting for 30 seconds before starting the job scraping process... {i+1}/30")
-    time.sleep(1)
-logger.info("Starting the job scraping process...")
-time.sleep(30)
 
 
 import pandas as pd
