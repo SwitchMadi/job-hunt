@@ -166,7 +166,13 @@ def extract_linkedin_jobs(jobs_url, scraped_linkedin_job_ids):
                         else:
                             logger.warn("No apply buttons found. Skipping job.")
 
-                            filename = take_screenshot()
+                            try:
+                                filename = take_screenshot()
+                            except OSError as e:
+                                logger.warn(
+                                    f"Failed to take screenshot due to OSError - {e}"
+                                )
+                                continue
 
                             file_s3_path = f"jobs-scraping/failures/{filename}"
                             s3.upload_data(
