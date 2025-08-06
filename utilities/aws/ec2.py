@@ -137,11 +137,11 @@ class EC2:
         logger.info(f"Instance terminated. instance_id - {terminated_instance_id}")
         return True
 
-    def create_snapshot(self):
+    def create_snapshot(self, name=None):
         # Create an AMI from the instance
         ami_response = self.client.create_image(
             InstanceId=self.instance_id,
-            Name=f"snapshot-{self.instance_id}",
+            Name=name if name else f"snapshot-{self.instance_id}",
             NoReboot=True,
         )
 
