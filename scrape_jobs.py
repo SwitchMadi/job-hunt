@@ -1,16 +1,3 @@
-from utilities import take_screenshot
-from utilities.aws.s3 import S3Bucket
-
-screenshot_filename = f"scraping_screenshot_1.png"
-take_screenshot(filename=screenshot_filename)
-
-s3 = S3Bucket(bucket_name=config["s3_bucket"])
-file_s3_path = f"jobs-scraping/failures/{screenshot_filename}"
-s3.upload_data(
-    file_local_path=screenshot_filename, file_s3_path=file_s3_path
-)
-
-
 import pandas as pd
 import numpy as np
 from sqlalchemy.types import Integer, Boolean
@@ -36,16 +23,6 @@ config = yaml.safe_load(open("config.yml"))
 lock_table = OperationLocksTable()
 operation_name = "job_scrape"
 lock_id = None
-
-
-screenshot_filename = f"scraping_screenshot_2.png"
-take_screenshot(filename=screenshot_filename)
-
-s3 = S3Bucket(bucket_name=config["s3_bucket"])
-file_s3_path = f"jobs-scraping/failures/{screenshot_filename}"
-s3.upload_data(
-    file_local_path=screenshot_filename, file_s3_path=file_s3_path
-)
 
 try:
     # Attempt to acquire lock
