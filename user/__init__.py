@@ -545,6 +545,29 @@ class User:
         return None
 
     @property
+    def successful_applications_count(self):
+        """Count the number of successful job applications for this user"""
+        if not hasattr(self, "_successful_applications_count"):
+            query = f"""
+                SELECT COUNT(*) as count
+                FROM users.job_applications
+                WHERE user_id = {self.id}
+                AND application_status = 'submitted'
+            """
+            result = get_sql_query_output(query)
+            self._successful_applications_count = result[0]["count"] if result else 0
+
+        return self._successful_applications_count
+
+    @property
+    def should_stream_applications(self):
+        """Determine if streaming should be enabled based on successful applications count and config"""
+        max_applications = config.get("streaming", {}).get(
+            "max_applications_for_streaming", 5
+        )
+        return self.successful_applications_count <= max_applications
+
+    @property
     def phone_number(self):
         if self.parsed_resume:
             # without special characters

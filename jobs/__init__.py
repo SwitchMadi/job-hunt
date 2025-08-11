@@ -20,6 +20,8 @@ from utilities.gpt import get_gpt_response
 from utilities.logging import get_logger
 from utilities.sql import get_sql_query_output, execute_sql_query
 from utilities.aws.s3 import S3Bucket
+from utilities.aws.websocket import WebSocketClient
+from utilities.aws.dynamo.websocket_connections import WebSocketConnectionsTable
 from jobs.page_components import ApplicationField
 from jobs.page_components.application_data_source import ApplicationDataSource
 from jobs.page_components.cookies_consent import CookiesConsent
@@ -129,6 +131,7 @@ class ApplicationPage:
         self._get_application_steps()
 
         self.application_id = None  # This will be set when apply() is called
+        self._should_stream = None  # Cache streaming eligibility for this instance
 
     def _get_application_steps(self):
         application_steps_query = f"""
@@ -460,6 +463,63 @@ class ApplicationPage:
 
         return True
 
+    def _get_websocket_connection(self):
+        """Get WebSocket connection for the user"""
+        try:
+            if not self.parent_job.user or not self.parent_job.user.email:
+                return None
+
+            websocket_table = WebSocketConnectionsTable()
+            connection = websocket_table.get_connections_by_user(
+                self.parent_job.user.email
+            )
+
+            if connection:
+                return connection.get("connectionId", {}).get("S")
+            return None
+        except Exception as e:
+            logger.exception(
+                f"Error getting websocket connection for user {self.parent_job.user.email}: {e}"
+            )
+            return None
+
+    def _send_stream_message(self, message_type, data):
+        """Send streaming message to user"""
+        try:
+            # Get WebSocket connection
+            connection_id = self._get_websocket_connection()
+            if not connection_id:
+                logger.warning(
+                    f"No WebSocket connection found for user {self.parent_job.user.email}"
+                )
+                return False
+
+            # Get WebSocket endpoint from config
+            websocket_endpoint = config.get("websocket", {}).get("endpoint_url")
+            if not websocket_endpoint:
+                logger.error("WebSocket endpoint URL not configured")
+                return False
+
+            # Send message
+            websocket_client = WebSocketClient(websocket_endpoint)
+            success = websocket_client.send_message(connection_id, message_type, data)
+
+            if success:
+                logger.info(
+                    f"Successfully sent {message_type} message to user {self.parent_job.user.email}"
+                )
+            else:
+                logger.warning(
+                    f"Failed to send {message_type} message to user {self.parent_job.user.email}"
+                )
+
+            return success
+        except Exception as e:
+            logger.exception(
+                f"Error sending stream message to user {self.parent_job.user.email}: {e}"
+            )
+            return False
+
     def apply(self):
         global driver
 
@@ -497,6 +557,28 @@ class ApplicationPage:
             return None
 
         self.application_id = result["id"]
+
+        # Stream application start message if streaming is enabled
+        # Cache streaming eligibility for this instance
+        if self._should_stream is None:
+            self._should_stream = (
+                self.parent_job.user and self.parent_job.user.should_stream_applications
+            )
+
+        if self._should_stream:
+            try:
+                from datetime import datetime
+
+                stream_data = {
+                    "event": "application_started",
+                    "job_title": self.parent_job.title,
+                    "company": self.parent_job.company,
+                    "job_url": self.parent_job.url,
+                    "timestamp": datetime.now().isoformat() + "Z",
+                }
+                self._send_stream_message("application_progress", stream_data)
+            except Exception as e:
+                logger.exception(f"Error streaming application start: {e}")
 
         steps_identified_at_beginning = self.steps_identified
 
@@ -656,6 +738,29 @@ class ApplicationPage:
             );
         """
         execute_sql_query(query)
+
+        # Stream the question and response if streaming is enabled
+        # Cache streaming eligibility for this instance
+        if self._should_stream is None:
+            self._should_stream = (
+                self.parent_job.user and self.parent_job.user.should_stream_applications
+            )
+
+        if self._should_stream:
+            try:
+                from datetime import datetime
+
+                stream_data = {
+                    "event": "question_answered",
+                    "job_title": self.parent_job.title,
+                    "company": self.parent_job.company,
+                    "question": question,
+                    "response": response,
+                    "timestamp": datetime.now().isoformat() + "Z",
+                }
+                self._send_stream_message("application_progress", stream_data)
+            except Exception as e:
+                logger.exception(f"Error streaming question response: {e}")
 
     @classmethod
     def update_steps_identification_status(

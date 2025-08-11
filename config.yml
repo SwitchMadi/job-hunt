@@ -16,3 +16,7 @@ startup_input: C:\Users\JobHunt\Desktop\startup_input.yml
 openai_model: gpt-4o-mini-2024-07-18
 user_email: bhaskar2choudhary@gmail.com
 admin_email: bhaskar2choudhary@gmail.com
+websocket:
+  endpoint_url: "https://ws.api.switchmadi.com"
+streaming:
+  max_applications_for_streaming: 5
