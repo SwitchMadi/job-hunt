@@ -523,6 +523,7 @@ class DateField(PageComponent):
             date_field = TextInput(
                 x_path=self.components.get("date", {}).get("xpath"),
                 category="date_field",
+                question=self.question,
                 parent_application_page=self.parent_application_page,
             )
             date_field.answer = self.answer
@@ -558,6 +559,14 @@ class DateField(PageComponent):
                         component.category = None
 
         simulate_empty_area_click(self.title)
+
+        # store the response
+        if self.parent_application_page:
+            self.parent_application_page.save_field_response(
+                question=self.question,
+                response=self.answer,
+            )
+
         return
 
     def _identify_input_method(self, retry=False):

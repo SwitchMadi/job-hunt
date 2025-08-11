@@ -72,6 +72,14 @@ class CheckBox(PageComponent):
             )
             option_element.proceed()
 
+        # store the responses
+        options_text = [option["text"] for option in options_to_select]
+        if options_text and self.parent_application_page:
+            self.parent_application_page.save_field_response(
+                question=self.question,
+                response=options_text,
+            )
+
         self.is_component_functional = True
         return
 

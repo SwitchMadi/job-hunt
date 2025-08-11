@@ -253,6 +253,14 @@ class SearchField(PageComponent):
 
                     if not is_element_visible(self.options_container_x_path):
                         self.is_component_functional = True
+
+                        # store the response
+                        if self.parent_application_page:
+                            self.parent_application_page.save_field_response(
+                                question=self.question,
+                                response=option["text"],
+                            )
+
                         return
                     else:
                         break

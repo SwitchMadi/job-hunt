@@ -159,6 +159,28 @@ class TextInput(PageComponent):
             if self.hit_enter:
                 element.send_keys(Keys.RETURN)
 
+            # store the response
+            if self.parent_application_page and (
+                self.question
+                or self.category in ["otp_textbox", "username", "password"]
+            ):
+                answer = self.answer
+                if self.category in ["otp_textbox", "password"]:
+                    answer = "*" * len(str(self.answer))
+
+                question = self.question
+                if self.category == "username":
+                    question = "What is your username?"
+                elif self.category == "password":
+                    question = "What is your password?"
+                elif self.category == "otp_textbox":
+                    question = "What is the OTP?"
+
+                self.parent_application_page.save_field_response(
+                    question=question,
+                    response=answer,
+                )
+
             self.is_component_functional = True
         except Exception as e:
             logger.exception(

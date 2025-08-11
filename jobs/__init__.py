@@ -128,6 +128,8 @@ class ApplicationPage:
         self.is_application_feasible = True
         self._get_application_steps()
 
+        self.application_id = None  # This will be set when apply() is called
+
     def _get_application_steps(self):
         application_steps_query = f"""
                                         select *
@@ -494,7 +496,7 @@ class ApplicationPage:
             close_selenium_driver()
             return None
 
-        application_id = result["id"]
+        self.application_id = result["id"]
 
         steps_identified_at_beginning = self.steps_identified
 
@@ -503,7 +505,7 @@ class ApplicationPage:
                 f"Application is not possible for job {self.parent_job.title}. URL - {self.url}"
             )
             self._update_application_status(
-                application_id, "failed", "Application not possible"
+                self.application_id, "failed", "Application not possible"
             )
             close_selenium_driver()
             return
@@ -545,7 +547,7 @@ class ApplicationPage:
                         f"Could not identify application steps for job {self.parent_job.title}. URL - {self.url}"
                     )
                     self._update_application_status(
-                        application_id, "failed", failure_reason
+                        self.application_id, "failed", failure_reason
                     )
                     return
             else:
@@ -556,12 +558,12 @@ class ApplicationPage:
                 self._verify_application_submission()
             )
             if application_submitted is None:
-                self._update_application_status(application_id, "unknown", None)
+                self._update_application_status(self.application_id, "unknown", None)
                 return None
 
             status = "submitted" if application_submitted else "failed"
             remarks = success_proof if application_submitted else failure_reason
-            self._update_application_status(application_id, status, remarks)
+            self._update_application_status(self.application_id, status, remarks)
 
             if not application_submitted:
                 logger.error(
@@ -582,7 +584,7 @@ class ApplicationPage:
                 f"{self.parent_job.title}. Error - {e}"
             )
             remarks = str(e)
-            self._update_application_status(application_id, "failed", remarks)
+            self._update_application_status(self.application_id, "failed", remarks)
 
             if not steps_identified_at_beginning:
                 self.update_steps_identification_status(
@@ -627,6 +629,31 @@ class ApplicationPage:
             SET application_status = '{status}',
                 remarks = {"'" + remarks.replace("'", "''") + "'" if remarks else "null"}
             WHERE id = {application_id};
+        """
+        execute_sql_query(query)
+
+    def save_field_response(self, question, response):
+        """Save the response for a specific field in the job application"""
+        if not self.application_id:
+            logger.error(
+                f"Application ID is not set for job {self.parent_job.id} - {self.parent_job.title}"
+            )
+            return
+
+        question = question.split("Above question should be answered")[0].strip()
+        question = question.split("Final question for us to answer")[0].strip()
+
+        response_json = json.dumps(response).replace("'", "''")
+
+        query = f"""
+            INSERT INTO users.job_application_responses
+            (user_id, application_id, question, response)
+            VALUES (
+                {self.parent_job.user.id},
+                {self.application_id},
+                '{question.replace("'", "''") if question else "null"}',
+                '{response_json}'
+            );
         """
         execute_sql_query(query)
 

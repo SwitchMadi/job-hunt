@@ -70,6 +70,13 @@ class RadioButton(PageComponent):
             )
             option_element.proceed()
 
+        # store the response
+        if self.parent_application_page:
+            self.parent_application_page.save_field_response(
+                question=self.question,
+                response=option["text"],
+            )
+
         self.is_component_functional = True
         return
 
