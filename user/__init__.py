@@ -154,16 +154,10 @@ class User:
         return self._jobs_sheet
 
     def _preferred_jobs_query_filters(self, job_filter_id):
-        """
-        This private method returns SQL query filter which will return jobs based on user preferences and job age.
+        field_preferences = self._get_job_fields_preferences(job_filter_id)
+        return User.preferred_jobs_query_filters(field_preferences)
 
-        Args:
-            job_age (int): Job age in days. Jobs older than this will be ignored.
-
-        Returns:
-            str: SQL query filter
-        """
-
+    def _get_job_fields_preferences(self, job_filter_id):
         user_preferences_query = f"""
             select coalesce(t2.related_job_field, t1.job_field) job_field,
                    unnest(coalesce(t2.synonyms, ARRAY[t1.value])) as value,
@@ -191,36 +185,54 @@ class User:
             lambda x: x.dropna().to_dict(), axis=1
         ).to_dict()
 
-        return User.preferred_jobs_query_filters(field_preferences)
+        return field_preferences
 
     @classmethod
-    def preferred_jobs_query_filters(cls, field_preferences):
+    def preferred_jobs_query_filters(
+        cls,
+        field_preferences,
+        days_ago=15,
+        min_years_offset=0,
+        max_years_offset=0,
+        skip_location=False,
+        skip_location_requirement=False,
+        skip_technical_skills=False,
+    ):
         filters = {}
+
+        if (
+            "job_posted_days_ago" in field_preferences
+            and True in field_preferences["job_posted_days_ago"]
+        ):
+            days_ago = int(field_preferences["job_posted_days_ago"][True][0])
+
+        now = datetime.now()
+        time_ago = now - timedelta(days=days_ago)
+        time_ago = int(time_ago.timestamp())
+        filters["job_posted_days_ago"] = (
+            f"(coalesce(job_posted_at, created_at) >= {time_ago})"
+        )
+
         for job_field, preferences in field_preferences.items():
-            if job_field == "job_posted_days_ago":
-                now = datetime.now()
-                time_ago = now - timedelta(days=int(preferences[True][0]))
-                time_ago = int(time_ago.timestamp())
-                filters[job_field] = (
-                    f"(coalesce(job_posted_at, created_at) >= {time_ago})"
-                )
-            elif job_field in (["employees_count"]):
+            if job_field == "employees_count":
                 filters[job_field] = (
                     f"(({job_field} >= {preferences[True][0]}) or {job_field} is null)"
                 )
-            elif job_field in (["experience_requirement_min_years"]):
+            elif job_field == "experience_requirement_min_years":
                 if preferences[True]:
+                    min_years = int(preferences[True][0]) - min_years_offset
                     filters[job_field] = (
-                        f"((experience_requirement_max_years >= {preferences[True][0]}) "
+                        f"((experience_requirement_max_years >= {min_years}) "
                         f"or experience_requirement_max_years is null)"
                     )
-            elif job_field in (["experience_requirement_max_years"]):
+            elif job_field == "experience_requirement_max_years":
                 if preferences[True]:
+                    max_years = int(preferences[True][0]) + max_years_offset
                     filters[job_field] = (
-                        f"((experience_requirement_min_years <= {preferences[True][0]}) "
+                        f"((experience_requirement_min_years <= {max_years}) "
                         f"or experience_requirement_min_years is null)"
                     )
-            elif job_field in (["company", "job_domain"]):
+            elif job_field in ["company", "job_domain"]:
                 queries = {}
                 for is_preferred, values in preferences.items():
                     if values:
@@ -241,15 +253,22 @@ class User:
                     filters[job_field] = f"({filters[job_field].strip(' and ')})"
                 else:
                     del filters[job_field]
-            elif job_field in (
-                [
-                    "title",
-                    "location",
-                    "location_requirement",
-                    "technical_skills",
-                    "employment_type",
-                ]
-            ):
+            elif job_field in [
+                "title",
+                "location",
+                "location_requirement",
+                "technical_skills",
+                "employment_type",
+            ]:
+                if (
+                    (job_field == "location" and skip_location)
+                    or (
+                        job_field == "location_requirement"
+                        and skip_location_requirement
+                    )
+                    or (job_field == "technical_skills" and skip_technical_skills)
+                ):
+                    continue
                 queries = {}
                 for is_preferred, values in preferences.items():
                     queries[is_preferred] = []
@@ -591,3 +610,146 @@ class User:
                 .get("country_code")
             )
         return None
+
+    def fetch_job_ids_to_apply(self, threshold=15):
+        """
+        Fetch job IDs to apply with iterative parameter adjustment to meet threshold.
+
+        Args:
+            threshold (int): Minimum number of jobs required. Default is 10.
+
+        Returns:
+            list: List of job IDs that meet the criteria
+        """
+        # Step 1: Get the active job filter ID for the user
+        job_filters_query = f"""
+            SELECT id
+            FROM users.job_filters
+            WHERE user_id = {self.id}
+            AND is_active;
+        """
+        job_filter = get_sql_query_output(job_filters_query)
+
+        if not job_filter:
+            return []  # No active job filters found
+
+        job_filter_id = job_filter[0]["id"]
+
+        # Step 2: Get job field preferences
+        job_field_preferences = self._get_job_fields_preferences(job_filter_id)
+
+        # Step 3: Define iteration parameters in order of preference
+        iteration_params = [
+            # 1. skip_technical_skills as True
+            {"skip_technical_skills": True},
+            # 2. skip_location_requirement as True, along with previous points
+            {"skip_technical_skills": True, "skip_location_requirement": True},
+            # 3. skip_location as True, along with previous points
+            {
+                "skip_technical_skills": True,
+                "skip_location_requirement": True,
+                "skip_location": True,
+            },
+            # 4. min_years_offset & max_years_offset as 1, along with previous points
+            {
+                "skip_technical_skills": True,
+                "skip_location_requirement": True,
+                "skip_location": True,
+                "min_years_offset": 1,
+                "max_years_offset": 1,
+            },
+            # 5. min_years_offset & max_years_offset as 2, along with previous points
+            {
+                "skip_technical_skills": True,
+                "skip_location_requirement": True,
+                "skip_location": True,
+                "min_years_offset": 2,
+                "max_years_offset": 2,
+            },
+            # 6. min_years_offset & max_years_offset as 3, along with previous points
+            {
+                "skip_technical_skills": True,
+                "skip_location_requirement": True,
+                "skip_location": True,
+                "min_years_offset": 3,
+                "max_years_offset": 3,
+            },
+        ]
+
+        # Step 4: Try with default parameters first
+        sql_preference_filters = User.preferred_jobs_query_filters(
+            job_field_preferences
+        )
+        job_ids = self._get_application_job_ids_with_filters(sql_preference_filters)
+
+        if len(job_ids) >= threshold:
+            logger.info(
+                f"Found {len(job_ids)} jobs with default filters, meeting threshold of {threshold}"
+            )
+            return job_ids
+
+        # Step 5: Iteratively try with relaxed parameters
+        for i, params in enumerate(iteration_params):
+            logger.info(f"Trying iteration {i+1} with parameters: {params}")
+
+            sql_preference_filters = User.preferred_jobs_query_filters(
+                job_field_preferences, **params
+            )
+            job_ids = self._get_application_job_ids_with_filters(sql_preference_filters)
+
+            if len(job_ids) >= threshold:
+                logger.info(
+                    f"Found {len(job_ids)} jobs with relaxed filters (iteration {i+1}), meeting threshold of {threshold}"
+                )
+                return job_ids
+
+        # Step 6: Return whatever we found if threshold not met
+        logger.info(
+            f"Threshold of {threshold} not met. Returning {len(job_ids)} jobs found with most relaxed filters."
+        )
+        return job_ids
+
+    def _get_application_job_ids_with_filters(self, sql_preference_filters):
+        """
+        Helper method to get job IDs with given SQL preference filters.
+
+        Args:
+            sql_preference_filters (str): SQL filter conditions
+
+        Returns:
+            list: List of job IDs
+        """
+        job_ids_query = f"""
+            WITH submitted_jobs AS (
+                SELECT DISTINCT job_id
+                FROM users.job_applications
+                WHERE user_id = {self.id}
+                AND application_status = 'submitted'
+            ),
+            failed_jobs AS (
+                SELECT job_id
+                FROM users.job_applications
+                WHERE user_id = {self.id}
+                AND application_status = 'failed'
+                GROUP BY job_id
+                HAVING COUNT(*) >= 3
+            )
+            SELECT j.id
+            FROM jobs.jobs j
+            JOIN jobs.application_steps a ON j.id = a.job_id
+            WHERE a.is_application_feasible = true
+            and a.is_identification_complete = true
+            and a.is_active = true
+            AND j.id in (
+                select id
+                from jobs.jobs
+                where is_active
+                and {sql_preference_filters}
+            )
+            AND j.job_url ilike '%greenhouse%'
+            AND j.id NOT IN (SELECT job_id FROM submitted_jobs)
+            AND j.id NOT IN (SELECT job_id FROM failed_jobs)
+        """
+
+        job_ids = get_sql_query_output(job_ids_query)
+        return [job["id"] for job in job_ids]
