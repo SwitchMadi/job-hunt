@@ -48,6 +48,7 @@ class User:
         self._jobs_sheet = None
         self._job_filters = None
         self._google_oauth_credentials = None
+        self._subscription = None
 
     @staticmethod
     def find_user_by_email(email):
@@ -99,6 +100,316 @@ class User:
             WHERE id = {self.id}
         """
         return execute_sql_query(user_update_query)
+
+    @property
+    def subscription(self):
+        """Get user's active subscription details"""
+        if self._subscription is None:
+            subscription_query = f"""
+                SELECT 
+                    s.id as subscription_id,
+                    s.start_at,
+                    s.current_period_start,
+                    s.current_period_end,
+                    s.canceled_at,
+                    s.is_active,
+                    p.code as plan_code,
+                    p.name as plan_name,
+                    p.billing_period,
+                    p.price_amount,
+                    p.price_currency
+                FROM subscription.subscriptions s
+                JOIN subscription.plans p ON s.plan_id = p.id
+                WHERE s.user_id = {self.id}
+                AND s.is_active = TRUE
+                ORDER BY s.created_at DESC
+                LIMIT 1
+            """
+            result = get_sql_query_output(subscription_query)
+            self._subscription = result[0] if result else None
+        return self._subscription
+
+    @property
+    def has_active_subscription(self):
+        """Check if user has an active subscription"""
+        return self.subscription is not None
+
+    @property
+    def subscription_plan_code(self):
+        """Get the current subscription plan code"""
+        return self.subscription.get("plan_code") if self.subscription else None
+
+    @property
+    def subscription_plan_name(self):
+        """Get the current subscription plan name"""
+        return self.subscription.get("plan_name") if self.subscription else None
+
+    @property
+    def is_trial_user(self):
+        """Check if user is on trial plan"""
+        return self.subscription_plan_code == "TRIAL"
+
+    @property
+    def is_basic_user(self):
+        """Check if user is on basic plan"""
+        return self.subscription_plan_code == "BASIC"
+
+    @property
+    def has_active_trial(self):
+        """Check if user has an active trial subscription"""
+        if not self.is_trial_user:
+            return False
+        
+        # Check if trial is still active (not expired)
+        if self.subscription:
+            current_time = int(datetime.now().timestamp())
+            return current_time <= self.subscription.get("current_period_end", 0)
+        
+        return False
+
+    @property
+    def has_utilized_trial(self):
+        """Check if user has utilized their trial (submitted applications against trial plan) - historical check"""
+        # Count submitted applications for any trial subscription (historical)
+        trial_applications_query = f"""
+            SELECT COUNT(*) as count
+            FROM users.job_applications ja
+            JOIN subscription.subscriptions s ON ja.subscription_id = s.id
+            JOIN subscription.plans p ON s.plan_id = p.id
+            WHERE ja.user_id = {self.id}
+            AND p.code = 'TRIAL'
+            AND ja.application_status = 'submitted'
+        """
+        result = get_sql_query_output(trial_applications_query)
+        trial_applications_count = result[0]["count"] if result else 0
+        
+        return trial_applications_count > 0
+
+    @property
+    def trial_applications_used(self):
+        """Get count of trial applications used - historical total"""
+        trial_applications_query = f"""
+            SELECT COUNT(*) as count
+            FROM users.job_applications ja
+            JOIN subscription.subscriptions s ON ja.subscription_id = s.id
+            JOIN subscription.plans p ON s.plan_id = p.id
+            WHERE ja.user_id = {self.id}
+            AND p.code = 'TRIAL'
+            AND ja.application_status = 'submitted'
+        """
+        result = get_sql_query_output(trial_applications_query)
+        return result[0]["count"] if result else 0
+
+    @property
+    def _trial_limit_from_entitlements(self):
+        """Get trial limit from plan entitlements schema"""
+        trial_limit_query = f"""
+            SELECT pe.limit_quantity
+            FROM subscription.plan_entitlements pe
+            JOIN subscription.plans p ON pe.plan_id = p.id
+            JOIN subscription.services s ON pe.service_id = s.id
+            WHERE p.code = 'TRIAL'
+            AND s.code = 'JOB_APPLY'
+            AND pe.is_active = TRUE
+        """
+        result = get_sql_query_output(trial_limit_query)
+        return result[0]["limit_quantity"] if result else 5  # fallback to 5
+
+    @property
+    def trial_applications_remaining(self):
+        """Get count of trial applications remaining"""
+        if not self.is_trial_user:
+            return 0
+        
+        trial_limit = self._trial_limit_from_entitlements
+        return max(0, trial_limit - self.trial_applications_used)
+
+    @property
+    def is_trial_exhausted(self):
+        """Check if trial applications are completely used up"""
+        return self.trial_applications_remaining == 0
+
+    @property
+    def basic_applications_used_this_period(self):
+        """Get count of basic plan applications used in current period"""
+        if not self.is_basic_user or not self.subscription:
+            return 0
+        
+        current_period_start = self.subscription.get("current_period_start", 0)
+        current_period_end = self.subscription.get("current_period_end", 0)
+        
+        basic_applications_query = f"""
+            SELECT COUNT(*) as count
+            FROM users.job_applications
+            WHERE user_id = {self.id}
+            AND subscription_id = {self.subscription.get("subscription_id")}
+            AND application_status = 'submitted'
+            AND created_at >= {current_period_start}
+            AND created_at <= {current_period_end}
+        """
+        result = get_sql_query_output(basic_applications_query)
+        return result[0]["count"] if result else 0
+
+    @property
+    def _basic_applications_limit_from_entitlements(self):
+        """Get basic plan applications limit from plan entitlements schema"""
+        basic_limit_query = f"""
+            SELECT pe.limit_quantity
+            FROM subscription.plan_entitlements pe
+            JOIN subscription.plans p ON pe.plan_id = p.id
+            JOIN subscription.services s ON pe.service_id = s.id
+            WHERE p.code = 'BASIC'
+            AND s.code = 'JOB_APPLY'
+            AND pe.is_active = TRUE
+        """
+        result = get_sql_query_output(basic_limit_query)
+        return result[0]["limit_quantity"] if result else 350  # fallback to 350
+
+    @property
+    def basic_applications_remaining_this_period(self):
+        """Get count of basic plan applications remaining in current period"""
+        if not self.is_basic_user:
+            return 0
+        
+        basic_limit = self._basic_applications_limit_from_entitlements
+        return max(0, basic_limit - self.basic_applications_used_this_period)
+
+    @property
+    def is_basic_plan_consumed_completely(self):
+        """Check if basic plan applications are completely consumed for current period"""
+        return self.basic_applications_remaining_this_period == 0
+
+    @property
+    def basic_job_shares_used_this_period(self):
+        """Get count of basic plan job shares used in current period"""
+        if not self.is_basic_user or not self.subscription:
+            return 0
+        
+        current_period_start = self.subscription.get("current_period_start", 0)
+        current_period_end = self.subscription.get("current_period_end", 0)
+        
+        # Count job shares for basic subscription in current period
+        job_shares_query = f"""
+            SELECT COUNT(*) as count
+            FROM users.jobs_shared js
+            JOIN subscription.subscriptions s ON js.subscription_id = s.id
+            JOIN subscription.plans p ON s.plan_id = p.id
+            WHERE js.user_id = {self.id}
+            AND p.code = 'BASIC'
+            AND js.shared_at >= {current_period_start}
+            AND js.shared_at <= {current_period_end}
+        """
+        result = get_sql_query_output(job_shares_query)
+        return result[0]["count"] if result else 0
+
+    @property
+    def _basic_shares_limit_from_entitlements(self):
+        """Get basic plan job shares limit from plan entitlements schema"""
+        basic_shares_limit_query = f"""
+            SELECT pe.limit_quantity
+            FROM subscription.plan_entitlements pe
+            JOIN subscription.plans p ON pe.plan_id = p.id
+            JOIN subscription.services s ON pe.service_id = s.id
+            WHERE p.code = 'BASIC'
+            AND s.code = 'JOB_SHARE'
+            AND pe.is_active = TRUE
+        """
+        result = get_sql_query_output(basic_shares_limit_query)
+        return result[0]["limit_quantity"] if result else 700  # fallback to 700
+
+    @property
+    def basic_job_shares_remaining_this_period(self):
+        """Get count of basic plan job shares remaining in current period"""
+        if not self.is_basic_user:
+            return 0
+        
+        basic_shares_limit = self._basic_shares_limit_from_entitlements
+        return max(0, basic_shares_limit - self.basic_job_shares_used_this_period)
+
+    @property
+    def can_apply_for_jobs(self):
+        """Check if user can apply for jobs based on their subscription"""
+        if not self.has_active_subscription:
+            return False
+        
+        if self.is_trial_user:
+            return not self.is_trial_exhausted
+        
+        if self.is_basic_user:
+            return not self.is_basic_plan_consumed_completely
+        
+        return False
+
+    @property
+    def can_share_jobs(self):
+        """Check if user can share jobs based on their subscription"""
+        if not self.has_active_subscription:
+            return False
+        
+        if self.is_trial_user:
+            return False  # Trial users can't share jobs
+        
+        if self.is_basic_user:
+            return self.basic_job_shares_remaining_this_period > 0
+        
+        return False
+
+    @property
+    def subscription_status_summary(self):
+        """Get a summary of user's subscription status"""
+        if not self.has_active_subscription:
+            return {
+                "has_subscription": False,
+                "plan": None,
+                "can_apply": False,
+                "can_share": False,
+                "applications_remaining": 0,
+                "shares_remaining": 0
+            }
+        
+        summary = {
+            "has_subscription": True,
+            "plan": self.subscription_plan_code,
+            "plan_name": self.subscription_plan_name,
+            "can_apply": self.can_apply_for_jobs,
+            "can_share": self.can_share_jobs
+        }
+        
+        if self.is_trial_user:
+            summary.update({
+                "applications_remaining": self.trial_applications_remaining,
+                "applications_used": self.trial_applications_used,
+                "total_applications": self._trial_limit_from_entitlements,
+                "shares_remaining": 0
+            })
+        elif self.is_basic_user:
+            summary.update({
+                "applications_remaining": self.basic_applications_remaining_this_period,
+                "applications_used": self.basic_applications_used_this_period,
+                "total_applications": self._basic_applications_limit_from_entitlements,
+                "shares_remaining": self.basic_job_shares_remaining_this_period,
+                "shares_used": self.basic_job_shares_used_this_period,
+                "total_shares": self._basic_shares_limit_from_entitlements
+            })
+        
+        return summary
+
+    @property
+    def subscription_period_info(self):
+        """Get subscription period information"""
+        if not self.subscription:
+            return None
+        
+        return {
+            "start_at": self.subscription.get("start_at"),
+            "current_period_start": self.subscription.get("current_period_start"),
+            "current_period_end": self.subscription.get("current_period_end"),
+            "canceled_at": self.subscription.get("canceled_at"),
+            "is_active": self.subscription.get("is_active"),
+            "billing_period": self.subscription.get("billing_period"),
+            "price_amount": self.subscription.get("price_amount"),
+            "price_currency": self.subscription.get("price_currency")
+        }
 
     @property
     def drive_folder(self):
@@ -338,6 +649,15 @@ class User:
     def share_jobs(self):
         import numpy as np  # TODO: Moved here to avoid increasing lambda build size. Optimise using lambda layers.
 
+        # Check if user can share jobs based on subscription
+        if not self.can_share_jobs:
+            subscription_status = self.subscription_status_summary
+            logger.warning(
+                f"User {self.email} cannot share jobs due to subscription limits. "
+                f"Subscription status: {subscription_status}"
+            )
+            return False
+
         logger.info(f"Sharing jobs for {self.email}...")
 
         today = datetime.now(pytz.timezone("Asia/Kolkata")).date()
@@ -383,6 +703,10 @@ class User:
             df_unshared_jobs = df_unshared_jobs[["id"]].rename(columns={"id": "job_id"})
             df_unshared_jobs["user_id"] = self.id
             df_unshared_jobs["job_filter_id"] = cur_filter["id"]
+            
+            # Add subscription_id to track job sharing usage
+            subscription_id = self.subscription.get("subscription_id") if self.subscription else None
+            df_unshared_jobs["subscription_id"] = subscription_id
 
             con = get_sql_connection(con_type="sqlalchemy")
             df_unshared_jobs.to_sql(
@@ -580,11 +904,8 @@ class User:
 
     @property
     def should_stream_applications(self):
-        """Determine if streaming should be enabled based on successful applications count and config"""
-        max_applications = config.get("streaming", {}).get(
-            "max_applications_for_streaming", 5
-        )
-        return self.successful_applications_count <= max_applications
+        """Determine if streaming should be enabled - only for trial users whose plan is not exhausted"""
+        return self.is_trial_user and not self.is_trial_exhausted
 
     @property
     def phone_number(self):
