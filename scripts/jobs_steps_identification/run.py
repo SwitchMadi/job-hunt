@@ -74,7 +74,7 @@ try:
                 [
                     python_executable,
                     "-m",
-                    "scripts.jobs_steps_identification.identify_job_steps",
+                    "scripts.job_application.apply_job",
                     str(curr_job_id),
                 ]
             )
