@@ -48,12 +48,25 @@ try:
 
     logger.info(f"Lock acquired for job application. Lock ID: {lock_id}")
 
+    # Check subscription status before proceeding
+    if not user.can_apply_for_jobs:
+        subscription_status = user.subscription_status_summary
+        logger.error(
+            f"User {user.id} cannot apply for jobs. Subscription status: {subscription_status}"
+        )
+        raise Exception(f"Job application not allowed due to subscription limits: {subscription_status}")
+
     jobs = user.fetch_job_ids_to_apply()
 
-    is_free_application_trigger = startup_config["free_application"]
-    if is_free_application_trigger:
-        logger.info("Limiting jobs to 5 as it's free application trigger")
-        jobs = jobs[:5]
+    # Apply subscription-based limits
+    if user.is_trial_user:
+        remaining_applications = user.trial_applications_remaining
+        logger.info(f"Trial user - limiting to {remaining_applications} applications")
+        jobs = jobs[:remaining_applications]
+    elif user.is_basic_user:
+        remaining_applications = user.basic_applications_remaining_this_period
+        logger.info(f"Basic user - limiting to {remaining_applications} applications for current period")
+        jobs = jobs[:remaining_applications]
 
     kill_selenium_chrome()
 

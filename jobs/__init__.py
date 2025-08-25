@@ -540,11 +540,12 @@ class ApplicationPage:
             close_selenium_driver()
             return True
 
-        # Create job application entry
+        # Create job application entry with subscription_id
+        subscription_id = self.parent_job.user.subscription.get("subscription_id") if self.parent_job.user.subscription else None
         insert_application_query = f"""
             INSERT INTO users.job_applications
-            (user_id, job_id, application_status)
-            VALUES ({self.parent_job.user.id}, {self.parent_job.id}, 'initiated')
+            (user_id, job_id, application_status, subscription_id)
+            VALUES ({self.parent_job.user.id}, {self.parent_job.id}, 'initiated', {subscription_id or 'NULL'})
             RETURNING id;
         """
         result = execute_sql_query(insert_application_query, return_result=True)

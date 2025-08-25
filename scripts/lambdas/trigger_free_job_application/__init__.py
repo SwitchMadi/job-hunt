@@ -23,6 +23,40 @@ def lambda_handler(event, context):
 
         user = User(email=email)
 
+        # Check if user is on trial plan (free job application is only for trial users)
+        if not user.is_trial_user:
+            subscription_status = user.subscription_status_summary
+            logger.warning(
+                f"User {user.id} is not on trial plan. Free job application is only for trial users. Subscription status: {subscription_status}"
+            )
+            return {
+                "statusCode": 403,
+                "body": json.dumps(
+                    {
+                        "message": "Free job application is only available for trial users",
+                        "subscription_status": subscription_status,
+                        "error": True,
+                    }
+                ),
+            }
+
+        # Check subscription status before allowing job application
+        if not user.can_apply_for_jobs:
+            subscription_status = user.subscription_status_summary
+            logger.warning(
+                f"User {user.id} cannot apply for jobs. Subscription status: {subscription_status}"
+            )
+            return {
+                "statusCode": 403,
+                "body": json.dumps(
+                    {
+                        "message": "Job application not allowed due to subscription limits",
+                        "subscription_status": subscription_status,
+                        "error": True,
+                    }
+                ),
+            }
+
         # Check if job scraping is already running
         lock_table = OperationLocksTable()
         operation_name = f"job_application-{user.id}"
@@ -47,7 +81,6 @@ def lambda_handler(event, context):
         echo Current date and time >> C:\Users\JobHunt\Desktop\startup.log
         echo %DATE% %TIME% >> C:\Users\JobHunt\Desktop\startup.log
         echo user_email: '{email}' >> C:\Users\JobHunt\Desktop\startup_input.yml
-        echo free_application: 'true' >> C:\Users\JobHunt\Desktop\startup_input.yml
         </script>
         <persist>true</persist>"""
 

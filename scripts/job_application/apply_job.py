@@ -16,6 +16,12 @@ from jobs import Job
 from user import User
 
 user = User(email=config["user_email"])
+
+# Check subscription status before applying
+if not user.can_apply_for_jobs:
+    subscription_status = user.subscription_status_summary
+    raise Exception(f"Job application not allowed due to subscription limits: {subscription_status}")
+
 job = Job(job_id=job_id, user=user)
 
 job.application_page.apply()
