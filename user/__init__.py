@@ -159,12 +159,12 @@ class User:
         """Check if user has an active trial subscription"""
         if not self.is_trial_user:
             return False
-        
+
         # Check if trial is still active (not expired)
         if self.subscription:
             current_time = int(datetime.now().timestamp())
             return current_time <= self.subscription.get("current_period_end", 0)
-        
+
         return False
 
     @property
@@ -182,7 +182,7 @@ class User:
         """
         result = get_sql_query_output(trial_applications_query)
         trial_applications_count = result[0]["count"] if result else 0
-        
+
         return trial_applications_count > 0
 
     @property
@@ -220,7 +220,7 @@ class User:
         """Get count of trial applications remaining"""
         if not self.is_trial_user:
             return 0
-        
+
         trial_limit = self._trial_limit_from_entitlements
         return max(0, trial_limit - self.trial_applications_used)
 
@@ -234,10 +234,10 @@ class User:
         """Get count of basic plan applications used in current period"""
         if not self.is_basic_user or not self.subscription:
             return 0
-        
+
         current_period_start = self.subscription.get("current_period_start", 0)
         current_period_end = self.subscription.get("current_period_end", 0)
-        
+
         basic_applications_query = f"""
             SELECT COUNT(*) as count
             FROM users.job_applications
@@ -270,7 +270,7 @@ class User:
         """Get count of basic plan applications remaining in current period"""
         if not self.is_basic_user:
             return 0
-        
+
         basic_limit = self._basic_applications_limit_from_entitlements
         return max(0, basic_limit - self.basic_applications_used_this_period)
 
@@ -284,10 +284,10 @@ class User:
         """Get count of basic plan job shares used in current period"""
         if not self.is_basic_user or not self.subscription:
             return 0
-        
+
         current_period_start = self.subscription.get("current_period_start", 0)
         current_period_end = self.subscription.get("current_period_end", 0)
-        
+
         # Count job shares for basic subscription in current period
         job_shares_query = f"""
             SELECT COUNT(*) as count
@@ -322,7 +322,7 @@ class User:
         """Get count of basic plan job shares remaining in current period"""
         if not self.is_basic_user:
             return 0
-        
+
         basic_shares_limit = self._basic_shares_limit_from_entitlements
         return max(0, basic_shares_limit - self.basic_job_shares_used_this_period)
 
@@ -331,13 +331,13 @@ class User:
         """Check if user can apply for jobs based on their subscription"""
         if not self.has_active_subscription:
             return False
-        
+
         if self.is_trial_user:
             return not self.is_trial_exhausted
-        
+
         if self.is_basic_user:
             return not self.is_basic_plan_consumed_completely
-        
+
         return False
 
     @property
@@ -345,13 +345,13 @@ class User:
         """Check if user can share jobs based on their subscription"""
         if not self.has_active_subscription:
             return False
-        
+
         if self.is_trial_user:
             return False  # Trial users can't share jobs
-        
+
         if self.is_basic_user:
             return self.basic_job_shares_remaining_this_period > 0
-        
+
         return False
 
     @property
@@ -364,34 +364,38 @@ class User:
                 "can_apply": False,
                 "can_share": False,
                 "applications_remaining": 0,
-                "shares_remaining": 0
+                "shares_remaining": 0,
             }
-        
+
         summary = {
             "has_subscription": True,
             "plan": self.subscription_plan_code,
             "plan_name": self.subscription_plan_name,
             "can_apply": self.can_apply_for_jobs,
-            "can_share": self.can_share_jobs
+            "can_share": self.can_share_jobs,
         }
-        
+
         if self.is_trial_user:
-            summary.update({
-                "applications_remaining": self.trial_applications_remaining,
-                "applications_used": self.trial_applications_used,
-                "total_applications": self._trial_limit_from_entitlements,
-                "shares_remaining": 0
-            })
+            summary.update(
+                {
+                    "applications_remaining": self.trial_applications_remaining,
+                    "applications_used": self.trial_applications_used,
+                    "total_applications": self._trial_limit_from_entitlements,
+                    "shares_remaining": 0,
+                }
+            )
         elif self.is_basic_user:
-            summary.update({
-                "applications_remaining": self.basic_applications_remaining_this_period,
-                "applications_used": self.basic_applications_used_this_period,
-                "total_applications": self._basic_applications_limit_from_entitlements,
-                "shares_remaining": self.basic_job_shares_remaining_this_period,
-                "shares_used": self.basic_job_shares_used_this_period,
-                "total_shares": self._basic_shares_limit_from_entitlements
-            })
-        
+            summary.update(
+                {
+                    "applications_remaining": self.basic_applications_remaining_this_period,
+                    "applications_used": self.basic_applications_used_this_period,
+                    "total_applications": self._basic_applications_limit_from_entitlements,
+                    "shares_remaining": self.basic_job_shares_remaining_this_period,
+                    "shares_used": self.basic_job_shares_used_this_period,
+                    "total_shares": self._basic_shares_limit_from_entitlements,
+                }
+            )
+
         return summary
 
     @property
@@ -399,7 +403,7 @@ class User:
         """Get subscription period information"""
         if not self.subscription:
             return None
-        
+
         return {
             "start_at": self.subscription.get("start_at"),
             "current_period_start": self.subscription.get("current_period_start"),
@@ -408,7 +412,7 @@ class User:
             "is_active": self.subscription.get("is_active"),
             "billing_period": self.subscription.get("billing_period"),
             "price_amount": self.subscription.get("price_amount"),
-            "price_currency": self.subscription.get("price_currency")
+            "price_currency": self.subscription.get("price_currency"),
         }
 
     @property
@@ -703,9 +707,11 @@ class User:
             df_unshared_jobs = df_unshared_jobs[["id"]].rename(columns={"id": "job_id"})
             df_unshared_jobs["user_id"] = self.id
             df_unshared_jobs["job_filter_id"] = cur_filter["id"]
-            
+
             # Add subscription_id to track job sharing usage
-            subscription_id = self.subscription.get("subscription_id") if self.subscription else None
+            subscription_id = (
+                self.subscription.get("subscription_id") if self.subscription else None
+            )
             df_unshared_jobs["subscription_id"] = subscription_id
 
             con = get_sql_connection(con_type="sqlalchemy")

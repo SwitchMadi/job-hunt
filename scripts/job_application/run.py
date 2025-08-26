@@ -54,7 +54,9 @@ try:
         logger.error(
             f"User {user.id} cannot apply for jobs. Subscription status: {subscription_status}"
         )
-        raise Exception(f"Job application not allowed due to subscription limits: {subscription_status}")
+        raise Exception(
+            f"Job application not allowed due to subscription limits: {subscription_status}"
+        )
 
     jobs = user.fetch_job_ids_to_apply()
 
@@ -65,7 +67,9 @@ try:
         jobs = jobs[:remaining_applications]
     elif user.is_basic_user:
         remaining_applications = user.basic_applications_remaining_this_period
-        logger.info(f"Basic user - limiting to {remaining_applications} applications for current period")
+        logger.info(
+            f"Basic user - limiting to {remaining_applications} applications for current period"
+        )
         jobs = jobs[:remaining_applications]
 
     kill_selenium_chrome()

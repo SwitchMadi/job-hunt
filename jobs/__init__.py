@@ -541,7 +541,11 @@ class ApplicationPage:
             return True
 
         # Create job application entry with subscription_id
-        subscription_id = self.parent_job.user.subscription.get("subscription_id") if self.parent_job.user.subscription else None
+        subscription_id = (
+            self.parent_job.user.subscription.get("subscription_id")
+            if self.parent_job.user.subscription
+            else None
+        )
         insert_application_query = f"""
             INSERT INTO users.job_applications
             (user_id, job_id, application_status, subscription_id)

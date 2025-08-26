@@ -21,7 +21,7 @@ def lambda_handler(event, context):
 
     for email in emails:
         user = User(email=email["email"])
-        
+
         # Check if user can share jobs based on subscription
         if not user.can_share_jobs:
             logger.warning(
@@ -29,7 +29,7 @@ def lambda_handler(event, context):
                 f"Subscription status: {user.subscription_status_summary}"
             )
             continue
-            
+
         user.share_jobs()
 
     return
