@@ -483,6 +483,48 @@ Resources:
               - !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ResumeParserWebSocket}/${ResumeParserWebSocketStage}/POST/@connections/*
               - !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ResumeParserWebSocket}/${ResumeParserWebSocketStage}/GET/@connections/*
 
+  TriggerFreeJobApplication:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: TriggerFreeJobApplication
+      Handler: __init__.lambda_handler
+      Runtime: python3.10
+      CodeUri: /Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_free_job_application
+      Timeout: 900
+      Layers:
+        - !Ref JobHuntCommonLayer
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref OperationLocksTable
+        - Statement:
+            Effect: Allow
+            Action:
+              - ec2:RunInstances
+              - ec2:CreateTags
+              - ec2:DescribeInstances
+              - ec2:DescribeImages
+              - ec2:DescribeKeyPairs
+              - ec2:DescribeSecurityGroups
+              - ec2:DescribeSubnets
+              - ec2:DescribeVpcs
+              - iam:PassRole
+            Resource: '*'
+      Events:
+        TriggerFreeJobApplicationPost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobHuntApi
+            Path: /jobs/application/free
+            Method: POST
+            Auth:
+              Authorizer: LambdaTokenAuthorizer
+        TriggerFreeJobApplicationOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobHuntApi
+            Path: /jobs/application/free
+            Method: OPTIONS
+
   # Lambda permissions for WebSocket routes
   WebSocketConnectPermission:
     Type: AWS::Lambda::Permission
