@@ -69,7 +69,77 @@ class User:
             (user_hash_id, email, name, password)
             values ('{self.hash_id}', '{self.email}', '{self.name}', '{self.password}')
         """
-        return execute_sql_query(user_create_query)
+        result = execute_sql_query(user_create_query)
+
+        # After creating the user, assign a trial subscription
+        if result:
+            # Get the newly created user to get the ID
+            user = User.find_user_by_email(self.email)
+            if user:
+                user.assign_trial_subscription()
+
+        return result
+
+    def assign_trial_subscription(self):
+        """Assign a trial subscription to the user if they don't have an active subscription"""
+        try:
+            # Check if user already has an active subscription
+            if self.has_active_subscription:
+                logger.info(
+                    f"User {self.id} already has an active subscription: {self.subscription_plan_code}"
+                )
+                return False
+
+            # Check if user has already utilized a trial (historical check)
+            if self.has_utilized_trial:
+                logger.info(f"User {self.id} has already utilized a trial subscription")
+                return False
+
+            # Get the trial plan ID
+            trial_plan_query = """
+                SELECT id FROM subscription.plans 
+                WHERE code = 'TRIAL' AND is_active = TRUE 
+                LIMIT 1
+            """
+            trial_plan_result = get_sql_query_output(trial_plan_query)
+
+            if not trial_plan_result:
+                logger.error("Trial plan not found in subscription.plans table")
+                return False
+
+            trial_plan_id = trial_plan_result[0]["id"]
+
+            # Calculate trial period from config
+            trial_days = config.get("subscription", {}).get("trial_days", 7)
+            current_time = int(datetime.now().timestamp())
+            trial_end_time = int(
+                (datetime.now() + timedelta(days=trial_days)).timestamp()
+            )
+
+            # Create trial subscription
+            subscription_create_query = f"""
+                INSERT INTO subscription.subscriptions
+                (user_id, plan_id, start_at, current_period_start, current_period_end, is_active)
+                VALUES 
+                ({self.id}, {trial_plan_id}, {current_time}, {current_time}, {trial_end_time}, TRUE)
+            """
+
+            subscription_result = execute_sql_query(subscription_create_query)
+
+            if subscription_result:
+                logger.info(
+                    f"Successfully assigned trial subscription to user {self.id}"
+                )
+                return True
+            else:
+                logger.error(f"Failed to create trial subscription for user {self.id}")
+                return False
+
+        except Exception as e:
+            logger.exception(
+                f"Error assigning trial subscription to user {self.id}: {e}"
+            )
+            return False
 
     def update_to_db(self, **fields):
         if not fields:

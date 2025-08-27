@@ -18,3 +18,5 @@ user_email: bhaskar2choudhary@gmail.com
 admin_email: bhaskar2choudhary@gmail.com
 websocket:
   endpoint_url: "https://ws.api.switchmadi.com"
+subscription:
+  trial_days: 30
