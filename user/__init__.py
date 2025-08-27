@@ -1108,15 +1108,15 @@ class User:
 
     def _get_application_job_ids_with_filters(self, sql_preference_filters):
         """
-        Helper method to get job IDs with given SQL preference filters.
+        Helper method to get job details with given SQL preference filters.
 
         Args:
             sql_preference_filters (str): SQL filter conditions
 
         Returns:
-            list: List of job IDs
+            list: List of job details with job_id, job_hash_id, job_url, title, company, location
         """
-        job_ids_query = f"""
+        job_details_query = f"""
             WITH submitted_jobs AS (
                 SELECT DISTINCT job_id
                 FROM users.job_applications
@@ -1131,7 +1131,13 @@ class User:
                 GROUP BY job_id
                 HAVING COUNT(*) >= 3
             )
-            SELECT j.id
+            SELECT 
+                j.id job_id,
+                j.job_hash_id,
+                j.job_url,
+                j.title,
+                j.company,
+                j.location
             FROM jobs.jobs j
             JOIN jobs.application_steps a ON j.id = a.job_id
             WHERE a.is_application_feasible = true
@@ -1146,7 +1152,8 @@ class User:
             AND j.job_url ilike '%greenhouse%'
             AND j.id NOT IN (SELECT job_id FROM submitted_jobs)
             AND j.id NOT IN (SELECT job_id FROM failed_jobs)
+            ORDER BY j.id
         """
 
-        job_ids = get_sql_query_output(job_ids_query)
-        return [job["id"] for job in job_ids]
+        job_details = get_sql_query_output(job_details_query)
+        return job_details

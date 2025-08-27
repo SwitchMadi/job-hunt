@@ -79,8 +79,9 @@ try:
     else:
         logger.info(f"Applying for {len(jobs)} jobs.")
 
-        jobs = [job["job_id"] for job in jobs]
-        for curr_job_id in jobs:
+        # Extract job IDs from the job details
+        job_ids = [job["job_id"] for job in jobs]
+        for curr_job_id in job_ids:
             logger.info(f"Applying job for job ID: {curr_job_id}")
 
             # Uploading screenshot before starting the identification process

@@ -3,7 +3,8 @@ import json
 from user import User
 from utilities.logging import get_logger
 from utilities.aws.ec2 import EC2
-from utilities.aws.dynamo import OperationLocksTable
+from utilities.aws.dynamo import OperationLocksTable, WebSocketConnectionsTable
+from utilities.aws.websocket import WebSocketClient
 
 logger = get_logger(name="trigger_job_application")
 
@@ -77,6 +78,78 @@ def lambda_handler(event, context):
 
         logger.info("No existing lock found. Triggering job application process.")
 
+        # Extract job information before launching EC2 instance
+        jobs = user.fetch_job_ids_to_apply()
+
+        # Apply trial plan limits
+        remaining_applications = user.trial_applications_remaining
+        logger.info(f"Trial user - limiting to {remaining_applications} applications")
+        jobs = jobs[:remaining_applications]
+
+        # Jobs now contain all the details we need
+        job_details = jobs if jobs else []
+        logger.info(f"Found {len(job_details)} job details for websocket message")
+
+        # If no jobs are available, return 204 No Content
+        if not job_details:
+            return {
+                "statusCode": 204,
+                "body": json.dumps(
+                    {
+                        "message": "No suitable jobs found for application",
+                        "no_jobs": True,
+                    }
+                ),
+            }
+
+        # Send job information via websocket to improve user experience
+        try:
+            websocket_table = WebSocketConnectionsTable()
+            connection = websocket_table.get_connections_by_user(email)
+
+            if connection:
+                connection_id = connection["connectionId"]["S"]
+                websocket_client = WebSocketClient()
+
+                # Send job list message when jobs are found
+                # Remove job_id from websocket data, only send hash_id and other details
+                websocket_jobs = []
+                for job in job_details:
+                    websocket_jobs.append(
+                        {
+                            "job_hash_id": job["job_hash_id"],
+                            "job_url": job["job_url"],
+                            "title": job["title"],
+                            "company": job["company"],
+                            "location": job["location"],
+                        }
+                    )
+
+                websocket_data = {
+                    "total_jobs": len(job_details),
+                    "jobs": websocket_jobs,
+                }
+
+                success = websocket_client.send_message(
+                    connection_id,
+                    "JOB_APPLICATION_JOBS_FOUND",
+                    websocket_data,
+                    user_email=email,
+                )
+
+                if success:
+                    logger.info(
+                        f"Successfully sent job list to user {email} via websocket"
+                    )
+                else:
+                    logger.warning(
+                        f"Failed to send job list to user {email} via websocket"
+                    )
+            else:
+                logger.warning(f"No websocket connection found for user {email}")
+        except Exception as e:
+            logger.exception(f"Error sending websocket message: {e}")
+
         script = rf"""<script>
         echo Current date and time >> C:\Users\JobHunt\Desktop\startup.log
         echo %DATE% %TIME% >> C:\Users\JobHunt\Desktop\startup.log
@@ -97,12 +170,39 @@ def lambda_handler(event, context):
 
         logger.info("Successfully triggered job application EC2 instance.")
 
+        # Send engaging message about the process starting
+        try:
+            if connection:
+                websocket_data = {
+                    "message": "🚀 Your job applications are being prepared! Our AI is analyzing each position and customizing your applications. This usually takes a few minutes - hang tight while we work our magic! ✨",
+                    "status": "processing",
+                }
+
+                success = websocket_client.send_message(
+                    connection_id,
+                    "JOB_APPLICATION_PROCESSING_STARTED",
+                    websocket_data,
+                    user_email=email,
+                )
+
+                if success:
+                    logger.info(
+                        f"Successfully sent processing message to user {email} via websocket"
+                    )
+                else:
+                    logger.warning(
+                        f"Failed to send processing message to user {email} via websocket"
+                    )
+        except Exception as e:
+            logger.exception(f"Error sending processing message: {e}")
+
         return {
             "statusCode": 200,
             "body": json.dumps(
                 {
                     "message": "Job application process triggered successfully",
                     "triggered": True,
+                    "jobs_found": len(job_details),
                 }
             ),
         }
