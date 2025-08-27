@@ -484,7 +484,7 @@ class ApplicationPage:
             return None
 
     def _send_stream_message(self, message_type, data):
-        """Send streaming message to user"""
+        """Send streaming message to user with connection recovery"""
         try:
             # Get WebSocket connection
             connection_id = self._get_websocket_connection()
@@ -494,15 +494,11 @@ class ApplicationPage:
                 )
                 return False
 
-            # Get WebSocket endpoint from config
-            websocket_endpoint = config.get("websocket", {}).get("endpoint_url")
-            if not websocket_endpoint:
-                logger.error("WebSocket endpoint URL not configured")
-                return False
-
-            # Send message
-            websocket_client = WebSocketClient(websocket_endpoint)
-            success = websocket_client.send_message(connection_id, message_type, data)
+            # Send message with connection recovery
+            websocket_client = WebSocketClient()
+            success = websocket_client.send_message(
+                connection_id, message_type, data, user_email=self.parent_job.user.email
+            )
 
             if success:
                 logger.info(
@@ -510,7 +506,7 @@ class ApplicationPage:
                 )
             else:
                 logger.warning(
-                    f"Failed to send {message_type} message to user {self.parent_job.user.email}"
+                    f"Failed to send {message_type} message to user {self.parent_job.user.email} after connection recovery attempts"
                 )
 
             return success
