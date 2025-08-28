@@ -7,8 +7,10 @@ from user import User
 from utilities import take_screenshot
 from utilities.logging import get_logger
 from utilities.selenium import kill_selenium_chrome
-from utilities.aws.dynamo import OperationLocksTable
+from utilities.aws.dynamo import OperationLocksTable, WebSocketConnectionsTable
 from utilities.aws.s3 import S3Bucket
+from utilities.aws.websocket import WebSocketClient
+from utilities.sql import get_sql_query_output
 
 
 logger = get_logger("jobs_application")
@@ -155,3 +157,69 @@ finally:
             logger.info(f"Lock released for job application. Lock ID: {lock_id}")
         except Exception as e:
             logger.exception(f"Error releasing lock: {e}")
+
+    # Send final completion message if streaming is enabled
+    if user.should_stream_applications:
+        try:
+            websocket_table = WebSocketConnectionsTable()
+            connection = websocket_table.get_connections_by_user(user.email)
+
+            if connection:
+                connection_id = connection["connectionId"]["S"]
+                websocket_client = WebSocketClient()
+
+                # Use the jobs list that was extracted at the start
+                total_apps = len(jobs) if jobs else 0
+                successful_apps = 0
+                failed_apps = 0
+
+                # Get application statistics from the jobs we processed
+                if jobs:
+                    job_ids = [job["job_id"] for job in jobs]
+                    job_ids_str = ",".join(map(str, job_ids))
+
+                    stats_query = f"""
+                        SELECT 
+                            COUNT(*) as total_applications,
+                            SUM(CASE WHEN application_status = 'submitted' THEN 1 ELSE 0 END) as successful_applications,
+                            SUM(CASE WHEN application_status = 'failed' THEN 1 ELSE 0 END) as failed_applications
+                        FROM users.job_applications 
+                        WHERE user_id = {user.id} 
+                        AND job_id IN ({job_ids_str})
+                        AND created_at >= NOW() - INTERVAL '1 hour'
+                    """
+                    stats = get_sql_query_output(stats_query)
+
+                    if stats:
+                        stats = stats[0]
+                        successful_apps = stats["successful_applications"] or 0
+                        failed_apps = stats["failed_applications"] or 0
+
+                # Create responses URL using the first job's hash ID (or a generic one)
+                responses_url = "https://switchmadi.com/jobs/responses"
+                if jobs and len(jobs) > 0:
+                    # Use the first job's hash ID for the responses URL
+                    first_job_hash = jobs[0]["job_hash_id"]
+                    responses_url = (
+                        f"https://switchmadi.com/jobs/{first_job_hash}/responses"
+                    )
+
+                completion_data = {
+                    "total_applications": total_apps,
+                    "successful_applications": successful_apps,
+                    "failed_applications": failed_apps,
+                    "responsesUrl": responses_url,
+                    "message": f"🎉 Job application process completed! Successfully applied for {successful_apps} out of {total_apps} jobs.",
+                }
+
+                websocket_client.send_message(
+                    connection_id,
+                    "JOB_APPLICATION_COMPLETED",
+                    completion_data,
+                    user_email=user.email,
+                )
+
+                logger.info(f"Sent final completion message for user {user.email}")
+
+        except Exception as e:
+            logger.exception(f"Error sending final completion message: {e}")

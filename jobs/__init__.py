@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from enum import Enum
 import json
 import yaml
+from datetime import datetime
 from selenium.webdriver.support.ui import WebDriverWait
 
 from utilities import constants, generate_hash, retry, clean_text_edges, take_screenshot
@@ -704,8 +705,7 @@ class ApplicationPage:
             # Close the driver after application
             close_selenium_driver()
 
-    @staticmethod
-    def _update_application_status(application_id, status, remarks):
+    def _update_application_status(self, application_id, status, remarks):
         """Update job application status in database"""
         query = f"""
             UPDATE users.job_applications
@@ -714,6 +714,31 @@ class ApplicationPage:
             WHERE id = {application_id};
         """
         execute_sql_query(query)
+
+        # Stream application completion message if this is a status update for a completed application
+        if status in ["submitted", "failed"] and self._should_stream:
+            try:
+                # Create responses URL using parent_job attributes
+                responses_url = f"https://switchmadi.com/jobs/{self.parent_job.job_hash_id}/responses"
+
+                stream_data = {
+                    "event": "application_completed",
+                    "job_title": self.parent_job.title,
+                    "company": self.parent_job.company,
+                    "success": status == "submitted",
+                    "responsesUrl": responses_url,
+                    "message": (
+                        f"Successfully applied for {self.parent_job.title} at {self.parent_job.company}"
+                        if status == "submitted"
+                        else f"Failed to apply for {self.parent_job.title} at {self.parent_job.company}"
+                    ),
+                    "timestamp": datetime.now().isoformat() + "Z",
+                }
+                self._send_stream_message("application_progress", stream_data)
+            except Exception as e:
+                logger.exception(
+                    f"Error streaming application completion from _update_application_status: {e}"
+                )
 
     def save_field_response(self, question, response):
         """Save the response for a specific field in the job application"""
