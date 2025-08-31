@@ -14,8 +14,8 @@ scraping:
       - https://www.linkedin.com/jobs/search/?f_TPR=r86400&geoId=103644278&keywords=business%20analyst&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true
 startup_input: C:\Users\JobHunt\Desktop\startup_input.yml
 openai_model: gpt-4o-mini-2024-07-18
-user_email: bhaskar2choudhary@gmail.com
-admin_email: bhaskar2choudhary@gmail.com
+user_email: yzalthree@gmail.com
+admin_email: yzalthree@gmail.com
 websocket:
   endpoint_url: "https://ws.api.switchmadi.com"
 subscription:
