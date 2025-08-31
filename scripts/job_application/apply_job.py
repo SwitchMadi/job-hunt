@@ -12,7 +12,7 @@ import yaml
 os.environ["LOG_GROUP_STREAM_SUFFIX"] = f"job_id-{job_id}"
 config = yaml.safe_load(open("config.yml"))
 
-from jobs import Job
+from jobs import Job, logger
 from user import User
 
 user = User(email=config["user_email"])
@@ -20,6 +20,9 @@ user = User(email=config["user_email"])
 # Check subscription status before applying
 if not user.can_apply_for_jobs:
     subscription_status = user.subscription_status_summary
+    logger.error(
+        f"Job application not allowed due to subscription limits: {subscription_status}"
+    )
     raise Exception(
         f"Job application not allowed due to subscription limits: {subscription_status}"
     )
