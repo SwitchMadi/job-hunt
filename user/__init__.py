@@ -91,7 +91,20 @@ class User:
                 return False
 
             # Check if user has already utilized a trial (historical check)
-            if self.has_utilized_trial:
+            # For trial check, we need to check historical usage regardless of current plan
+            trial_applications_query = f"""
+                SELECT COUNT(*) as count
+                FROM users.job_applications ja
+                JOIN subscription.subscriptions s ON ja.subscription_id = s.id
+                JOIN subscription.plans p ON s.plan_id = p.id
+                WHERE ja.user_id = {self.id}
+                AND p.code = 'TRIAL'
+                AND ja.application_status = 'submitted'
+            """
+            result = get_sql_query_output(trial_applications_query)
+            trial_applications_count = result[0]["count"] if result else 0
+
+            if trial_applications_count > 0:
                 logger.info(f"User {self.id} has already utilized a trial subscription")
                 return False
 
@@ -214,215 +227,175 @@ class User:
         """Get the current subscription plan name"""
         return self.subscription.get("plan_name") if self.subscription else None
 
-    @property
-    def is_trial_user(self):
-        """Check if user is on trial plan"""
-        return self.subscription_plan_code == "TRIAL"
+    # Generic service-based methods for extensible plan support
+    def get_service_limit(self, service_code, plan_code=None):
+        """Get limit for any service on any plan (or current plan if not specified)"""
+        if plan_code is None:
+            plan_code = self.subscription_plan_code
 
-    @property
-    def is_basic_user(self):
-        """Check if user is on basic plan"""
-        return self.subscription_plan_code == "BASIC"
+        if not plan_code:
+            return 0
 
-    @property
-    def has_active_trial(self):
-        """Check if user has an active trial subscription"""
-        if not self.is_trial_user:
+        limit_query = f"""
+            SELECT pe.limit_quantity
+            FROM subscription.plan_entitlements pe
+            JOIN subscription.plans p ON pe.plan_id = p.id
+            JOIN subscription.services s ON pe.service_id = s.id
+            WHERE p.code = '{plan_code}'
+            AND s.code = '{service_code}'
+            AND pe.is_active = TRUE
+        """
+        result = get_sql_query_output(limit_query)
+        return result[0]["limit_quantity"] if result else 0
+
+    def get_service_usage(
+        self, service_code, plan_code=None, period_start=None, period_end=None
+    ):
+        """Get usage for any service on any plan (or current plan if not specified)"""
+        if plan_code is None:
+            plan_code = self.subscription_plan_code
+
+        if not plan_code:
+            return 0
+
+        # For lifetime services (like TRIAL), don't use period filtering
+        if plan_code == "TRIAL":
+            usage_query = f"""
+                SELECT COUNT(*) as count
+                FROM users.job_applications ja
+                JOIN subscription.subscriptions s ON ja.subscription_id = s.id
+                JOIN subscription.plans p ON s.plan_id = p.id
+                WHERE ja.user_id = {self.id}
+                AND p.code = '{plan_code}'
+                AND ja.application_status = 'submitted'
+            """
+        else:
+            # For period-based services, use subscription period
+            if period_start is None or period_end is None:
+                if self.subscription:
+                    period_start = self.subscription.get("current_period_start", 0)
+                    period_end = self.subscription.get("current_period_end", 0)
+                else:
+                    return 0
+
+            if service_code == "JOB_APPLY":
+                usage_query = f"""
+                    SELECT COUNT(*) as count
+                    FROM users.job_applications
+                    WHERE user_id = {self.id}
+                    AND subscription_id = {self.subscription.get("subscription_id")}
+                    AND application_status = 'submitted'
+                    AND created_at >= {period_start}
+                    AND created_at <= {period_end}
+                """
+            elif service_code == "JOB_SHARE":
+                usage_query = f"""
+                    SELECT COUNT(*) as count
+                    FROM users.jobs_shared js
+                    JOIN subscription.subscriptions s ON js.subscription_id = s.id
+                    JOIN subscription.plans p ON s.plan_id = p.id
+                    WHERE js.user_id = {self.id}
+                    AND p.code = '{plan_code}'
+                    AND js.shared_at >= {period_start}
+                    AND js.shared_at <= {period_end}
+                """
+            else:
+                raise ValueError(f"Invalid service code: {service_code}")
+
+        result = get_sql_query_output(usage_query)
+        return result[0]["count"] if result else 0
+
+    def get_service_remaining(self, service_code, plan_code=None):
+        """Get remaining quota for any service on any plan"""
+        limit = self.get_service_limit(service_code, plan_code)
+        usage = self.get_service_usage(service_code, plan_code)
+        return max(0, limit - usage)
+
+    def can_use_service(self, service_code):
+        """Check if user can use any service based on their current plan"""
+        if not self.has_active_subscription:
             return False
 
-        # Check if trial is still active (not expired)
-        if self.subscription:
-            current_time = int(datetime.now().timestamp())
-            return current_time <= self.subscription.get("current_period_end", 0)
+        remaining = self.get_service_remaining(service_code)
+        return remaining > 0
 
-        return False
+    def has_service_access(self, service_code):
+        """Check if current plan provides access to a service"""
+        if not self.subscription:
+            return False
 
-    @property
-    def has_utilized_trial(self):
-        """Check if user has utilized their trial (submitted applications against trial plan) - historical check"""
-        # Count submitted applications for any trial subscription (historical)
-        trial_applications_query = f"""
-            SELECT COUNT(*) as count
-            FROM users.job_applications ja
-            JOIN subscription.subscriptions s ON ja.subscription_id = s.id
-            JOIN subscription.plans p ON s.plan_id = p.id
-            WHERE ja.user_id = {self.id}
-            AND p.code = 'TRIAL'
-            AND ja.application_status = 'submitted'
-        """
-        result = get_sql_query_output(trial_applications_query)
-        trial_applications_count = result[0]["count"] if result else 0
+        plan_code = self.subscription_plan_code
+        limit = self.get_service_limit(service_code, plan_code)
+        return limit > 0
 
-        return trial_applications_count > 0
+    def get_plan_entitlements(self, plan_code=None):
+        """Get all entitlements for a plan"""
+        if plan_code is None:
+            plan_code = self.subscription_plan_code
 
-    @property
-    def trial_applications_used(self):
-        """Get count of trial applications used - historical total"""
-        trial_applications_query = f"""
-            SELECT COUNT(*) as count
-            FROM users.job_applications ja
-            JOIN subscription.subscriptions s ON ja.subscription_id = s.id
-            JOIN subscription.plans p ON s.plan_id = p.id
-            WHERE ja.user_id = {self.id}
-            AND p.code = 'TRIAL'
-            AND ja.application_status = 'submitted'
-        """
-        result = get_sql_query_output(trial_applications_query)
-        return result[0]["count"] if result else 0
+        if not plan_code:
+            return {}
 
-    @property
-    def _trial_limit_from_entitlements(self):
-        """Get trial limit from plan entitlements schema"""
-        trial_limit_query = f"""
-            SELECT pe.limit_quantity
+        entitlements_query = f"""
+            SELECT s.code as service_code, pe.limit_quantity
             FROM subscription.plan_entitlements pe
             JOIN subscription.plans p ON pe.plan_id = p.id
             JOIN subscription.services s ON pe.service_id = s.id
-            WHERE p.code = 'TRIAL'
-            AND s.code = 'JOB_APPLY'
+            WHERE p.code = '{plan_code}'
             AND pe.is_active = TRUE
         """
-        result = get_sql_query_output(trial_limit_query)
-        return result[0]["limit_quantity"] if result else 5  # fallback to 5
+        result = get_sql_query_output(entitlements_query)
+
+        entitlements = {}
+        for row in result:
+            entitlements[row["service_code"]] = row["limit_quantity"]
+
+        return entitlements
 
     @property
-    def trial_applications_remaining(self):
-        """Get count of trial applications remaining"""
-        if not self.is_trial_user:
-            return 0
-
-        trial_limit = self._trial_limit_from_entitlements
-        return max(0, trial_limit - self.trial_applications_used)
+    def current_plan_services(self):
+        """Get all services available on current plan"""
+        return self.get_plan_entitlements()
 
     @property
-    def is_trial_exhausted(self):
-        """Check if trial applications are completely used up"""
-        return self.trial_applications_remaining == 0
+    def applications_remaining(self):
+        """Get remaining job applications for current plan"""
+        return self.get_service_remaining("JOB_APPLY")
 
     @property
-    def basic_applications_used_this_period(self):
-        """Get count of basic plan applications used in current period"""
-        if not self.is_basic_user or not self.subscription:
-            return 0
-
-        current_period_start = self.subscription.get("current_period_start", 0)
-        current_period_end = self.subscription.get("current_period_end", 0)
-
-        basic_applications_query = f"""
-            SELECT COUNT(*) as count
-            FROM users.job_applications
-            WHERE user_id = {self.id}
-            AND subscription_id = {self.subscription.get("subscription_id")}
-            AND application_status = 'submitted'
-            AND created_at >= {current_period_start}
-            AND created_at <= {current_period_end}
-        """
-        result = get_sql_query_output(basic_applications_query)
-        return result[0]["count"] if result else 0
+    def applications_used(self):
+        """Get used job applications for current plan"""
+        return self.get_service_usage("JOB_APPLY")
 
     @property
-    def _basic_applications_limit_from_entitlements(self):
-        """Get basic plan applications limit from plan entitlements schema"""
-        basic_limit_query = f"""
-            SELECT pe.limit_quantity
-            FROM subscription.plan_entitlements pe
-            JOIN subscription.plans p ON pe.plan_id = p.id
-            JOIN subscription.services s ON pe.service_id = s.id
-            WHERE p.code = 'BASIC'
-            AND s.code = 'JOB_APPLY'
-            AND pe.is_active = TRUE
-        """
-        result = get_sql_query_output(basic_limit_query)
-        return result[0]["limit_quantity"] if result else 350  # fallback to 350
+    def applications_limit(self):
+        """Get total job applications limit for current plan"""
+        return self.get_service_limit("JOB_APPLY")
 
     @property
-    def basic_applications_remaining_this_period(self):
-        """Get count of basic plan applications remaining in current period"""
-        if not self.is_basic_user:
-            return 0
-
-        basic_limit = self._basic_applications_limit_from_entitlements
-        return max(0, basic_limit - self.basic_applications_used_this_period)
+    def shares_remaining(self):
+        """Get remaining job shares for current plan"""
+        return self.get_service_remaining("JOB_SHARE")
 
     @property
-    def is_basic_plan_consumed_completely(self):
-        """Check if basic plan applications are completely consumed for current period"""
-        return self.basic_applications_remaining_this_period == 0
+    def shares_used(self):
+        """Get used job shares for current plan"""
+        return self.get_service_usage("JOB_SHARE")
 
     @property
-    def basic_job_shares_used_this_period(self):
-        """Get count of basic plan job shares used in current period"""
-        if not self.is_basic_user or not self.subscription:
-            return 0
-
-        current_period_start = self.subscription.get("current_period_start", 0)
-        current_period_end = self.subscription.get("current_period_end", 0)
-
-        # Count job shares for basic subscription in current period
-        job_shares_query = f"""
-            SELECT COUNT(*) as count
-            FROM users.jobs_shared js
-            JOIN subscription.subscriptions s ON js.subscription_id = s.id
-            JOIN subscription.plans p ON s.plan_id = p.id
-            WHERE js.user_id = {self.id}
-            AND p.code = 'BASIC'
-            AND js.shared_at >= {current_period_start}
-            AND js.shared_at <= {current_period_end}
-        """
-        result = get_sql_query_output(job_shares_query)
-        return result[0]["count"] if result else 0
-
-    @property
-    def _basic_shares_limit_from_entitlements(self):
-        """Get basic plan job shares limit from plan entitlements schema"""
-        basic_shares_limit_query = f"""
-            SELECT pe.limit_quantity
-            FROM subscription.plan_entitlements pe
-            JOIN subscription.plans p ON pe.plan_id = p.id
-            JOIN subscription.services s ON pe.service_id = s.id
-            WHERE p.code = 'BASIC'
-            AND s.code = 'JOB_SHARE'
-            AND pe.is_active = TRUE
-        """
-        result = get_sql_query_output(basic_shares_limit_query)
-        return result[0]["limit_quantity"] if result else 700  # fallback to 700
-
-    @property
-    def basic_job_shares_remaining_this_period(self):
-        """Get count of basic plan job shares remaining in current period"""
-        if not self.is_basic_user:
-            return 0
-
-        basic_shares_limit = self._basic_shares_limit_from_entitlements
-        return max(0, basic_shares_limit - self.basic_job_shares_used_this_period)
+    def shares_limit(self):
+        """Get total job shares limit for current plan"""
+        return self.get_service_limit("JOB_SHARE")
 
     @property
     def can_apply_for_jobs(self):
         """Check if user can apply for jobs based on their subscription"""
-        if not self.has_active_subscription:
-            return False
-
-        if self.is_trial_user:
-            return not self.is_trial_exhausted
-
-        if self.is_basic_user:
-            return not self.is_basic_plan_consumed_completely
-
-        return False
+        return self.can_use_service("JOB_APPLY")
 
     @property
     def can_share_jobs(self):
         """Check if user can share jobs based on their subscription"""
-        if not self.has_active_subscription:
-            return False
-
-        if self.is_trial_user:
-            return False  # Trial users can't share jobs
-
-        if self.is_basic_user:
-            return self.basic_job_shares_remaining_this_period > 0
-
-        return False
+        return self.can_use_service("JOB_SHARE")
 
     @property
     def subscription_status_summary(self):
@@ -445,24 +418,24 @@ class User:
             "can_share": self.can_share_jobs,
         }
 
-        if self.is_trial_user:
+        # Get all available services for current plan
+        plan_services = self.current_plan_services
+
+        if "JOB_APPLY" in plan_services:
             summary.update(
                 {
-                    "applications_remaining": self.trial_applications_remaining,
-                    "applications_used": self.trial_applications_used,
-                    "total_applications": self._trial_limit_from_entitlements,
-                    "shares_remaining": 0,
+                    "applications_remaining": self.applications_remaining,
+                    "applications_used": self.applications_used,
+                    "total_applications": self.applications_limit,
                 }
             )
-        elif self.is_basic_user:
+
+        if "JOB_SHARE" in plan_services:
             summary.update(
                 {
-                    "applications_remaining": self.basic_applications_remaining_this_period,
-                    "applications_used": self.basic_applications_used_this_period,
-                    "total_applications": self._basic_applications_limit_from_entitlements,
-                    "shares_remaining": self.basic_job_shares_remaining_this_period,
-                    "shares_used": self.basic_job_shares_used_this_period,
-                    "total_shares": self._basic_shares_limit_from_entitlements,
+                    "shares_remaining": self.shares_remaining,
+                    "shares_used": self.shares_used,
+                    "total_shares": self.shares_limit,
                 }
             )
 
@@ -981,7 +954,9 @@ class User:
     @property
     def should_stream_applications(self):
         """Determine if streaming should be enabled - only for trial users whose plan is not exhausted"""
-        return self.is_trial_user and not self.is_trial_exhausted
+        if self.subscription_plan_code != "TRIAL":
+            return False
+        return self.applications_remaining > 0
 
     @property
     def phone_number(self):

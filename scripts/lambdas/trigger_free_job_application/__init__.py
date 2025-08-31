@@ -25,7 +25,7 @@ def lambda_handler(event, context):
         user = User(email=email)
 
         # Check if user is on trial plan (free job application is only for trial users)
-        if not user.is_trial_user:
+        if user.subscription_plan_code != "TRIAL":
             subscription_status = user.subscription_status_summary
             logger.warning(
                 f"User {user.id} is not on trial plan. Free job application is only for trial users. Subscription status: {subscription_status}"
@@ -81,8 +81,8 @@ def lambda_handler(event, context):
         # Extract job information before launching EC2 instance
         jobs = user.fetch_job_ids_to_apply()
 
-        # Apply trial plan limits
-        remaining_applications = user.trial_applications_remaining
+        # Apply trial plan limits using generic service methods
+        remaining_applications = user.applications_remaining
         logger.info(f"Trial user - limiting to {remaining_applications} applications")
         jobs = jobs[:remaining_applications]
 

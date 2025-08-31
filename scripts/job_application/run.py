@@ -62,17 +62,14 @@ try:
 
     jobs = user.fetch_job_ids_to_apply()
 
-    # Apply subscription-based limits
-    if user.is_trial_user:
-        remaining_applications = user.trial_applications_remaining
-        logger.info(f"Trial user - limiting to {remaining_applications} applications")
+    # Apply subscription-based limits using generic service methods
+    remaining_applications = user.applications_remaining
+    if remaining_applications > 0:
+        logger.info(f"User plan - limiting to {remaining_applications} applications")
         jobs = jobs[:remaining_applications]
-    elif user.is_basic_user:
-        remaining_applications = user.basic_applications_remaining_this_period
-        logger.info(
-            f"Basic user - limiting to {remaining_applications} applications for current period"
-        )
-        jobs = jobs[:remaining_applications]
+    else:
+        logger.info("No applications remaining for user")
+        jobs = []
 
     kill_selenium_chrome()
 
