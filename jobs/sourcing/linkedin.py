@@ -46,7 +46,7 @@ def extract_linkedin_jobs(jobs_url, scraped_linkedin_job_ids):
         )
         return []
 
-    driver.set_page_load_timeout(15)
+    driver.set_page_load_timeout(300)
     time.sleep(5)
 
     try:
