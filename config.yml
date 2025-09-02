@@ -10,6 +10,7 @@ scraping:
     login_pause: false
     max_job_count: 600
     jobs_urls:
+      - https://www.linkedin.com/jobs/search/?f_E=2%2C3%2C4&f_TPR=r86400&geoId=103644278&keywords=data%20analyst&origin=JOB_SEARCH_PAGE_JOB_FILTER&refresh=true&spellCorrectionEnabled=true
       - https://www.linkedin.com/jobs/search/?f_TPR=r86400&geoId=103644278&keywords=business%20analyst&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true
 startup_input: C:\Users\JobHunt\Desktop\startup_input.yml
 openai_model: gpt-4o-mini-2024-07-18
