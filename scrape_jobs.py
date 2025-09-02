@@ -14,7 +14,11 @@ from utilities.sql import get_sql_connection, get_sql_query_output, execute_sql_
 from utilities.logging import get_logger
 from utilities.aws.s3 import S3Bucket
 from utilities.aws.dynamo import OperationLocksTable
-from utilities.selenium import get_selenium_driver, close_selenium_driver
+from utilities.selenium import (
+    get_selenium_driver,
+    close_selenium_driver,
+    kill_selenium_chrome,
+)
 
 logger = get_logger(name="scrape_jobs")
 config = yaml.safe_load(open("config.yml"))
@@ -107,7 +111,11 @@ try:
         # Clean up WebDriver after processing this URL to ensure fresh ChromeDriver for next URL
         try:
             close_selenium_driver()
-            logger.info("WebDriver cleaned up after processing URL")
+            # Also kill any remaining Chrome processes to ensure clean cleanup
+            kill_selenium_chrome()
+            logger.info(
+                "WebDriver and Chrome processes cleaned up after processing URL"
+            )
         except Exception as e:
             logger.warning(f"Failed to cleanup WebDriver: {e}")
 
