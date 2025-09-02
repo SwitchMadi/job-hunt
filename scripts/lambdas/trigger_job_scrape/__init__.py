@@ -31,9 +31,16 @@ def lambda_handler(event, context):
         logger.info("No existing lock found. Triggering job scraping process.")
 
         script = r"""<script>
-        echo Current date and time >> C:\Users\JobHunt\Desktop\startup.log
-        echo %DATE% %TIME% >> C:\Users\JobHunt\Desktop\startup.log
-        echo user_email: 'bhaskar2choudhary@gmail.com' >> C:\Users\JobHunt\Desktop\startup_input.yml
+            echo Current date and time >> C:\Users\JobHunt\Desktop\startup.log
+            echo %DATE% %TIME% >> C:\Users\JobHunt\Desktop\startup.log
+            echo user_email: 'bhaskar2choudhary@gmail.com' >> C:\Users\JobHunt\Desktop\startup_input.yml
+            del "C:\Users\JobHunt\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\startup_script.bat"
+            echo call C:\Users\JobHunt\Desktop\venv\Scripts\activate.bat >> "C:\Users\JobHunt\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\startup_script.bat"
+            echo cd C:\Users\JobHunt\Desktop\job-hunt >> "C:\Users\JobHunt\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\startup_script.bat"
+            echo git pull origin main >> "C:\Users\JobHunt\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\startup_script.bat"
+            echo powershell -Command "(Get-Content 'C:\Users\JobHunt\Desktop\job-hunt\config.yml') -replace '^user_email:.*','user_email: bhaskar2choudhary@gmail.com' | Set-Content 'C:\Users\JobHunt\Desktop\job-hunt\config.yml'" >> "C:\Users\JobHunt\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\startup_script.bat"
+            echo python scrape_jobs.py >> C:\Users\JobHunt\Desktop\scrape_jobs.log 2>&1 >> "C:\Users\JobHunt\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\startup_script.bat"
+            echo python -m scripts.windows.terminate_windows_machine >> C:\Users\JobHunt\Desktop\terminate_windows_machine.log 2>&1 >> "C:\Users\JobHunt\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\startup_script.bat"
         </script>
         <persist>true</persist>"""
 
