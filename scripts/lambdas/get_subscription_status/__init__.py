@@ -2,10 +2,12 @@ import json
 from user import User
 from utilities.logging import get_logger
 from utilities.sql import get_sql_query_output
+from utilities.aws import send_lambda_response
 
 logger = get_logger(name="get_subscription_status")
 
 
+@send_lambda_response(logger)
 def lambda_handler(event, context):
     """
     Lambda function to get user subscription status.
