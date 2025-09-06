@@ -21,11 +21,7 @@ def lambda_handler(event, context):
     encrypted_payload = body.get("data")
 
     if not encrypted_payload:
-        return {
-            "statusCode": 400,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"error": "Missing payload"}),
-        }
+        return {"statusCode": 400, "body": json.dumps({"error": "Missing payload"})}
 
     # AES decryption (default)
     decrypted_data = decrypt_string(encrypted_payload, mode="aes")
