@@ -24,6 +24,9 @@ class PayPalGateway(PaymentGatewayInterface):
             else "https://api-m.paypal.com"
         )
 
+        # Current order data (shared between methods in same operation)
+        self._current_order = None
+
     def create_order(
         self, amount: float, currency: str, user_email: str, description: str
     ) -> PaymentResult:
@@ -58,6 +61,9 @@ class PayPalGateway(PaymentGatewayInterface):
                 "application_context": {
                     "return_url": "https://switchmadi.com/free-job-application?payment=success",
                     "cancel_url": "https://switchmadi.com/free-job-application?payment=cancelled",
+                    "brand_name": "SwitchMadi",
+                    "landing_page": "BILLING",
+                    "user_action": "PAY_NOW",
                 },
             }
 
@@ -239,6 +245,184 @@ class PayPalGateway(PaymentGatewayInterface):
         except Exception as e:
             logger.exception(f"Error verifying PayPal webhook signature: {e}")
             return False
+
+    def _get_order_details(self, order_id: str) -> dict:
+        """
+        Get order details from PayPal API.
+        Returns current order data if available, otherwise fetches from PayPal.
+        """
+        try:
+            # Check if we already have order data for this operation
+            if self._current_order and self._current_order.get("id") == order_id:
+                logger.info(
+                    f"Order {order_id} details already available from current operation"
+                )
+                return self._current_order
+
+            # Fetch from PayPal if not available
+            logger.info(f"Fetching order {order_id} details from PayPal")
+
+            # Get access token
+            access_token = self._get_access_token()
+            if not access_token:
+                logger.error("Failed to get PayPal access token for order details")
+                return {}
+
+            # Get order details from PayPal
+            response = requests.get(
+                f"{self.base_url}/v2/checkout/orders/{order_id}",
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {access_token}",
+                    "Accept": "application/json",
+                },
+                timeout=30,
+            )
+
+            if response.status_code == 200:
+                order_data = response.json()
+                logger.info(f"Order {order_id} details fetched successfully")
+                return order_data
+            else:
+                logger.error(
+                    f"Failed to get order details: {response.status_code} - {response.text}"
+                )
+                return {}
+
+        except Exception as e:
+            logger.exception(f"Error getting order details: {e}")
+            return {}
+
+    def verify_order_ownership(self, order_id: str, user_email: str) -> bool:
+        """
+        Verify that an order belongs to the specified user.
+        Uses current order data if available.
+        """
+        try:
+            # Get order details (will use current order if available)
+            order_data = self._get_order_details(order_id)
+
+            if not order_data:
+                logger.error(f"Failed to get order details for {order_id}")
+                return False
+
+            # Check if order exists and get custom_id (user email)
+            purchase_units = order_data.get("purchase_units", [])
+            if purchase_units:
+                custom_id = purchase_units[0].get("custom_id", "")
+                is_owner = custom_id == user_email
+
+                if is_owner:
+                    logger.info(f"Order {order_id} verified for user {user_email}")
+                else:
+                    logger.warning(
+                        f"Order {order_id} custom_id ({custom_id}) does not match user email ({user_email})"
+                    )
+
+                return is_owner
+
+            logger.warning(f"No purchase units found in order {order_id}")
+            return False
+
+        except Exception as e:
+            logger.exception(f"Error verifying order ownership: {e}")
+            return False
+
+    def capture_order(self, order_id: str) -> PaymentResult:
+        """
+        Capture a PayPal order.
+        This method will store the order details for other methods to use.
+        """
+        try:
+            # Get access token
+            access_token = self._get_access_token()
+            if not access_token:
+                return PaymentResult(
+                    payment_id="",
+                    status="failed",
+                    amount=0,
+                    currency="USD",
+                    user_email="",
+                    gateway="paypal",
+                    error_message="Failed to get PayPal access token",
+                )
+
+            # Make capture API call
+            response = requests.post(
+                f"{self.base_url}/v2/checkout/orders/{order_id}/capture",
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {access_token}",
+                    "Accept": "application/json",
+                },
+                json={},  # Empty body for capture
+                timeout=30,
+            )
+
+            if response.status_code == 201:
+                order_data = response.json()
+
+                # Store the order data for other methods to use
+                self._current_order = order_data
+                logger.info(f"Order {order_id} details stored for current operation")
+
+                # Extract capture details
+                purchase_units = order_data.get("purchase_units", [])
+                if purchase_units:
+                    payments = purchase_units[0].get("payments", {})
+                    captures = payments.get("captures", [])
+                    if captures:
+                        capture = captures[0]
+                        amount = float(capture.get("amount", {}).get("value", "0"))
+                        currency = capture.get("amount", {}).get("currency_code", "USD")
+                        payment_id = capture.get("id", "")
+                        status = capture.get("status", "")
+
+                        return PaymentResult(
+                            payment_id=payment_id,
+                            status="completed" if status == "COMPLETED" else "failed",
+                            amount=amount,
+                            currency=currency,
+                            user_email="",  # Will be filled by caller
+                            gateway="paypal",
+                            order_id=order_id,
+                        )
+
+                # Fallback if no capture found
+                return PaymentResult(
+                    payment_id="",
+                    status="failed",
+                    amount=0,
+                    currency="USD",
+                    user_email="",
+                    gateway="paypal",
+                    error_message="No capture found in response",
+                )
+            else:
+                logger.error(
+                    f"PayPal order capture failed: {response.status_code} - {response.text}"
+                )
+                return PaymentResult(
+                    payment_id="",
+                    status="failed",
+                    amount=0,
+                    currency="USD",
+                    user_email="",
+                    gateway="paypal",
+                    error_message=f"Order capture failed: {response.text}",
+                )
+
+        except Exception as e:
+            logger.exception(f"Error capturing PayPal order: {e}")
+            return PaymentResult(
+                payment_id="",
+                status="failed",
+                amount=0,
+                currency="USD",
+                user_email="",
+                gateway="paypal",
+                error_message=str(e),
+            )
 
     def get_client_config(self) -> Dict[str, Any]:
         """

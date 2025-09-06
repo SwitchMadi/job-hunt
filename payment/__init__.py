@@ -73,6 +73,33 @@ class PaymentGatewayInterface(ABC):
         pass
 
     @abstractmethod
+    def verify_order_ownership(self, order_id: str, user_email: str) -> bool:
+        """
+        Verify that an order belongs to the specified user.
+
+        Args:
+            order_id: The order ID to verify
+            user_email: The user email to verify against
+
+        Returns:
+            bool: True if order belongs to user, False otherwise
+        """
+        pass
+
+    @abstractmethod
+    def capture_order(self, order_id: str) -> PaymentResult:
+        """
+        Capture a payment order.
+
+        Args:
+            order_id: The order ID to capture
+
+        Returns:
+            PaymentResult: Result of the capture operation
+        """
+        pass
+
+    @abstractmethod
     def get_client_config(self) -> Dict[str, Any]:
         """
         Get client configuration for frontend SDK.

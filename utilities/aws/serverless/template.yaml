@@ -561,6 +561,58 @@ Resources:
             Path: /subscription
             Method: OPTIONS
 
+  CreateOrder:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: CreateOrder
+      Handler: __init__.lambda_handler
+      Runtime: python3.10
+      CodeUri: /Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/create_order
+      Timeout: 300
+      Layers:
+        - !Ref JobHuntCommonLayer
+      Events:
+        CreateOrderApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobHuntApi
+            Path: /payment-gateway/order
+            Method: POST
+            Auth:
+              Authorizer: LambdaTokenAuthorizer
+        CreateOrderOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobHuntApi
+            Path: /payment-gateway/order
+            Method: OPTIONS
+
+  CaptureOrder:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: CaptureOrder
+      Handler: __init__.lambda_handler
+      Runtime: python3.10
+      CodeUri: /Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/capture_order
+      Timeout: 300
+      Layers:
+        - !Ref JobHuntCommonLayer
+      Events:
+        CaptureOrderApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobHuntApi
+            Path: /payment-gateway/order/{orderId}
+            Method: GET
+            Auth:
+              Authorizer: LambdaTokenAuthorizer
+        CaptureOrderOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobHuntApi
+            Path: /payment-gateway/order/{orderId}
+            Method: OPTIONS
+
   PayPalWebhook:
     Type: AWS::Serverless::Function
     Properties:
