@@ -17,6 +17,7 @@ from utilities.gpt.file_assistant import query_file
 from utilities.gpt import get_gpt_response
 from utilities.aws.s3 import S3Bucket
 from user.resume import Resume
+from plan import Plan
 
 
 logger = get_logger(name="user")
@@ -1080,6 +1081,89 @@ class User:
             f"Threshold of {threshold} not met. Returning {len(job_ids)} jobs found with most relaxed filters."
         )
         return job_ids
+
+    def update_subscription_status(
+        self, plan_code, status, payment_id=None, payment_amount=None
+    ):
+        """
+        Update user's subscription status after successful payment.
+
+        Args:
+            plan_code (str): The subscription plan code (e.g., 'PAID')
+            status (str): The subscription status (e.g., 'ACTIVE')
+            payment_id (str): PayPal payment ID for tracking
+            payment_amount (str): Payment amount for record keeping
+        """
+        try:
+            # Get the plan ID for the given plan code
+            plan_query = f"""
+                SELECT id FROM subscription.plans 
+                WHERE code = '{plan_code}' AND is_active = TRUE 
+                LIMIT 1
+            """
+            plan_result = get_sql_query_output(plan_query)
+
+            if not plan_result:
+                logger.error(f"Plan with code '{plan_code}' not found")
+                return False
+
+            plan_id = plan_result[0]["id"]
+
+            # Deactivate any existing active subscriptions
+            deactivate_query = f"""
+                UPDATE subscription.subscriptions 
+                SET is_active = FALSE, canceled_at = {int(datetime.now().timestamp())}
+                WHERE user_id = {self.id} AND is_active = TRUE
+            """
+            execute_sql_query(deactivate_query)
+
+            # Create new subscription
+            current_time = int(datetime.now().timestamp())
+
+            # Get billing period from plan table
+            period_days = Plan.get_plan_billing_period_days(plan_id)
+            period_end_time = int(
+                (datetime.now() + timedelta(days=period_days)).timestamp()
+            )
+
+            subscription_create_query = f"""
+                INSERT INTO subscription.subscriptions
+                (user_id, plan_id, start_at, current_period_start, current_period_end, is_active)
+                VALUES 
+                ({self.id}, {plan_id}, {current_time}, {current_time}, {period_end_time}, TRUE)
+            """
+
+            subscription_result = execute_sql_query(subscription_create_query)
+
+            if subscription_result:
+                logger.info(
+                    f"Successfully updated subscription for user {self.id} to plan {plan_code}"
+                )
+
+                # Clear cached subscription data
+                self._subscription = None
+
+                # Optionally store payment information
+                if payment_id and payment_amount:
+                    payment_log_query = f"""
+                        INSERT INTO subscription.payment_logs
+                        (user_id, payment_id, amount, plan_code, status, created_at)
+                        VALUES 
+                        ({self.id}, '{payment_id}', '{payment_amount}', '{plan_code}', '{status}', {current_time})
+                    """
+                    execute_sql_query(payment_log_query)
+                    logger.info(f"Logged payment {payment_id} for user {self.id}")
+
+                return True
+            else:
+                logger.error(f"Failed to create subscription for user {self.id}")
+                return False
+
+        except Exception as e:
+            logger.exception(
+                f"Error updating subscription status for user {self.id}: {e}"
+            )
+            return False
 
     def _get_application_job_ids_with_filters(self, sql_preference_filters):
         """
