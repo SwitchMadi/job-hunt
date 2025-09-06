@@ -269,6 +269,16 @@ Resources:
         CertificateArn: arn:aws:acm:us-east-1:992382457904:certificate/8ecc1e74-c6fe-493e-8044-9474f906cac9
         EndpointConfiguration: EDGE
 
+  WebhookApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: WebhookApi
+      StageName: prod
+      Domain:
+        DomainName: webhook.api.switchmadi.com
+        CertificateArn: arn:aws:acm:us-east-1:992382457904:certificate/7f221245-feb3-4370-9342-c6edf71f3ea8
+        EndpointConfiguration: EDGE
+
   SaveUserTokens:
     Type: AWS::Serverless::Function
     Properties:
@@ -524,6 +534,50 @@ Resources:
             RestApiId: !Ref JobHuntApi
             Path: /jobs/application/free
             Method: OPTIONS
+
+  GetSubscriptionStatus:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: GetSubscriptionStatus
+      Handler: __init__.lambda_handler
+      Runtime: python3.10
+      CodeUri: /Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/get_subscription_status
+      Timeout: 300
+      Layers:
+        - !Ref JobHuntCommonLayer
+      Events:
+        GetSubscriptionStatusApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobHuntApi
+            Path: /subscription
+            Method: GET
+            Auth:
+              Authorizer: LambdaTokenAuthorizer
+        GetSubscriptionStatusOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobHuntApi
+            Path: /subscription
+            Method: OPTIONS
+
+  PayPalWebhook:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: PayPalWebhook
+      Handler: __init__.lambda_handler
+      Runtime: python3.10
+      CodeUri: /Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/paypal_webhook
+      Timeout: 300
+      Layers:
+        - !Ref JobHuntCommonLayer
+      Events:
+        PayPalWebhookPost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref WebhookApi
+            Path: /paypal
+            Method: POST
 
   # Lambda permissions for WebSocket routes
   WebSocketConnectPermission:

@@ -20,6 +20,8 @@ cp ~/Desktop/switchmadi/codebase/job-hunt/config.yml ~/Desktop/switchmadi/codeba
 cp ~/Desktop/switchmadi/codebase/job-hunt/config.yml ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/websocket_disconnect/
 cp ~/Desktop/switchmadi/codebase/job-hunt/config.yml ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/save_modified_resume/
 cp ~/Desktop/switchmadi/codebase/job-hunt/config.yml ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_free_job_application/
+cp ~/Desktop/switchmadi/codebase/job-hunt/config.yml ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/get_subscription_status/
+cp ~/Desktop/switchmadi/codebase/job-hunt/config.yml ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/paypal_webhook/
 
 cp /Users/bhaskar/Desktop/temporary/job-hunt-data/job-hunt-420615-0ce7f4f42a30.json ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/share_jobs/
 cp /Users/bhaskar/Desktop/temporary/job-hunt-data/client_secret_604979190363-ei70huqc4iirglc66t3vhc94fl96f07l.apps.googleusercontent.com.json ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/share_jobs/
@@ -49,6 +51,8 @@ rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/websocket_connect/conf
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/websocket_disconnect/config.yml
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/save_modified_resume/config.yml
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_free_job_application/config.yml
+rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/get_subscription_status/config.yml
+rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/paypal_webhook/config.yml
 
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_job_scrape/requirements.txt
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_job_steps_identification/requirements.txt
@@ -65,6 +69,8 @@ rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/websocket_connect/requ
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/websocket_disconnect/requirements.txt
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/save_modified_resume/requirements.txt
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_free_job_application/requirements.txt
+rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/get_subscription_status/requirements.txt
+rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/paypal_webhook/requirements.txt
 
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_job_scrape/job-hunt-420615-0ce7f4f42a30.json
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/share_jobs/job-hunt-420615-0ce7f4f42a30.json
