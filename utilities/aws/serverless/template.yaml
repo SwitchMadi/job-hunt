@@ -72,23 +72,38 @@ Resources:
             Schedule: 'rate(15 minutes)'  # Every 15 minutes
             Name: JobStepsIdentificationTrigger
 
-  ShareJobs:
+  TriggerShareJobs:
     Type: 'AWS::Serverless::Function'
     Properties:
-      FunctionName: ShareJobs
+      FunctionName: TriggerShareJobs
       Handler: __init__.lambda_handler
       Runtime: python3.10
-      CodeUri: /Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/share_jobs
-      MemorySize: 1024
+      CodeUri: /Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_share_jobs
       Timeout: 900
       Layers:
         - !Ref JobHuntCommonLayer
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref OperationLocksTable
+        - Statement:
+            Effect: Allow
+            Action:
+              - ec2:RunInstances
+              - ec2:CreateTags
+              - ec2:DescribeInstances
+              - ec2:DescribeImages
+              - ec2:DescribeKeyPairs
+              - ec2:DescribeSecurityGroups
+              - ec2:DescribeSubnets
+              - ec2:DescribeVpcs
+              - iam:PassRole
+            Resource: '*'
       Events:
         ScheduledEvent:
           Type: Schedule
           Properties:
             Schedule: 'cron(30 14 * * ? *)'  # 8 PM IST every day
-            Name: ShareJobsTrigger
+            Name: TriggerShareJobsTrigger
 
   Authorization:
     Type: 'AWS::Serverless::Function'
@@ -100,9 +115,9 @@ Resources:
       Timeout: 900
       Layers:
         - !Ref JobHuntCommonLayer
+      AutoPublishAlias: live
       ProvisionedConcurrencyConfig:
-        ProvisionedConcurrencyConfig:
-          ProvisionedConcurrency: 1
+        ProvisionedConcurrentExecutions: 1
 
   # DynamoDB Table for WebSocket Connections
   ConnectionsTable:
@@ -230,9 +245,9 @@ Resources:
               - !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ResumeParserWebSocket}/${ResumeParserWebSocketStage}/DELETE/@connections/*
       Layers:
         - !Ref JobHuntCommonLayer
+      AutoPublishAlias: live
       ProvisionedConcurrencyConfig:
-        ProvisionedConcurrencyConfig:
-          ProvisionedConcurrency: 1
+        ProvisionedConcurrentExecutions: 1
 
   WebSocketDisconnect:
     Type: AWS::Serverless::Function
@@ -282,7 +297,7 @@ Resources:
       StageName: prod
       Domain:
         DomainName: webhook.api.switchmadi.com
-        CertificateArn: arn:aws:acm:us-east-1:992382457904:certificate/7f221245-feb3-4370-9342-c6edf71f3ea8
+        CertificateArn: arn:aws:acm:us-east-1:992382457904:certificate/d9d344d3-8607-4658-b23a-7e0b9682816b
         EndpointConfiguration: EDGE
 
   SaveUserTokens:
@@ -315,9 +330,9 @@ Resources:
       Timeout: 900
       Layers:
         - !Ref JobHuntCommonLayer
+      AutoPublishAlias: live
       ProvisionedConcurrencyConfig:
-        ProvisionedConcurrencyConfig:
-          ProvisionedConcurrency: 1
+        ProvisionedConcurrentExecutions: 1
       Events:
         PreferredJobsApiGet:
           Type: Api
@@ -370,9 +385,9 @@ Resources:
      Timeout: 900
      Layers:
        - !Ref JobHuntCommonLayer
+     AutoPublishAlias: live
      ProvisionedConcurrencyConfig:
-       ProvisionedConcurrencyConfig:
-         ProvisionedConcurrency: 1
+       ProvisionedConcurrentExecutions: 1
      Events:
        GetJobPreferencesApiGet:
          Type: Api
@@ -393,9 +408,9 @@ Resources:
      Timeout: 900
      Layers:
        - !Ref JobHuntCommonLayer
+     AutoPublishAlias: live
      ProvisionedConcurrencyConfig:
-       ProvisionedConcurrencyConfig:
-         ProvisionedConcurrency: 1
+       ProvisionedConcurrentExecutions: 1
      Events:
        UploadResumePost:
          Type: Api
@@ -445,9 +460,9 @@ Resources:
             Action:
               - lambda:InvokeFunction
             Resource: !GetAtt ParseResume.Arn
+      AutoPublishAlias: live
       ProvisionedConcurrencyConfig:
-        ProvisionedConcurrencyConfig:
-          ProvisionedConcurrency: 1
+        ProvisionedConcurrentExecutions: 1
       Events:
         ParseResumePost:
           Type: Api
@@ -510,9 +525,9 @@ Resources:
             Resource:
               - !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ResumeParserWebSocket}/${ResumeParserWebSocketStage}/POST/@connections/*
               - !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ResumeParserWebSocket}/${ResumeParserWebSocketStage}/GET/@connections/*
+      AutoPublishAlias: live
       ProvisionedConcurrencyConfig:
-        ProvisionedConcurrencyConfig:
-          ProvisionedConcurrency: 1
+        ProvisionedConcurrentExecutions: 1
 
   TriggerFreeJobApplication:
     Type: AWS::Serverless::Function
