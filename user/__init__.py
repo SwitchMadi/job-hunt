@@ -1143,17 +1143,6 @@ class User:
                 # Clear cached subscription data
                 self._subscription = None
 
-                # Optionally store payment information
-                if payment_id and payment_amount:
-                    payment_log_query = f"""
-                        INSERT INTO subscription.payment_logs
-                        (user_id, payment_id, amount, plan_code, status, created_at)
-                        VALUES 
-                        ({self.id}, '{payment_id}', '{payment_amount}', '{plan_code}', '{status}', {current_time})
-                    """
-                    execute_sql_query(payment_log_query)
-                    logger.info(f"Logged payment {payment_id} for user {self.id}")
-
                 return True
             else:
                 logger.error(f"Failed to create subscription for user {self.id}")

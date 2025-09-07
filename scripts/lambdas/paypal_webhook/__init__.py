@@ -13,9 +13,22 @@ def lambda_handler(event, context):
     Uses the payment gateway interface for processing.
     """
     try:
+        logger.info("PayPal webhook received - starting processing")
+
         # Parse webhook payload
         webhook_data = json.loads(event.get("body", "{}"))
         headers = event.get("headers", {})
+
+        # Log webhook data
+        logger.info(f"Webhook payload: {json.dumps(webhook_data, indent=2)}")
+        logger.info(f"Webhook headers: {json.dumps(headers, indent=2)}")
+
+        # Extract and log user email for easy CloudWatch Insights queries
+        resource = webhook_data.get("resource", {})
+        user_email = resource.get("custom_id", "")
+        payment_id = resource.get("id", "")
+
+        logger.info(f"PayPal webhook - User: {user_email}, Payment: {payment_id}")
 
         # Get payment gateway (default to PayPal for now)
         gateway_type = os.getenv("PAYMENT_GATEWAY", "paypal")
