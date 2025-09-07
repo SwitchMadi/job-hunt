@@ -36,7 +36,7 @@ cd /Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas
 cd /Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/utilities/aws/serverless
 
 sam build
-sam deploy
+sam deploy --no-disable-rollback
 
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_job_scrape/config.yml
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_job_steps_identification/config.yml
