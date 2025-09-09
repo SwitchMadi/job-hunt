@@ -76,7 +76,6 @@ def get_basic_plan_details():
                 p.id,
                 p.code,
                 p.name,
-                p.description,
                 p.billing_period,
                 p.price_amount,
                 p.price_currency,
@@ -93,7 +92,7 @@ def get_basic_plan_details():
             LEFT JOIN subscription.plan_entitlements pe ON p.id = pe.plan_id AND pe.is_active = TRUE
             LEFT JOIN subscription.services s ON pe.service_id = s.id AND s.is_active = TRUE
             WHERE p.code = 'BASIC' AND p.is_active = TRUE
-            GROUP BY p.id, p.code, p.name, p.description, p.billing_period, p.price_amount, p.price_currency, p.is_active
+            GROUP BY p.id, p.code, p.name, p.billing_period, p.price_amount, p.price_currency, p.is_active
         """
 
         plan_result = get_sql_query_output(basic_plan_query)
@@ -111,11 +110,11 @@ def get_basic_plan_details():
             if service["service_code"] is not None
         ]
 
+        # TODO: Remove id
         basic_plan = {
             "id": plan_data["id"],
             "code": plan_data["code"],
             "name": plan_data["name"],
-            "description": plan_data["description"],
             "billing_period": plan_data["billing_period"],
             "price_amount": plan_data["price_amount"],
             "price_currency": plan_data["price_currency"],

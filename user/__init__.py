@@ -228,6 +228,22 @@ class User:
         """Get the current subscription plan name"""
         return self.subscription.get("plan_name") if self.subscription else None
 
+    @property
+    def subscription_status(self):
+        """Get the current subscription status"""
+        if not self.subscription:
+            return "INACTIVE"
+
+        # Check if subscription is active and not canceled
+        if self.subscription.get("is_active") and not self.subscription.get(
+            "canceled_at"
+        ):
+            return "ACTIVE"
+        elif self.subscription.get("canceled_at"):
+            return "CANCELED"
+        else:
+            return "INACTIVE"
+
     # Generic service-based methods for extensible plan support
     def get_service_limit(self, service_code, plan_code=None):
         """Get limit for any service on any plan (or current plan if not specified)"""
