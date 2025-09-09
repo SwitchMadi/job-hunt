@@ -581,6 +581,9 @@ Resources:
       Timeout: 300
       Layers:
         - !Ref JobHuntCommonLayer
+      AutoPublishAlias: live
+      ProvisionedConcurrencyConfig:
+        ProvisionedConcurrentExecutions: 1
       Events:
         GetSubscriptionStatusApi:
           Type: Api
