@@ -1,5 +1,9 @@
 import json
 import os
+
+# import for lambda requirements.txt
+import requests
+
 from user import User
 from payment import PaymentGatewayFactory
 from utilities.logging import get_logger
