@@ -1,6 +1,5 @@
 import os
 import requests
-import json
 from typing import Dict, Any
 from . import PaymentGatewayInterface, PaymentResult
 from utilities.logging import get_logger

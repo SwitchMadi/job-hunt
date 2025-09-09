@@ -148,7 +148,7 @@ class PaymentGatewayFactory:
             from utilities.logging import get_logger
 
             logger = get_logger(name="payment_factory")
-            logger.error(f"Failed to create payment gateway '{gateway_type}': {e}")
+            logger.exception(f"Failed to create payment gateway '{gateway_type}': {e}")
             return None
 
     @staticmethod

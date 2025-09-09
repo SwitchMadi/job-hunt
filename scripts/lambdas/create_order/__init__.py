@@ -4,6 +4,9 @@ from payment import PaymentGatewayFactory
 from utilities.logging import get_logger
 from utilities.aws import send_lambda_response
 
+# import for lambda requirements.txt
+import requests
+
 logger = get_logger(name="create_order")
 
 
