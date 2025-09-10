@@ -1108,7 +1108,7 @@ class User:
             plan_code (str): The subscription plan code (e.g., 'PAID')
             status (str): The subscription status (e.g., 'ACTIVE')
             payment_id (str): PayPal payment ID for tracking
-            payment_amount (str): Payment amount for record keeping
+            payment_amount (float): Payment amount for record keeping
         """
         try:
             # Get the plan ID for the given plan code
