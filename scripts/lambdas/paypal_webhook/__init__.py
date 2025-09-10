@@ -24,8 +24,8 @@ def lambda_handler(event, context):
         headers = event.get("headers", {})
 
         # Log webhook data
-        logger.info(f"Webhook payload: {json.dumps(webhook_data, indent=2)}")
-        logger.info(f"Webhook headers: {json.dumps(headers, indent=2)}")
+        logger.info(f"Webhook payload: {webhook_data}")
+        logger.info(f"Webhook headers: {headers}")
 
         # Extract and log user email for easy CloudWatch Insights queries
         resource = webhook_data.get("resource", {})
@@ -50,7 +50,7 @@ def lambda_handler(event, context):
 
         if result.status == "completed":
             # Update user subscription
-            user = User.find_user_by_email(result.user_email)
+            user = User(email=result.user_email)
             if user:
                 success = user.update_subscription_status(
                     "BASIC", "ACTIVE", result.payment_id, result.amount
