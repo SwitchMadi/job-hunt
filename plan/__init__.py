@@ -40,15 +40,15 @@ class Plan:
             billing_period = result[0]["billing_period"]
 
             # Convert billing period to days
-            if billing_period == "monthly":
+            if billing_period == "MONTH":
                 return 30
-            elif billing_period == "yearly":
+            elif billing_period == "YEAR":
                 return 365
-            elif billing_period == "weekly":
+            elif billing_period == "WEEK":
                 return 7
-            elif billing_period == "daily":
+            elif billing_period == "DAY":
                 return 1
-            elif billing_period == "lifetime":
+            elif billing_period == "LIFETIME":
                 return 36500  # 100 years for lifetime
             else:
                 logger.warning(
