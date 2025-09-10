@@ -80,6 +80,9 @@ class PayPalGateway(PaymentGatewayInterface):
 
             if response.status_code == 201:
                 order_data = response.json()
+
+                logger.info(f"PayPal order created successfully - {order_data}")
+
                 return PaymentResult(
                     payment_id=order_data["id"],
                     status="pending",
@@ -280,7 +283,13 @@ class PayPalGateway(PaymentGatewayInterface):
 
             if response.status_code == 200:
                 order_data = response.json()
-                logger.info(f"Order {order_id} details fetched successfully")
+                logger.info(
+                    f"Order {order_id} details fetched successfully - {order_data}"
+                )
+
+                # Store the fetched order data for potential later use
+                self._current_order = order_data
+
                 return order_data
             else:
                 logger.error(
@@ -361,9 +370,9 @@ class PayPalGateway(PaymentGatewayInterface):
             if response.status_code == 201:
                 order_data = response.json()
 
-                # Store the order data for other methods to use
-                self._current_order = order_data
-                logger.info(f"Order {order_id} details stored for current operation")
+                logger.info(
+                    f"Order {order_id} details captured - {order_data}"
+                )
 
                 # Extract capture details
                 purchase_units = order_data.get("purchase_units", [])
