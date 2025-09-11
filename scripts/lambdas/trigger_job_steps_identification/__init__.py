@@ -34,6 +34,7 @@ def lambda_handler(event, context):
             "No existing lock found. Triggering job steps identification process."
         )
 
+        # TODO: Update script to update env variable for cloudwatch group (for other scripts/lambdas as well)
         script = r"""<script>
                 echo Current date and time >> C:\Users\JobHunt\Desktop\startup.log
                 echo %DATE% %TIME% >> C:\Users\JobHunt\Desktop\startup.log
