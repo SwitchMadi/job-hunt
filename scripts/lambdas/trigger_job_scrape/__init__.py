@@ -72,7 +72,7 @@ def lambda_handler(event, context):
             key_name="job-hunt",
             security_group="sg-011a3786d569e6382",
             user_data_script=script,
-            instance_name="jobs-scraping",
+            instance_name=f"jobs-scraping-{branch_name.split('/')[-1]}",
         )
 
         logger.info(
