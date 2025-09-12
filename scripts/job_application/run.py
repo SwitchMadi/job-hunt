@@ -1,6 +1,7 @@
 import subprocess
 import sys
 import yaml
+import os
 
 from jobs import ApplicationPage
 from user import User
@@ -26,6 +27,9 @@ if not user_email:
 
 user = User(email=user_email)
 logger = get_logger(f"jobs_application-{user.id}")
+
+# set user id in environment variable for logging stream suffix at later stage
+os.environ["USER_ID"] = f"{user.id}"
 
 logger.info(f"Writing user email {user_email} to main config...")
 config["user_email"] = user_email
@@ -83,6 +87,7 @@ try:
         for curr_job_id in job_ids:
             logger.info(f"Applying job for job ID: {curr_job_id}")
 
+            # TODO: Remove uploading screenshot before starting the identification process from all places
             # Uploading screenshot before starting the identification process
             screenshot_filename = f"jobId-{curr_job_id}--userId-{user.id}--start.png"
             take_screenshot(filename=screenshot_filename)

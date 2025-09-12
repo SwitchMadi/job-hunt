@@ -9,7 +9,12 @@ if not job_id:
 import os
 import yaml
 
-os.environ["LOG_GROUP_STREAM_SUFFIX"] = f"job_id-{job_id}"
+user_id = os.getenv("USER_ID")
+if user_id:
+    os.environ["LOG_GROUP_STREAM_SUFFIX"] = f"job_id-{job_id}-user_id-{user_id}"
+else:
+    os.environ["LOG_GROUP_STREAM_SUFFIX"] = f"job_id-{job_id}"
+
 config = yaml.safe_load(open("config.yml"))
 
 from jobs import Job, logger
