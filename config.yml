@@ -20,3 +20,4 @@ websocket:
   endpoint_url: "https://ws.api.switchmadi.com"
 subscription:
   trial_days: 30
+cloudwatch_log_group: job-hunt
