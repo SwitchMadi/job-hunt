@@ -33,11 +33,26 @@ Resources:
         - DynamoDBCrudPolicy:
             TableName: !Ref OperationLocksTable
       Events:
-        ScheduledEvent:
+        ScrapeUsaAnalystJobs:
           Type: Schedule
           Properties:
-            Schedule: 'cron(0 5 * * ? *)'  # 10:30 AM IST every day
-            Name: JobScrapeTrigger
+            Schedule: 'cron(30 7 * * ? *)'  # 1:00 PM IST daily
+            Name: ScrapeUsaAnalystJobsTrigger
+            Input: !Sub |
+              {
+                "ami_id": "ami-044dfecf80feb107f",
+                "branch_name": "jobs_scraping/usa_analyst_jobs"
+              }
+        ScrapeGlobalBackendJobs:
+          Type: Schedule
+          Properties:
+            Schedule: 'cron(30 12 * * ? *)'  # 6:00 PM IST daily
+            Name: ScrapeGlobalBackendJobsTrigger
+            Input: !Sub |
+              {
+                "ami_id": "ami-08dbe25707aaaeed1",
+                "branch_name": "jobs_scraping/global_backend_jobs"
+              }
 
   TriggerJobStepsIdentification:
     Type: 'AWS::Serverless::Function'

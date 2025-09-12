@@ -5,6 +5,7 @@ from datetime import datetime
 import yaml
 import time
 import sys
+import argparse
 from concurrent.futures import ThreadPoolExecutor
 
 from jobs.sourcing.linkedin import extract_linkedin_jobs
@@ -20,12 +21,22 @@ from utilities.selenium import (
     kill_selenium_chrome,
 )
 
+# Parse command line arguments
+parser = argparse.ArgumentParser(description="Scrape jobs from various sources")
+parser.add_argument(
+    "--operation-name",
+    type=str,
+    default="job_scrape",
+    help="Operation name for lock management (default: job_scrape)",
+)
+args = parser.parse_args()
+
 logger = get_logger(name="scrape_jobs")
 config = yaml.safe_load(open("config.yml"))
 
 # Initialize lock manager
 lock_table = OperationLocksTable()
-operation_name = "job_scrape"
+operation_name = args.operation_name
 lock_id = None
 
 try:
