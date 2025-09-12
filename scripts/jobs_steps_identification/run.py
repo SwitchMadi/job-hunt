@@ -43,6 +43,11 @@ try:
         and t2.id is null
         and not t1.linkedin_easy_apply
         and t1.job_url ilike '%greenhouse%'
+        and (
+                t1.job_domain ilike '%business%' 
+                or t1.job_domain ilike '%analy%' 
+                or t1.job_domain ilike '%data%'
+        )
         and t1.job_posted_at >= EXTRACT(EPOCH FROM (CURRENT_DATE - INTERVAL '7 days'));
     """
     jobs = get_sql_query_output(steps_unidentified_jobs_query)
