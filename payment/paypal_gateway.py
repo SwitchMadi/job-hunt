@@ -370,9 +370,7 @@ class PayPalGateway(PaymentGatewayInterface):
             if response.status_code == 201:
                 order_data = response.json()
 
-                logger.info(
-                    f"Order {order_id} details captured - {order_data}"
-                )
+                logger.info(f"Order {order_id} details captured - {order_data}")
 
                 # Extract capture details
                 purchase_units = order_data.get("purchase_units", [])
