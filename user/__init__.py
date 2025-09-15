@@ -503,6 +503,81 @@ class User:
         return self._drive_folder
 
     @property
+    def drive_folder_link(self):
+        """Get the Google Drive folder link for the user's drive folder"""
+        if not self.drive_folder:
+            return None
+        return f"https://drive.google.com/drive/folders/{self.drive_folder.id}"
+
+    @property
+    def resume_signed_url(self):
+        """
+        Get a signed URL for the user's resume stored in S3 (valid for 1 hour)
+
+        Returns:
+            str: Signed URL or None if no resume or error
+        """
+        if not self.resume:
+            return None
+
+        try:
+            s3 = S3Bucket(bucket_name=config["s3_bucket"])
+
+            # Generate presigned URL (valid for 1 hour = 3600 seconds)
+            signed_url = s3.generate_presigned_url(self.resume, expiration=3600)
+
+            if not signed_url:
+                logger.error(f"Failed to generate signed URL for resume: {self.resume}")
+                return None
+
+            return signed_url
+
+        except Exception as e:
+            logger.exception(
+                f"Error generating resume signed URL for user {self.id}: {e}"
+            )
+            return None
+
+    @property
+    def resume_info(self):
+        """
+        Get complete information for the user's resume stored in S3 including signed URL
+
+        Returns:
+            dict: Contains resume metadata and signed URL or None if no resume or error
+        """
+        if not self.resume:
+            return None
+
+        try:
+            s3 = S3Bucket(bucket_name=config["s3_bucket"])
+
+            # Generate presigned URL (valid for 1 hour = 3600 seconds)
+            signed_url = s3.generate_presigned_url(self.resume, expiration=3600)
+
+            if not signed_url:
+                logger.error(f"Failed to generate signed URL for resume: {self.resume}")
+                return None
+
+            # Get object metadata including last modified timestamp
+            metadata = s3.get_object_metadata(self.resume)
+
+            if not metadata:
+                logger.error(f"Failed to get metadata for resume: {self.resume}")
+                return None
+
+            return {
+                "url": signed_url,
+                "last_modified": metadata["last_modified"].timestamp(),
+                "content_length": metadata["content_length"],
+                "content_type": metadata["content_type"],
+            }
+
+        except Exception as e:
+            logger.exception(f"Error getting resume info for user {self.id}: {e}")
+            return None
+
+    @property
     def jobs_sheet(self):
         if self._jobs_sheet:
             return self._jobs_sheet

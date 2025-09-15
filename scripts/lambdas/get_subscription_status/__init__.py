@@ -36,11 +36,20 @@ def lambda_handler(event, context):
             "can_apply_for_jobs": user.can_apply_for_jobs,
             "applications_remaining": user.applications_remaining,
             "subscription_status_summary": user.subscription_status_summary,
+            "subscription_period_info": user.subscription_period_info,
         }
 
         # Get BASIC plan details only
         basic_plan = get_basic_plan_details()
         subscription_status["basic_plan"] = basic_plan
+
+        # TODO: Move to separate lambda
+        # Add user resume info
+        subscription_status["resume_info"] = user.resume_info
+
+        # TODO: Move to separate lambda
+        # Add user drive folder
+        subscription_status["drive_folder"] = user.drive_folder_link
 
         logger.info(
             f"Retrieved subscription status for user {email}: {subscription_status}"

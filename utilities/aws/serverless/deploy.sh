@@ -25,11 +25,8 @@ cp ~/Desktop/switchmadi/codebase/job-hunt/config.yml ~/Desktop/switchmadi/codeba
 cp ~/Desktop/switchmadi/codebase/job-hunt/config.yml ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/create_order/
 cp ~/Desktop/switchmadi/codebase/job-hunt/config.yml ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/capture_order/
 
-cp /Users/bhaskar/Desktop/temporary/job-hunt-data/job-hunt-420615-0ce7f4f42a30.json ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_share_jobs/
-cp /Users/bhaskar/Desktop/temporary/job-hunt-data/client_secret_604979190363-ei70huqc4iirglc66t3vhc94fl96f07l.apps.googleusercontent.com.json ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_share_jobs/
-
-cp /Users/bhaskar/Desktop/temporary/job-hunt-data/job-hunt-420615-0ce7f4f42a30.json ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_job_scrape/
-cp /Users/bhaskar/Desktop/temporary/job-hunt-data/client_secret_604979190363-ei70huqc4iirglc66t3vhc94fl96f07l.apps.googleusercontent.com.json ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_job_scrape/
+cp /Users/bhaskar/Desktop/temporary/job-hunt-data/job-hunt-420615-0ce7f4f42a30.json ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/get_subscription_status/
+cp /Users/bhaskar/Desktop/temporary/job-hunt-data/client_secret_604979190363-ei70huqc4iirglc66t3vhc94fl96f07l.apps.googleusercontent.com.json ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/get_subscription_status/
 
 cd /Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas
 /Users/bhaskar/Desktop/temporary/job-hunt-venv/bin/python generate_lambda_requirement_files.py
@@ -78,11 +75,8 @@ rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/paypal_webhook/require
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/create_order/requirements.txt
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/capture_order/requirements.txt
 
-rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_job_scrape/job-hunt-420615-0ce7f4f42a30.json
-rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_share_jobs/job-hunt-420615-0ce7f4f42a30.json
-
-rm -f ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_job_scrape/client_secret_604979190363-ei70huqc4iirglc66t3vhc94fl96f07l.apps.googleusercontent.com.json
-rm -f ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_share_jobs/client_secret_604979190363-ei70huqc4iirglc66t3vhc94fl96f07l.apps.googleusercontent.com.json
+rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/get_subscription_status/job-hunt-420615-0ce7f4f42a30.json
+rm -f ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/get_subscription_status/client_secret_604979190363-ei70huqc4iirglc66t3vhc94fl96f07l.apps.googleusercontent.com.json
 
 rm -rf .aws-sam
 rm -rf ~/Desktop/SharedLayer
