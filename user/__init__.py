@@ -50,6 +50,8 @@ class User:
         self._job_filters = None
         self._google_oauth_credentials = None
         self._subscription = None
+        self._lifetime_applications_count = None
+        self._lifetime_shares_count = None
 
     @staticmethod
     def find_user_by_email(email):
@@ -1042,6 +1044,35 @@ class User:
             self._successful_applications_count = result[0]["count"] if result else 0
 
         return self._successful_applications_count
+
+    @property
+    def lifetime_applications_count(self):
+        """Count the total number of successful job applications (submitted status) for this user"""
+        if self._lifetime_applications_count is None:
+            query = f"""
+                SELECT COUNT(*) as count
+                FROM users.job_applications
+                WHERE user_id = {self.id}
+                AND application_status = 'submitted'
+            """
+            result = get_sql_query_output(query)
+            self._lifetime_applications_count = result[0]["count"] if result else 0
+
+        return self._lifetime_applications_count
+
+    @property
+    def lifetime_shares_count(self):
+        """Count the total number of job shares for this user"""
+        if self._lifetime_shares_count is None:
+            query = f"""
+                SELECT COUNT(*) as count
+                FROM users.jobs_shared
+                WHERE user_id = {self.id}
+            """
+            result = get_sql_query_output(query)
+            self._lifetime_shares_count = result[0]["count"] if result else 0
+
+        return self._lifetime_shares_count
 
     @property
     def should_stream_applications(self):

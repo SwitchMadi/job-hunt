@@ -37,6 +37,8 @@ def lambda_handler(event, context):
             "applications_remaining": user.applications_remaining,
             "subscription_status_summary": user.subscription_status_summary,
             "subscription_period_info": user.subscription_period_info,
+            "lifetime_applications_count": user.lifetime_applications_count,
+            "lifetime_shares_count": user.lifetime_shares_count,
         }
 
         # Get BASIC plan details only
