@@ -685,6 +685,58 @@ Resources:
             Path: /paypal
             Method: POST
 
+  GetUserJobApplications:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: GetUserJobApplications
+      Handler: __init__.lambda_handler
+      Runtime: python3.10
+      CodeUri: /Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/get_user_job_applications
+      Timeout: 300
+      Layers:
+        - !Ref JobHuntCommonLayer
+      Events:
+        GetUserJobApplicationsApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobHuntApi
+            Path: /jobs/applications
+            Method: GET
+            Auth:
+              Authorizer: LambdaTokenAuthorizer
+        GetUserJobApplicationsOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobHuntApi
+            Path: /jobs/applications
+            Method: OPTIONS
+
+  GetApplicationResponses:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: GetApplicationResponses
+      Handler: __init__.lambda_handler
+      Runtime: python3.10
+      CodeUri: /Users/bhaskar/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/get_application_responses
+      Timeout: 300
+      Layers:
+        - !Ref JobHuntCommonLayer
+      Events:
+        GetApplicationResponsesApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobHuntApi
+            Path: /jobs/{job_hash_id}/application/responses
+            Method: GET
+            Auth:
+              Authorizer: LambdaTokenAuthorizer
+        GetApplicationResponsesOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobHuntApi
+            Path: /jobs/{job_hash_id}/application/responses
+            Method: OPTIONS
+
   # Lambda permissions for WebSocket routes
   WebSocketConnectPermission:
     Type: AWS::Lambda::Permission

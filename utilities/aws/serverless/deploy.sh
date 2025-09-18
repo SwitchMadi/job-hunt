@@ -24,6 +24,8 @@ cp ~/Desktop/switchmadi/codebase/job-hunt/config.yml ~/Desktop/switchmadi/codeba
 cp ~/Desktop/switchmadi/codebase/job-hunt/config.yml ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/paypal_webhook/
 cp ~/Desktop/switchmadi/codebase/job-hunt/config.yml ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/create_order/
 cp ~/Desktop/switchmadi/codebase/job-hunt/config.yml ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/capture_order/
+cp ~/Desktop/switchmadi/codebase/job-hunt/config.yml ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/get_user_job_applications/
+cp ~/Desktop/switchmadi/codebase/job-hunt/config.yml ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/get_application_responses/
 
 cp /Users/bhaskar/Desktop/temporary/job-hunt-data/job-hunt-420615-0ce7f4f42a30.json ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/get_subscription_status/
 cp /Users/bhaskar/Desktop/temporary/job-hunt-data/client_secret_604979190363-ei70huqc4iirglc66t3vhc94fl96f07l.apps.googleusercontent.com.json ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/get_subscription_status/
@@ -54,6 +56,8 @@ rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/get_subscription_statu
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/paypal_webhook/config.yml
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/create_order/config.yml
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/capture_order/config.yml
+rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/get_user_job_applications/config.yml
+rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/get_application_responses/config.yml
 
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_job_scrape/requirements.txt
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_job_steps_identification/requirements.txt
@@ -74,6 +78,8 @@ rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/get_subscription_statu
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/paypal_webhook/requirements.txt
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/create_order/requirements.txt
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/capture_order/requirements.txt
+rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/get_user_job_applications/requirements.txt
+rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/get_application_responses/requirements.txt
 
 rm ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/get_subscription_status/job-hunt-420615-0ce7f4f42a30.json
 rm -f ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/get_subscription_status/client_secret_604979190363-ei70huqc4iirglc66t3vhc94fl96f07l.apps.googleusercontent.com.json
