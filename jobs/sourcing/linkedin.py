@@ -51,7 +51,7 @@ def extract_linkedin_jobs(jobs_url, scraped_linkedin_job_ids):
 
     try:
         jobs_count = driver.find_element(
-            by=By.CLASS_NAME, value="jobs-search-results-list__subtitle"
+            By.CSS_SELECTOR, "small.jobs-search-results-list__text"
         ).text
         jobs_count = int(jobs_count.split()[0].replace(",", ""))
 
