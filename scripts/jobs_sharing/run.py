@@ -22,14 +22,24 @@ try:
 
     logger.info(f"Lock acquired for share jobs. Lock ID: {lock_id}")
 
-    # TODO: Remove share_jobs flag from users table
+    # Fetch users with active subscriptions who can share jobs
     user_emails_to_share_jobs_query = """
-        select email
-        from users.users
-        where share_jobs is true;
+        SELECT DISTINCT u.email
+        FROM users.users u
+        JOIN subscription.subscriptions s ON u.id = s.user_id
+        JOIN subscription.plans p ON s.plan_id = p.id
+        JOIN subscription.plan_entitlements pe ON p.id = pe.plan_id
+        JOIN subscription.services svc ON pe.service_id = svc.id
+        WHERE s.is_active = TRUE
+        AND s.canceled_at IS NULL
+        AND pe.is_active = TRUE
+        AND svc.code = 'JOB_SHARE'
+        AND svc.is_active = TRUE;
     """
     emails = get_sql_query_output(user_emails_to_share_jobs_query)
-    logger.info(f"Total users to share jobs with - {len(emails)}")
+    logger.info(
+        f"Total users with active subscriptions to share jobs with - {len(emails)}"
+    )
 
     for email in emails:
         user = User(email=email["email"])
