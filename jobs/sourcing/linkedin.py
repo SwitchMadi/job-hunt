@@ -53,7 +53,8 @@ def extract_linkedin_jobs(jobs_url, scraped_linkedin_job_ids):
         jobs_count = driver.find_element(
             By.CSS_SELECTOR, "small.jobs-search-results-list__text"
         ).text
-        jobs_count = int(jobs_count.split()[0].replace(",", ""))
+        jobs_count = int(jobs_count.split()[0].replace(",", "").replace("+", ""))
+        logger.info(f"Total jobs found - {jobs_count}")
 
         jobs_elements = driver.find_elements(
             By.XPATH, "//li[contains(@class, 'scaffold-layout__list')]"
