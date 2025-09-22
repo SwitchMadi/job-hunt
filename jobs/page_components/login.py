@@ -824,7 +824,7 @@ class VerifyAccount(PageComponent):
         gmail = Gmail(user=self.parent_application_page.parent_job.user)
 
         ten_minutes_ago_unix = datetime.now().timestamp() - 10 * 60
-        query = f"after:{int(ten_minutes_ago_unix)} is:unread"
+        query = f"after:{int(ten_minutes_ago_unix)}"
 
         email_identified = False
         while not email_identified:
