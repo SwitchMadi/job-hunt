@@ -43,6 +43,7 @@ class User:
         self.name = user["name"]
         self.resume = user["resume"]
         self.parsed_resume = user["modified_resume"] or user["parsed_resume"] or {}
+        self.is_parsed_resume_enriched = bool(user["modified_resume"])
         self.password = decrypt_string(user["password"])
 
         self._drive_folder = None
@@ -573,6 +574,7 @@ class User:
                 "last_modified": metadata["last_modified"].timestamp(),
                 "content_length": metadata["content_length"],
                 "content_type": metadata["content_type"],
+                "is_parsed_resume_enriched": self.is_parsed_resume_enriched,
             }
 
         except Exception as e:
