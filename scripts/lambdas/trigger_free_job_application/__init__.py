@@ -172,7 +172,7 @@ def lambda_handler(event, context):
             key_name="job-hunt",
             security_group="sg-011a3786d569e6382",
             user_data_script=script,
-            instance_name=f"jobs-application-{user.id}",
+            instance_name=f"jobs-application--user-id--{user.id}",
         )
 
         logger.info("Successfully triggered job application EC2 instance.")

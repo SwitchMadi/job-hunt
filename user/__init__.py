@@ -1324,7 +1324,7 @@ class User:
             AND j.job_url ilike '%greenhouse%'
             AND j.id NOT IN (SELECT job_id FROM submitted_jobs)
             AND j.id NOT IN (SELECT job_id FROM failed_jobs)
-            ORDER BY j.id
+            ORDER BY j.id desc
         """
 
         job_details = get_sql_query_output(job_details_query)
