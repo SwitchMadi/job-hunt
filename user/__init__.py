@@ -30,6 +30,7 @@ class User:
     def __init__(self, email=None, name=None):
         self.email = email
 
+        is_new_user = False
         user = User.find_user_by_email(email)
         if user is None:
             self.hash_id = uuid.uuid4()
@@ -37,6 +38,7 @@ class User:
             self.password = encrypt_string(generate_password())
             self.save_to_db()
             user = User.find_user_by_email(email)
+            is_new_user = True
 
         self.id = user["id"]
         self.hash_id = user["user_hash_id"]
@@ -53,6 +55,10 @@ class User:
         self._subscription = None
         self._lifetime_applications_count = None
         self._lifetime_shares_count = None
+
+        # After creating the user, assign a trial subscription
+        if is_new_user:
+            self.assign_trial_subscription()
 
     @staticmethod
     def find_user_by_email(email):
@@ -74,14 +80,6 @@ class User:
             values ('{self.hash_id}', '{self.email}', '{self.name}', '{self.password}')
         """
         result = execute_sql_query(user_create_query)
-
-        # After creating the user, assign a trial subscription
-        if result:
-            # Get the newly created user to get the ID
-            user = User.find_user_by_email(self.email)
-            if user:
-                user.assign_trial_subscription()
-
         return result
 
     def assign_trial_subscription(self):
