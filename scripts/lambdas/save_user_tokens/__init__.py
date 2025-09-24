@@ -36,6 +36,10 @@ def lambda_handler(event, context):
         )
         raise
 
+    # Check if user already exists
+    existing_user = User.find_user_by_email(email)
+    is_new_user = existing_user is None
+
     access_token = payload.get("access_token")
     user_info = get_user_info(access_token)
 
@@ -57,5 +61,16 @@ def lambda_handler(event, context):
     )
 
     user.google_oauth_credentials = credentials
+
+    # Assign trial plan to new users
+    if is_new_user:
+        logger.info(f"New user detected: {email}. Assigning trial subscription.")
+        trial_assigned = user.assign_trial_subscription()
+        if trial_assigned:
+            logger.info(f"Successfully assigned trial subscription to new user: {email}")
+        else:
+            logger.warning(f"Failed to assign trial subscription to new user: {email}")
+    else:
+        logger.info(f"Existing user: {email}. No trial assignment needed.")
 
     return
