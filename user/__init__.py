@@ -622,20 +622,41 @@ class User:
             and t1.is_active
             and t1.job_filter_id = {job_filter_id}
         """
-        df_user_preferences = get_sql_query_output(
-            query=user_preferences_query, output_as_dataframe=True
-        )
-        df_user_preferences["value"] = df_user_preferences["value"].apply(
-            lambda x: x.replace("'", "''")
-        )
-        grouped_preferences = (
-            df_user_preferences.groupby(["job_field", "is_preferred"])["value"]
-            .agg(list)
-            .unstack()
-        )
-        field_preferences = grouped_preferences.apply(
-            lambda x: x.dropna().to_dict(), axis=1
-        ).to_dict()
+        user_preferences_data = get_sql_query_output(query=user_preferences_query)
+
+        # Process the data without pandas
+        field_preferences = {}
+
+        for row in user_preferences_data:
+            job_field = row["job_field"]
+            value = row["value"]
+            is_preferred = row["is_preferred"]
+
+            # Skip null/empty values (equivalent to pandas dropna())
+            if value is None or value == "":
+                continue
+
+            # Escape single quotes
+            value = value.replace("'", "''")
+
+            # Initialize job_field if not exists
+            if job_field not in field_preferences:
+                field_preferences[job_field] = {}
+
+            # Initialize is_preferred key if not exists
+            if is_preferred not in field_preferences[job_field]:
+                field_preferences[job_field][is_preferred] = []
+
+            # Add value to the list (deduplication handled by using set)
+            field_preferences[job_field][is_preferred].append(value)
+
+        # Remove duplicates from each list (equivalent to pandas deduplication)
+        for job_field in field_preferences:
+            for is_preferred in field_preferences[job_field]:
+                # Convert to set to remove duplicates, then back to list
+                field_preferences[job_field][is_preferred] = list(
+                    set(field_preferences[job_field][is_preferred])
+                )
 
         return field_preferences
 
