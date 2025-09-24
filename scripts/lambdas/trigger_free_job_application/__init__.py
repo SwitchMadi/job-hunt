@@ -1,6 +1,7 @@
 import json
 
 from user import User
+from utilities.aws import send_lambda_response
 from utilities.logging import get_logger
 from utilities.aws.ec2 import EC2
 from utilities.aws.dynamo import OperationLocksTable, WebSocketConnectionsTable
@@ -9,6 +10,7 @@ from utilities.aws.websocket import WebSocketClient
 logger = get_logger(name="trigger_job_application")
 
 
+@send_lambda_response(logger)
 def lambda_handler(event, context):
     """
     Lambda function to trigger job free job application.
