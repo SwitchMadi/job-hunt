@@ -204,7 +204,7 @@ finally:
                     "successful_applications": successful_apps,
                     "failed_applications": failed_apps,
                     "responsesUrl": responses_url,
-                    "message": f"🎉 Job application process completed successfully!",
+                    "message": f"🎉 Job application process completed successfully! Apply to 100s of jobs automatically every month - no stress, no wasted time. Click below! 👇",
                 }
 
                 websocket_client.send_message(
