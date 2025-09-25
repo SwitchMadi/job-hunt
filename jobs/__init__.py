@@ -716,10 +716,10 @@ class ApplicationPage:
         execute_sql_query(query)
 
         # Stream application completion message if this is a status update for a completed application
-        if status in ["submitted", "failed"] and self._should_stream:
+        if False and status in ["submitted", "failed"] and self._should_stream:
             try:
                 # Create responses URL using parent_job attributes
-                responses_url = f"https://switchmadi.com/jobs/{self.parent_job.job_hash_id}/responses"
+                responses_url = f"https://switchmadi.com/jobs/{self.parent_job.hash_id}/responses"
 
                 stream_data = {
                     "event": "application_completed",
