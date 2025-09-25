@@ -188,7 +188,7 @@ finally:
                         FROM users.job_applications 
                         WHERE user_id = {user.id} 
                         AND job_id IN ({job_ids_str})
-                        AND created_at >= NOW() - INTERVAL '1 hour'
+                        AND created_at >= EXTRACT(EPOCH FROM NOW() - INTERVAL '1 hour')
                     """
                     stats = get_sql_query_output(stats_query)
 
