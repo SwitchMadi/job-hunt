@@ -719,9 +719,7 @@ class ApplicationPage:
         if False and status in ["submitted", "failed"] and self._should_stream:
             try:
                 # Create responses URL using parent_job attributes
-                responses_url = (
-                    f"https://switchmadi.com/jobs/{self.parent_job.hash_id}/responses"
-                )
+                responses_url = f"https://switchmadi.com/application-responses/{self.parent_job.hash_id}"
 
                 stream_data = {
                     "event": "application_completed",
