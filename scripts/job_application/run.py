@@ -197,21 +197,14 @@ finally:
                         successful_apps = stats["successful_applications"] or 0
                         failed_apps = stats["failed_applications"] or 0
 
-                # Create responses URL using the first job's hash ID (or a generic one)
-                responses_url = "https://switchmadi.com/jobs/responses"
-                if jobs and len(jobs) > 0:
-                    # Use the first job's hash ID for the responses URL
-                    first_job_hash = jobs[0]["job_hash_id"]
-                    responses_url = (
-                        f"https://switchmadi.com/jobs/{first_job_hash}/responses"
-                    )
+                responses_url = "https://switchmadi.com/job-applications"
 
                 completion_data = {
                     "total_applications": total_apps,
                     "successful_applications": successful_apps,
                     "failed_applications": failed_apps,
                     "responsesUrl": responses_url,
-                    "message": f"🎉 Job application process completed! Successfully applied for {successful_apps} out of {total_apps} jobs.",
+                    "message": f"🎉 Job application process completed successfully!",
                 }
 
                 websocket_client.send_message(
