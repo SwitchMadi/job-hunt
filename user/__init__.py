@@ -1097,10 +1097,10 @@ class User:
 
     @property
     def should_stream_applications(self):
-        """Determine if streaming should be enabled - only for trial users whose plan is not exhausted"""
+        """Determine if streaming should be enabled - only for trial users"""
         if self.subscription_plan_code != "TRIAL":
             return False
-        return self.applications_remaining > 0
+        return True
 
     @property
     def phone_number(self):
