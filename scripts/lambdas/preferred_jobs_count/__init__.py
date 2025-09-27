@@ -48,6 +48,9 @@ def lambda_handler(event, context):
     locations = ensure_list(nested_params.get("locations"))
     skills = ensure_list(nested_params.get("skills"))
 
+    # Filter out "United States" from location values
+    locations = [loc for loc in locations if loc.lower() != "united states"]
+
     # Expand values with synonyms for fields that support them
     expanded_domains = Job.expand_field_values_with_synonyms(domains, "job_domain")
     expanded_location_requirement = Job.expand_field_values_with_synonyms(

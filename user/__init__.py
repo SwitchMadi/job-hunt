@@ -636,6 +636,10 @@ class User:
             if value is None or value == "":
                 continue
 
+            # Skip "United States" for location field
+            if job_field in ["location"] and value.lower() == "united states":
+                continue
+
             # Escape single quotes
             value = value.replace("'", "''")
 
