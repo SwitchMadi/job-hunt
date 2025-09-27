@@ -106,41 +106,6 @@ class Job:
         else:
             return None
 
-    @staticmethod
-    def expand_field_values_with_synonyms(field_values, job_field):
-        """
-        Expand field values with synonyms from the database.
-        Similar to how User._get_job_fields_preferences works.
-
-        Args:
-            field_values: List of values to expand
-            job_field: The job field name (e.g., 'technical_skills', 'location', etc.)
-
-        Returns:
-            List of expanded values including synonyms
-        """
-        if not field_values:
-            return []
-
-        # Create a query to get synonyms for the given field values
-        values_str = "', '".join([v.replace("'", "''") for v in field_values])
-        synonyms_query = f"""
-            select coalesce(t2.related_job_field, t1.job_field) as job_field,
-                   unnest(coalesce(t2.synonyms, ARRAY[t1.value])) as value
-            from (select unnest(ARRAY['{values_str}']) as value) t1
-            left join jobs.field_value_synonyms t2
-            on t1.value = t2.value 
-            and t2.job_field = '{job_field}'
-        """
-
-        try:
-            synonyms_data = get_sql_query_output(query=synonyms_query)
-            expanded_values = [row["value"] for row in synonyms_data if row["value"]]
-            return list(set(expanded_values))  # Remove duplicates
-        except Exception as e:
-            logger.warning(f"Failed to expand synonyms for {job_field}: {e}")
-            return field_values  # Fallback to original values
-
     def save_to_db(self):
         job_create_query = f"""
             insert into jobs.jobs

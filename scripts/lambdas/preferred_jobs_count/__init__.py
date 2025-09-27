@@ -2,9 +2,43 @@ from utilities.logging import get_logger
 from utilities.aws import send_lambda_response
 from utilities.sql import get_sql_query_output
 from user import User
-from jobs import Job
 
 logger = get_logger(name="preferred_jobs_count")
+
+
+def expand_field_values_with_synonyms(field_values, job_field):
+    """
+    Expand field values with synonyms from the database.
+    Similar to how User._get_job_fields_preferences works.
+
+    Args:
+        field_values: List of values to expand
+        job_field: The job field name (e.g., 'technical_skills', 'location', etc.)
+
+    Returns:
+        List of expanded values including synonyms
+    """
+    if not field_values:
+        return []
+
+    # Create a query to get synonyms for the given field values
+    values_str = "', '".join([v.replace("'", "''") for v in field_values])
+    synonyms_query = f"""
+        select coalesce(t2.related_job_field, t1.job_field) as job_field,
+               unnest(coalesce(t2.synonyms, ARRAY[t1.value])) as value
+        from (select unnest(ARRAY['{values_str}']) as value) t1
+        left join jobs.field_value_synonyms t2
+        on t1.value = t2.value 
+        and t2.job_field = '{job_field}'
+    """
+
+    try:
+        synonyms_data = get_sql_query_output(query=synonyms_query)
+        expanded_values = [row["value"] for row in synonyms_data if row["value"]]
+        return list(set(expanded_values))  # Remove duplicates
+    except Exception as e:
+        logger.warning(f"Failed to expand synonyms for {job_field}: {e}")
+        return field_values  # Fallback to original values
 
 
 @send_lambda_response(logger)
@@ -52,12 +86,12 @@ def lambda_handler(event, context):
     locations = [loc for loc in locations if loc.lower() != "united states"]
 
     # Expand values with synonyms for fields that support them
-    expanded_domains = Job.expand_field_values_with_synonyms(domains, "job_domain")
-    expanded_location_requirement = Job.expand_field_values_with_synonyms(
+    expanded_domains = expand_field_values_with_synonyms(domains, "job_domain")
+    expanded_location_requirement = expand_field_values_with_synonyms(
         location_requirement, "location_requirement"
     )
-    expanded_locations = Job.expand_field_values_with_synonyms(locations, "location")
-    expanded_skills = Job.expand_field_values_with_synonyms(skills, "technical_skills")
+    expanded_locations = expand_field_values_with_synonyms(locations, "location")
+    expanded_skills = expand_field_values_with_synonyms(skills, "technical_skills")
 
     field_preferences = {
         "job_domain": {True: expanded_domains},
