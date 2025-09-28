@@ -42,6 +42,7 @@ try:
         where t1.is_active
         and t2.id is null
         and not t1.linkedin_easy_apply
+        and t1.employment_type not ilike '%intern%'
         and t1.job_url ilike '%greenhouse%'
         and (
                 t1.job_domain ilike '%business%' 

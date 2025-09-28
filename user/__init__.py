@@ -811,6 +811,7 @@ class User:
                     and application_status = 'submitted'
                 )
             and is_active
+            and employment_type not ilike '%intern%'
             and {self._preferred_jobs_query_filters(job_filter_id)}
             order by coalesce(job_posted_at, created_at) desc
         """
@@ -1365,6 +1366,7 @@ class User:
             WHERE a.is_application_feasible = true
             and a.is_identification_complete = true
             and a.is_active = true
+            and j.employment_type not ilike '%intern%'
             AND j.id in (
                 select id
                 from jobs.jobs
