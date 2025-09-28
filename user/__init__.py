@@ -804,6 +804,12 @@ class User:
                     where user_id = {self.id}
                     and job_filter_id = {job_filter_id}
                 )
+            and id not in (
+                    select job_id
+                    from users.job_applications
+                    where user_id = {self.id}
+                    and application_status = 'submitted'
+                )
             and is_active
             and {self._preferred_jobs_query_filters(job_filter_id)}
             order by coalesce(job_posted_at, created_at) desc
