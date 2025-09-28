@@ -844,6 +844,27 @@ class User:
                 "repost_url",
                 "description_language",
             ]
+
+            # Define list of privileged emails that get access to all columns
+            privileged_emails = [
+                # Add specific email addresses here that should have access to all columns
+                "bhaskar2choudhary@gmail.com"
+            ]
+
+            # If user email is not in privileged list, skip additional columns
+            if self.email not in privileged_emails:
+                additional_skip_columns = [
+                    # Add additional columns to skip for non-privileged users
+                    "employment_type",
+                    "other_skills",
+                    "employees_count",
+                    "job_domain",
+                    "experience_level",
+                    "linkedin_easy_apply",
+                    "is_non_automatable",
+                    "job_posted_at_ist",
+                ]
+                skip_columns.extend(additional_skip_columns)
             keep_columns = [
                 col for col in df_unshared_jobs.columns if col not in skip_columns
             ]
