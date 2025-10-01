@@ -40,7 +40,7 @@ Resources:
             Name: ScrapeUsaAnalystJobsTrigger
             Input: !Sub |
               {
-                "ami_id": "ami-044dfecf80feb107f",
+                "ami_id": "ami-08b28ae49511d344b",
                 "branch_name": "jobs_scraping/usa_analyst_jobs"
               }
         ScrapeGlobalBackendJobs:
@@ -50,7 +50,7 @@ Resources:
             Name: ScrapeGlobalBackendJobsTrigger
             Input: !Sub |
               {
-                "ami_id": "ami-08dbe25707aaaeed1",
+                "ami_id": "ami-047d89b0be7dcf62e",
                 "branch_name": "jobs_scraping/global_backend_jobs"
               }
 
