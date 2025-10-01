@@ -106,7 +106,7 @@ def lambda_handler(event, context):
         SELECT count(*) AS count
         FROM jobs.jobs
         WHERE is_active
-          AND job_posted_at > EXTRACT(EPOCH FROM (CURRENT_DATE - INTERVAL '1 day'))
+          AND job_posted_at > EXTRACT(EPOCH FROM (CURRENT_DATE - INTERVAL '2 day'))
           AND {User.preferred_jobs_query_filters(field_preferences)}
           AND is_non_automatable = false;
     """
