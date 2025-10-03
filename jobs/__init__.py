@@ -1294,32 +1294,35 @@ class ApplicationPage:
 
         return initial_fields
 
-    def _act_on_job_fields(self, job_fields):
+    def _act_on_job_fields(self, job_fields, only_error_fields=False):
         for job_field in job_fields:
             # Handle phone number/code fields together
             if job_field.field_category.value in [
                 "phone_country_code",
                 "phone_number_without_country_code",
             ]:
-                if not self.phone_info_identified:
-                    self._identify_phone_fields(job_field.field_title)
+                if self.phone_info_identified and not only_error_fields:
+                    continue
+
+                self._identify_phone_fields(job_field.field_title)
             elif job_field.field_category.value == "tnc":
                 self._identify_tnc_field()
             elif job_field.field_category.value == "work_experience":
-                if self.work_experience_section_identified:
+                if self.work_experience_section_identified and not only_error_fields:
                     continue
 
                 self._identify_work_experience_section()
             elif job_field.field_category.value == "education":
-                if self.education_section_identified:
+                if self.education_section_identified and not only_error_fields:
                     continue
 
                 self._identify_education_section()
             elif job_field.field_category.value == "cover_letter":
                 pass
             elif job_field.field_category.value == "resume_upload":
-                if self.resume_upload_identified:
+                if self.resume_upload_identified and not only_error_fields:
                     continue
+
                 self._identify_resume_upload_field(job_field.field_title)
             else:
                 self._complete_application_field_identification(job_field)
@@ -1443,7 +1446,7 @@ class ApplicationPage:
                 logger.warn(
                     f"Errors in job application fields for {self.parent_job.title}. URL - {self.url}"
                 )
-                self._act_on_job_fields(error_fields)
+                self._act_on_job_fields(error_fields, only_error_fields=True)
 
                 submit_application_button.proceed()
 
