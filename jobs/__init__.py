@@ -106,6 +106,20 @@ class Job:
         else:
             return None
 
+    @staticmethod
+    def is_active(job_id):
+        query = f"SELECT is_active FROM jobs.jobs WHERE id = {job_id} LIMIT 1"
+        try:
+            result = get_sql_query_output(query)
+        except Exception as exc:
+            logger.exception(f"Failed to verify active status for job {job_id}: {exc}")
+            return False
+
+        if not result:
+            return False
+
+        return bool(result[0].get("is_active"))
+
     def save_to_db(self):
         job_create_query = f"""
             insert into jobs.jobs
