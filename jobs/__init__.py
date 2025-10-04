@@ -107,7 +107,7 @@ class Job:
             return None
 
     @staticmethod
-    def is_active(job_id):
+    def is_job_active(job_id):
         query = f"SELECT is_active FROM jobs.jobs WHERE id = {job_id} LIMIT 1"
         try:
             result = get_sql_query_output(query)

@@ -157,7 +157,7 @@ try:
                 kill_selenium_chrome()
                 logger.info("Selenium Chrome process killed.")
 
-            if Job.is_active(curr_job_id):
+            if Job.is_job_active(curr_job_id):
                 counted_jobs.append(job)
                 logger.info(
                     f"Job {curr_job_id} is active. Counting towards remaining applications."
