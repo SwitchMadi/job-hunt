@@ -649,6 +649,14 @@ class ApplicationPage:
                     )
                     return
             else:
+                job_exists, unavailability_reason = self._is_job_still_available()
+                if not job_exists:
+                    failure_reason = "Job not available"
+                    self._update_application_status(
+                        self.application_id, "failed", failure_reason
+                    )
+                    return
+
                 self.run_steps()
 
             # Verify submission status and update application
@@ -951,6 +959,98 @@ class ApplicationPage:
 
         return False, "No conclusion after multiple attempts"
 
+    def _is_job_still_available(self):
+        """Check if the job posting still exists on the page."""
+        global driver
+
+        try:
+            revoke_optional_permissions(self.url)
+            driver.get(self.url)
+            disable_browser_alerts()
+
+            WebDriverWait(driver, 10).until(
+                lambda d: d.execute_script("return document.readyState") == "complete"
+            )
+            time.sleep(5)
+
+            job_available, unavailability_reason = self._assess_job_availability(
+                driver.page_source
+            )
+
+            if job_available is False:
+                reason = unavailability_reason or "Job not available anymore"
+                logger.warn(
+                    f"Job {self.parent_job.id} - {self.parent_job.title} is not available anymore."
+                )
+                self._mark_job_as_inactive()
+                return False, reason
+
+            if job_available is None:
+                return True, None
+
+            return True, None
+        except Exception as exc:
+            logger.exception(
+                f"Failed to verify job availability for job {self.parent_job.id} - {self.parent_job.title}: {exc}"
+            )
+            return True, None
+
+    def _assess_job_availability(self, page_source):
+        class JobAvailability(Enum):
+            true = True
+            false = False
+
+        class JobAvailabilityAssessment(BaseModel):
+            job_not_available: JobAvailability = Field(
+                ...,
+                description="Whether the page explicitly states that the job is unavailable, closed, filled, or similar.",
+            )
+            evidence: Optional[str] = Field(
+                None,
+                description="Exact message or a concise summary of the text indicating unavailability, if any.",
+            )
+
+        user_prompt = (
+            f"Following HTML page is job application webpage for {self.parent_job.title}."
+            f"HTML: {minify_html_for_gpt_prompt(page_source)}\n"
+            "Identify if there is any explicit message indicating that the job is unavailable, closed, filled, expired, or otherwise not accepting applications."
+            "Return true only if such a message is clearly present. If the page is ambiguous or does not mention unavailability, return false."
+            "If a message is present, include the exact text or a short summary in evidence."
+        )
+
+        availability_found, availability = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=JobAvailabilityAssessment,
+        )
+
+        if not availability_found:
+            logger.error(
+                f"Couldn't determine job availability for {self.parent_job.title}. URL - {self.url}"
+            )
+            return None, None
+
+        return not availability.job_not_available.value, availability.evidence
+
+    def _mark_job_as_inactive(self):
+        if self.parent_job.is_active is False:
+            return
+
+        self.parent_job.is_active = False
+
+        update_query = f"""
+            update jobs.jobs
+            set is_active = false
+            where id = {self.parent_job.id};
+        """
+
+        try:
+            execute_sql_query(update_query)
+        except Exception as exc:
+            logger.exception(
+                f"Failed to mark job {self.parent_job.id} - {self.parent_job.title} inactive: {exc}"
+            )
+
     def _identify_current_page_elements(self):
         global driver
         user_prompt = (
@@ -1041,14 +1141,7 @@ class ApplicationPage:
 
         if elements.job_not_available_alert.value:
             logger.warn(f"Job is not available anymore.")
-            self.parent_job.is_active = False
-
-            update_query = f"""
-                update jobs.jobs
-                set is_active = false
-                where id = {self.parent_job.id};
-            """
-            execute_sql_query(update_query)
+            self._mark_job_as_inactive()
 
             return False, "Job not available"
 
