@@ -587,6 +587,8 @@ class ApplicationPage:
 
                 stream_data = {
                     "event": "application_started",
+                    "job_hash_id": self.parent_job.hash_id,
+                    "job_id": self.parent_job.id,
                     "job_title": self.parent_job.title,
                     "company": self.parent_job.company,
                     "job_url": self.parent_job.url,
@@ -651,7 +653,8 @@ class ApplicationPage:
             else:
                 job_exists, unavailability_reason = self._is_job_still_available()
                 if not job_exists:
-                    failure_reason = "Job not available"
+                    failure_reason = unavailability_reason or "Job not available"
+                    self._notify_job_unavailable(failure_reason)
                     self._update_application_status(
                         self.application_id, "failed", failure_reason
                     )
@@ -745,6 +748,8 @@ class ApplicationPage:
 
                 stream_data = {
                     "event": "application_completed",
+                    "job_hash_id": self.parent_job.hash_id,
+                    "job_id": self.parent_job.id,
                     "job_title": self.parent_job.title,
                     "company": self.parent_job.company,
                     "success": status == "submitted",
@@ -800,6 +805,8 @@ class ApplicationPage:
 
                 stream_data = {
                     "event": "question_answered",
+                    "job_hash_id": self.parent_job.hash_id,
+                    "job_id": self.parent_job.id,
                     "job_title": self.parent_job.title,
                     "company": self.parent_job.company,
                     "question": question,
@@ -983,6 +990,7 @@ class ApplicationPage:
                     f"Job {self.parent_job.id} - {self.parent_job.title} is not available anymore."
                 )
                 self._mark_job_as_inactive()
+                self._notify_job_unavailable(reason)
                 return False, reason
 
             if job_available is None:
@@ -1049,6 +1057,28 @@ class ApplicationPage:
         except Exception as exc:
             logger.exception(
                 f"Failed to mark job {self.parent_job.id} - {self.parent_job.title} inactive: {exc}"
+            )
+
+    def _notify_job_unavailable(self, reason=None):
+        if not self._should_stream:
+            return
+
+        message = {
+            "event": "job_unavailable",
+            "job_hash_id": self.parent_job.hash_id,
+            "job_id": self.parent_job.id,
+            "job_title": self.parent_job.title,
+            "company": self.parent_job.company,
+            "job_url": self.parent_job.url,
+            "reason": reason,
+            "timestamp": datetime.now().isoformat() + "Z",
+        }
+
+        try:
+            self._send_stream_message("application_progress", message)
+        except Exception as exc:
+            logger.exception(
+                f"Failed to send job unavailable notification for {self.parent_job.id}: {exc}"
             )
 
     def _identify_current_page_elements(self):
@@ -1142,6 +1172,7 @@ class ApplicationPage:
         if elements.job_not_available_alert.value:
             logger.warn(f"Job is not available anymore.")
             self._mark_job_as_inactive()
+            self._notify_job_unavailable("Job not available")
 
             return False, "Job not available"
 
