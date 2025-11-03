@@ -13,6 +13,9 @@ scraping:
       - https://www.linkedin.com/jobs/search/?f_E=3%2C4%2C5%2C6&f_F=it%2Ceng&f_JT=F&f_TPR=r86400&f_WT=3%2C2&geoId=105214831&keywords=principal%20engineer&origin=JOB_SEARCH_PAGE_JOB_FILTER&refresh=true&sortBy=R
       - https://www.linkedin.com/jobs/search/?f_E=3%2C4%2C5%2C6&f_F=it%2Ceng&f_JT=F&f_TPR=r86400&f_WT=3%2C2&geoId=105214831&keywords=senior%20software%20engineer&origin=JOB_SEARCH_PAGE_JOB_FILTER&refresh=true&sortBy=R
       - https://www.linkedin.com/jobs/search/?f_E=3%2C4%2C5%2C6&f_F=it%2Ceng&f_JT=F&f_TPR=r86400&f_WT=3%2C2&geoId=105214831&keywords=engineering%20manager&origin=JOB_SEARCH_PAGE_JOB_FILTER&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?f_E=3%2C4%2C5%2C6&f_F=it%2Ceng&f_JT=F&f_TPR=r86400&f_WT=2&geoId=102713980&keywords=principal%20engineer&origin=JOB_SEARCH_PAGE_JOB_FILTER&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?f_E=3%2C4%2C5%2C6&f_F=it%2Ceng&f_JT=F&f_TPR=r86400&f_WT=2&geoId=102713980&keywords=senior%20software%20engineer&origin=JOB_SEARCH_PAGE_JOB_FILTER&refresh=true&sortBy=R
+      - https://www.linkedin.com/jobs/search/?f_E=3%2C4%2C5%2C6&f_F=it%2Ceng&f_JT=F&f_TPR=r86400&f_WT=2&geoId=102713980&keywords=engineering%20manager&origin=JOB_SEARCH_PAGE_JOB_FILTER&refresh=true&sortBy=R
       - https://www.linkedin.com/jobs/search/?f_E=3%2C4%2C5%2C6&f_F=it%2Ceng&f_JT=F&f_TPR=r86400&f_WT=2&geoId=92000000&keywords=backend%20engineer&origin=JOB_SEARCH_PAGE_JOB_FILTER&refresh=true&sortBy=R
       - https://www.linkedin.com/jobs/search/?f_E=3%2C4%2C5%2C6&f_F=it%2Ceng&f_JT=F&f_TPR=r86400&f_WT=2&geoId=92000000&keywords=principal%20engineer&origin=JOB_SEARCH_PAGE_JOB_FILTER&refresh=true&sortBy=R
       - https://www.linkedin.com/jobs/search/?f_E=3%2C4%2C5%2C6&f_F=it%2Ceng&f_JT=F&f_TPR=r86400&f_WT=2&geoId=92000000&keywords=senior%20software%20engineer&origin=JOB_SEARCH_PAGE_JOB_FILTER&refresh=true&sortBy=R
