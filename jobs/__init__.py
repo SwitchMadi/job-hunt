@@ -1154,6 +1154,7 @@ class ApplicationPage:
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=WebPageElements,
+            model="complex",
         )
         if elements_found:
             return elements
@@ -1175,12 +1176,6 @@ class ApplicationPage:
             self._notify_job_unavailable("Job not available")
 
             return False, "Job not available"
-
-        # if elements.mandatory_account_login_signup.value:
-        #     return False, "Login required"
-        #
-        # if elements.account_verification.value:
-        #     return False, "Account verification required"
 
         # Feasible sections
         if elements.captcha.value:
@@ -1415,6 +1410,7 @@ class ApplicationPage:
                 constants.gpt["system_prompts"]["application_step_identification"],
                 user_prompt_text,
                 response_format=JobFields,
+                model="complex",
             )
             if job_fields_found:
                 return job_fields.job_fields
