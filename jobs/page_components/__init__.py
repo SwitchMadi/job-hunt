@@ -1,6 +1,7 @@
 import time
 from abc import ABC, abstractmethod
 import re
+import importlib
 from pydantic import BaseModel, Field
 from enum import Enum
 from typing import Optional, List
@@ -44,11 +45,26 @@ def get_page_component_class_name(class_name):
         module_name = "work_experience_section"
     elif class_name == "Education":
         module_name = "education_section"
+    elif class_name.endswith("State") and not class_name.startswith("Login"):
+        # Login state classes (e.g., StartState, SignInFormState)
+        # Map to login subfolder - module_name already has _state suffix, so we're good
+        module_name = f"jobs.page_components.login.{module_name}"
 
     try:
         return globals()[class_name]
     except KeyError:
-        return eval(f'globals()["{module_name}"].{class_name}')
+        # Use importlib for nested module imports (e.g., login.account_creation_form_state)
+        try:
+            module = importlib.import_module(module_name)
+            return getattr(module, class_name)
+        except (ImportError, AttributeError) as e:
+            # Fallback to eval for backward compatibility
+            try:
+                return eval(f'globals()["{module_name}"].{class_name}')
+            except Exception:
+                raise ImportError(
+                    f"Could not import {class_name} from {module_name}: {e}"
+                )
 
 
 class PageComponent(ABC):
