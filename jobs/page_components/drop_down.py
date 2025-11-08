@@ -69,51 +69,56 @@ class DropDown(PageComponent):
         if dropdown_type == "select-option":
             self.options_container_x_path = None
 
-        option = None
-        max_tries = 3
-        current_try = 1
-        while (option is None) or is_element_visible(self.options_container_x_path):
-            if dropdown_type != "select-option":
-                simulate_empty_area_click()
-                self.dropdown_button.proceed()
+        if dropdown_type != "select-option":
+            simulate_empty_area_click()
+            self.dropdown_button.proceed()
 
-                if (
-                    not element_exists(self.options_container_x_path)
-                    and dropdown_element.tag_name.lower() == "input"
-                ):
-                    # send vowels to trigger options loading for cases where just click is not enough
-                    for vowel in "aeiou":
-                        dropdown_element.send_keys(vowel)
-                        time.sleep(0.5)
-                        dropdown_element.send_keys("\ue003")  # Backspace key
+            if (
+                not element_exists(self.options_container_x_path)
+                and dropdown_element.tag_name.lower() == "input"
+            ):
+                # send vowels to trigger options loading for cases where just click is not enough
+                for vowel in "aeiou":
+                    dropdown_element.send_keys(vowel)
+                    time.sleep(0.5)
+                    dropdown_element.send_keys("\ue003")  # Backspace key
 
-                if not element_exists(self.options_container_x_path):
-                    logger.warning(
-                        f"Element with dropdown container XPath {self.options_container_x_path} not found at url "
-                        f"{self.parent_application_page.url}. Retrying with generalized XPath..."
-                    )
-                    self.options_container_x_path = generalize_xpath_attributes(
-                        self.options_container_x_path
-                    )
-
-                if not element_exists(self.options_container_x_path):
-                    raise Exception(
-                        f"Element with generalized dropdown container XPath {self.options_container_x_path} not found at url "
-                        f"{self.parent_application_page.url}"
-                    )
-            else:
-                driver.execute_script(
-                    """
-                    const element = arguments[0];
-                    const rect = element.getBoundingClientRect();
-                    const elementTop = rect.top + window.pageYOffset;
-                    const viewportHeight = window.innerHeight;
-                    const offsetToCenter = elementTop - (viewportHeight / 2) + (rect.height / 2) + 100;
-                    window.scrollTo({top: offsetToCenter, behavior: 'auto'});
-                """,
-                    dropdown_element,
+            if not element_exists(self.options_container_x_path):
+                logger.warning(
+                    f"Element with dropdown container XPath {self.options_container_x_path} not found at url "
+                    f"{self.parent_application_page.url}. Retrying with generalized XPath..."
+                )
+                self.options_container_x_path = generalize_xpath_attributes(
+                    self.options_container_x_path
                 )
 
+            if not element_exists(self.options_container_x_path):
+                raise Exception(
+                    f"Element with generalized dropdown container XPath {self.options_container_x_path} not found at url "
+                    f"{self.parent_application_page.url}"
+                )
+        else:
+            driver.execute_script(
+                """
+                const element = arguments[0];
+                const rect = element.getBoundingClientRect();
+                const elementTop = rect.top + window.pageYOffset;
+                const viewportHeight = window.innerHeight;
+                const offsetToCenter = elementTop - (viewportHeight / 2) + (rect.height / 2) + 100;
+                window.scrollTo({top: offsetToCenter, behavior: 'auto'});
+            """,
+                dropdown_element,
+            )
+
+        option = None
+        max_empty_options_retries = 3
+        empty_options_retry_count = 1
+        max_iterations = 3
+        iteration_count = 0
+        while (
+            (option is None) or is_element_visible(self.options_container_x_path)
+        ) and iteration_count < max_iterations:
+            iteration_count += 1
             if not self.options_xpath_pattern:
                 self.options_xpath_pattern, options = self.get_dropdown_options(
                     job_title=self.parent_application_page.parent_job.title,
@@ -135,10 +140,10 @@ class DropDown(PageComponent):
             if not options:
                 self.options_xpath_pattern = None
 
-                if current_try >= max_tries:
+                if empty_options_retry_count >= max_empty_options_retries:
                     simulate_empty_area_click()
                     return
-                current_try += 1
+                empty_options_retry_count += 1
 
                 continue
 
@@ -193,7 +198,25 @@ class DropDown(PageComponent):
                 )
                 option_button.proceed()
 
-            break
+        # Check if loop ended due to maximum iterations without completing successfully
+        if iteration_count >= max_iterations:
+            option_text = option["text"] if option else None
+            dropdown_visible = False
+            if self.options_container_x_path:
+                try:
+                    dropdown_visible = is_element_visible(self.options_container_x_path)
+                except Exception:
+                    dropdown_visible = "unknown"
+
+            # Only raise exception if task didn't complete successfully
+            # (option is None OR dropdown is still visible)
+            if option is None or dropdown_visible:
+                raise Exception(
+                    f"Maximum iterations ({max_iterations}) reached for dropdown '{self.title}' "
+                    f"at url {self.parent_application_page.url}. "
+                    f"Option selected: {option_text}, "
+                    f"Dropdown still visible: {dropdown_visible}"
+                )
 
         # Store the response
         if option and self.parent_application_page:
