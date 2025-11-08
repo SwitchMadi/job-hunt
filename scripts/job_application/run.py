@@ -3,7 +3,7 @@ import sys
 import yaml
 import os
 
-from jobs import ApplicationPage
+from jobs import ApplicationPage, Job
 from user import User
 from utilities import take_screenshot
 from utilities.logging import get_logger
@@ -69,8 +69,9 @@ try:
     # Apply subscription-based limits using generic service methods
     remaining_applications = user.applications_remaining
     if remaining_applications > 0:
-        logger.info(f"User plan - limiting to {remaining_applications} applications")
-        jobs = jobs[:remaining_applications]
+        logger.info(
+            f"User plan - attempting up to {remaining_applications} applications"
+        )
     else:
         logger.info("No applications remaining for user")
         jobs = []
@@ -80,11 +81,16 @@ try:
     if not jobs:
         logger.warning("No jobs found for application.")
     else:
-        logger.info(f"Applying for {len(jobs)} jobs.")
+        logger.info(f"Preparing {len(jobs)} jobs for potential applications.")
 
-        # Extract job IDs from the job details
-        job_ids = [job["job_id"] for job in jobs]
-        for curr_job_id in job_ids:
+        counted_jobs = []
+
+        for job in jobs:
+            if len(counted_jobs) >= remaining_applications:
+                logger.info("Reached application limit based on active jobs.")
+                break
+
+            curr_job_id = job["job_id"]
             logger.info(f"Applying job for job ID: {curr_job_id}")
 
             # TODO: Remove uploading screenshot before starting the identification process from all places
@@ -150,6 +156,30 @@ try:
             finally:
                 kill_selenium_chrome()
                 logger.info("Selenium Chrome process killed.")
+
+            if Job.is_job_active(curr_job_id):
+                counted_jobs.append(job)
+                logger.info(
+                    f"Job {curr_job_id} is active. Counting towards remaining applications."
+                )
+            else:
+                logger.info(
+                    f"Job {curr_job_id} is inactive. It will not count towards remaining applications."
+                )
+
+        if counted_jobs:
+            logger.info(
+                f"Counted {len(counted_jobs)} active job applications after processing."
+            )
+        else:
+            logger.info("No active jobs counted towards remaining applications.")
+
+        if len(counted_jobs) < remaining_applications:
+            logger.info(
+                "Available active jobs were fewer than the remaining application allowance."
+            )
+
+        jobs = counted_jobs
 
 finally:
     # Always release the lock, even if an error occurred

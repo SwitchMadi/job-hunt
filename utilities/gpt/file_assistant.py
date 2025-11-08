@@ -15,7 +15,7 @@ def get_file_assistant(name, instructions):
     assistant = client.beta.assistants.create(
         name=name,
         instructions=instructions,
-        model=config["openai_model"],
+        model=config["openai_models"]["complex"],
         tools=[{"type": "file_search"}],
     )
 

@@ -68,7 +68,12 @@ class EnumEncoder(json.JSONEncoder):
 
 
 def get_gpt_response(
-    system_prompt, user_prompt, response_format=None, sleep_time=1, images=[]
+    system_prompt,
+    user_prompt,
+    response_format=None,
+    sleep_time=1,
+    images=[],
+    model=None,
 ):
     _log_call_trace()
 
@@ -78,8 +83,15 @@ def get_gpt_response(
         for image in images:
             user_content.append({"type": "image_url", "image_url": {"url": image}})
 
+        # Use specified model or default model
+        if model is None:
+            model = config["openai_models"]["default"]
+        elif model == "complex":
+            model = config["openai_models"]["complex"]
+        # If model is already a string (model name), use it directly
+
         payload = {
-            "model": config["openai_model"],
+            "model": model,
             "messages": [
                 {
                     "role": "system",
@@ -140,7 +152,12 @@ def get_gpt_response(
             )
             time.sleep(sleep_time)
             return get_gpt_response(
-                system_prompt, user_prompt, sleep_time=2 * sleep_time
+                system_prompt,
+                user_prompt,
+                response_format=response_format,
+                sleep_time=2 * sleep_time,
+                images=images,
+                model=model,
             )
         else:
             logger.exception(f"HTTP error occurred while calling Openai api: {e}")

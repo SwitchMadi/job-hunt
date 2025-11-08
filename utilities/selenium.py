@@ -250,6 +250,59 @@ def element_exists(x_path):
         return False
 
 
+def is_element_in_popup(x_path):
+    """
+    Check if element at xpath is within a popup/modal by traversing DOM hierarchy.
+    Returns True if element is inside a popup, False otherwise.
+    """
+    global driver
+
+    try:
+        if not element_exists(x_path):
+            return False
+
+        element = driver.find_element(By.XPATH, x_path)
+
+        # Common modal/popup identifiers
+        modal_keywords = ["modal", "popup", "dialog", "overlay", "backdrop"]
+
+        # Traverse up the DOM tree
+        current = element
+        depth = 0
+        max_depth = 20
+
+        while current and depth < max_depth:
+            # Check role attributes
+            role = current.get_attribute("role")
+            if role == "dialog" or role == "alertdialog":
+                return True
+
+            # Check aria-modal
+            if current.get_attribute("aria-modal") == "true":
+                return True
+
+            # Check class names
+            class_attr = current.get_attribute("class") or ""
+            class_lower = class_attr.lower()
+            if any(keyword in class_lower for keyword in modal_keywords):
+                return True
+
+            # Move to parent
+            try:
+                parent = current.find_element(By.XPATH, "..")
+                if parent.tag_name == "body" or parent.tag_name == "html":
+                    break
+                current = parent
+            except:
+                break
+
+            depth += 1
+
+        return False
+    except Exception:
+        return False
+
+
 def is_element_visible(x_path=None, element=None):
     global driver
 
@@ -1045,7 +1098,9 @@ def clear_text_field(x_path, title=None, skip_all_sections=False):
 
     global driver
 
-    simulate_empty_area_click()
+    # Only click empty area if element is not in a popup
+    if not is_element_in_popup(x_path):
+        simulate_empty_area_click()
     input_field = get_active_element_after_click(x_path, title=title)
 
     value = input_field.get_attribute("value") or input_field.text or ""
@@ -1094,7 +1149,9 @@ def clear_text_field(x_path, title=None, skip_all_sections=False):
             pass
 
     if is_stale(input_field):
-        simulate_empty_area_click()
+        # Only click empty area if element is not in a popup
+        if not is_element_in_popup(x_path):
+            simulate_empty_area_click()
         input_field = get_active_element_after_click(x_path, title=title)
 
     # Directly set the value to empty and dispatch an input event

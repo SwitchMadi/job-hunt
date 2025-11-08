@@ -106,6 +106,20 @@ class Job:
         else:
             return None
 
+    @staticmethod
+    def is_job_active(job_id):
+        query = f"SELECT is_active FROM jobs.jobs WHERE id = {job_id} LIMIT 1"
+        try:
+            result = get_sql_query_output(query)
+        except Exception as exc:
+            logger.exception(f"Failed to verify active status for job {job_id}: {exc}")
+            return False
+
+        if not result:
+            return False
+
+        return bool(result[0].get("is_active"))
+
     def save_to_db(self):
         job_create_query = f"""
             insert into jobs.jobs
@@ -573,6 +587,8 @@ class ApplicationPage:
 
                 stream_data = {
                     "event": "application_started",
+                    "job_hash_id": self.parent_job.hash_id,
+                    "job_id": self.parent_job.id,
                     "job_title": self.parent_job.title,
                     "company": self.parent_job.company,
                     "job_url": self.parent_job.url,
@@ -635,6 +651,15 @@ class ApplicationPage:
                     )
                     return
             else:
+                job_exists, unavailability_reason = self._is_job_still_available()
+                if not job_exists:
+                    failure_reason = unavailability_reason or "Job not available"
+                    self._notify_job_unavailable(failure_reason)
+                    self._update_application_status(
+                        self.application_id, "failed", failure_reason
+                    )
+                    return
+
                 self.run_steps()
 
             # Verify submission status and update application
@@ -723,6 +748,8 @@ class ApplicationPage:
 
                 stream_data = {
                     "event": "application_completed",
+                    "job_hash_id": self.parent_job.hash_id,
+                    "job_id": self.parent_job.id,
                     "job_title": self.parent_job.title,
                     "company": self.parent_job.company,
                     "success": status == "submitted",
@@ -778,6 +805,8 @@ class ApplicationPage:
 
                 stream_data = {
                     "event": "question_answered",
+                    "job_hash_id": self.parent_job.hash_id,
+                    "job_id": self.parent_job.id,
                     "job_title": self.parent_job.title,
                     "company": self.parent_job.company,
                     "question": question,
@@ -937,6 +966,121 @@ class ApplicationPage:
 
         return False, "No conclusion after multiple attempts"
 
+    def _is_job_still_available(self):
+        """Check if the job posting still exists on the page."""
+        global driver
+
+        try:
+            revoke_optional_permissions(self.url)
+            driver.get(self.url)
+            disable_browser_alerts()
+
+            WebDriverWait(driver, 10).until(
+                lambda d: d.execute_script("return document.readyState") == "complete"
+            )
+            time.sleep(5)
+
+            job_available, unavailability_reason = self._assess_job_availability(
+                driver.page_source
+            )
+
+            if job_available is False:
+                reason = unavailability_reason or "Job not available anymore"
+                logger.warn(
+                    f"Job {self.parent_job.id} - {self.parent_job.title} is not available anymore."
+                )
+                self._mark_job_as_inactive()
+                self._notify_job_unavailable(reason)
+                return False, reason
+
+            if job_available is None:
+                return True, None
+
+            return True, None
+        except Exception as exc:
+            logger.exception(
+                f"Failed to verify job availability for job {self.parent_job.id} - {self.parent_job.title}: {exc}"
+            )
+            return True, None
+
+    def _assess_job_availability(self, page_source):
+        class JobAvailability(Enum):
+            true = True
+            false = False
+
+        class JobAvailabilityAssessment(BaseModel):
+            job_not_available: JobAvailability = Field(
+                ...,
+                description="Whether the page explicitly states that the job is unavailable, closed, filled, or similar.",
+            )
+            evidence: Optional[str] = Field(
+                None,
+                description="Exact message or a concise summary of the text indicating unavailability, if any.",
+            )
+
+        user_prompt = (
+            f"Following HTML page is job application webpage for {self.parent_job.title}."
+            f"HTML: {minify_html_for_gpt_prompt(page_source)}\n"
+            "Identify if there is any explicit message indicating that the job is unavailable, closed, filled, expired, or otherwise not accepting applications."
+            "Return true only if such a message is clearly present. If the page is ambiguous or does not mention unavailability, return false."
+            "If a message is present, include the exact text or a short summary in evidence."
+        )
+
+        availability_found, availability = get_gpt_response(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=JobAvailabilityAssessment,
+        )
+
+        if not availability_found:
+            logger.error(
+                f"Couldn't determine job availability for {self.parent_job.title}. URL - {self.url}"
+            )
+            return None, None
+
+        return not availability.job_not_available.value, availability.evidence
+
+    def _mark_job_as_inactive(self):
+        if self.parent_job.is_active is False:
+            return
+
+        self.parent_job.is_active = False
+
+        update_query = f"""
+            update jobs.jobs
+            set is_active = false
+            where id = {self.parent_job.id};
+        """
+
+        try:
+            execute_sql_query(update_query)
+        except Exception as exc:
+            logger.exception(
+                f"Failed to mark job {self.parent_job.id} - {self.parent_job.title} inactive: {exc}"
+            )
+
+    def _notify_job_unavailable(self, reason=None):
+        if not self._should_stream:
+            return
+
+        message = {
+            "event": "job_unavailable",
+            "job_hash_id": self.parent_job.hash_id,
+            "job_id": self.parent_job.id,
+            "job_title": self.parent_job.title,
+            "company": self.parent_job.company,
+            "job_url": self.parent_job.url,
+            "reason": reason,
+            "timestamp": datetime.now().isoformat() + "Z",
+        }
+
+        try:
+            self._send_stream_message("application_progress", message)
+        except Exception as exc:
+            logger.exception(
+                f"Failed to send job unavailable notification for {self.parent_job.id}: {exc}"
+            )
+
     def _identify_current_page_elements(self):
         global driver
         user_prompt = (
@@ -1010,6 +1154,7 @@ class ApplicationPage:
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=WebPageElements,
+            model="complex",
         )
         if elements_found:
             return elements
@@ -1027,22 +1172,10 @@ class ApplicationPage:
 
         if elements.job_not_available_alert.value:
             logger.warn(f"Job is not available anymore.")
-            self.parent_job.is_active = False
-
-            update_query = f"""
-                update jobs.jobs
-                set is_active = false
-                where id = {self.parent_job.id};
-            """
-            execute_sql_query(update_query)
+            self._mark_job_as_inactive()
+            self._notify_job_unavailable("Job not available")
 
             return False, "Job not available"
-
-        # if elements.mandatory_account_login_signup.value:
-        #     return False, "Login required"
-        #
-        # if elements.account_verification.value:
-        #     return False, "Account verification required"
 
         # Feasible sections
         if elements.captcha.value:
@@ -1277,6 +1410,7 @@ class ApplicationPage:
                 constants.gpt["system_prompts"]["application_step_identification"],
                 user_prompt_text,
                 response_format=JobFields,
+                model="complex",
             )
             if job_fields_found:
                 return job_fields.job_fields

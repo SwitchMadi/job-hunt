@@ -13,6 +13,7 @@ from utilities.selenium import (
     get_unique_element_by_xpath,
     element_exists,
     simulate_empty_area_click,
+    is_element_in_popup,
 )
 
 
@@ -89,7 +90,9 @@ class TextInput(PageComponent):
             if not self.category.endswith(("- month", "- day", "- year")):
                 clear_text_field(self.x_path, title=self.title)
 
-            simulate_empty_area_click(text_to_click=self.title)
+            # Only click empty area if element is not in a popup
+            if not is_element_in_popup(self.x_path):
+                simulate_empty_area_click(text_to_click=self.title)
 
             if start_mutation_observer:
                 start_dom_mutation_observer(timeout=1500)
