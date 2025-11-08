@@ -1122,7 +1122,12 @@ class ApplicationPage:
             )
             select_application_data_source: IsElementPresent = Field(
                 ...,
-                description="Select application data source like Linkedin, Indeed, upload resume etc.",
+                description="There exists a UI element or section on the page that allows selecting how to IMPORT "
+                "candidate data into the application form. This includes options like importing from LinkedIn, "
+                "Indeed, uploading a resume file, or manually inputting data. This is specifically about HOW to "
+                "populate/import the candidate's application data, NOT about referral sources or 'how did you hear "
+                "about this job' questions. Return true only if there is a clear UI element/section for selecting "
+                "the data import method (e.g., 'Apply with LinkedIn', 'Upload Resume', 'Fill manually', etc.).",
             )
             already_applied_alert: IsElementPresent = Field(
                 ...,
