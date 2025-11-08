@@ -118,15 +118,15 @@ class Button(PageComponent):
             actions = ActionChains(driver)
             self._move_mouse_naturally(element, actions)
 
-            if self.button_type == "dropdown":
-                time.sleep(0.5)
-                WebDriverWait(driver, 5).until(EC.element_to_be_clickable(element))
-                element.click()
-            elif (element.tag_name == "input") or (
+            if (element.tag_name == "input") or (
                 self.button_type in ["dropdown_option", "upload"]
             ):
                 actions = ActionChains(driver)
                 actions.move_to_element(element).click().perform()
+            elif self.button_type:
+                time.sleep(0.5)
+                WebDriverWait(driver, 5).until(EC.element_to_be_clickable(element))
+                element.click()
             else:
                 # Use JavaScript to dispatch native events for more reliable clicking
                 driver.execute_script(
