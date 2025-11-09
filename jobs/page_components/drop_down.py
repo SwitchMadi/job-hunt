@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import Select
+from selenium.common.exceptions import NoSuchElementException
 import time
 
 from jobs.page_components import (
@@ -58,6 +59,73 @@ class DropDown(PageComponent):
 
         self.next = None
         self.prev = None
+
+    def _get_clickable_xpath_for_option(self, option_xpath, option_text):
+        """
+        Get the clickable xpath for an option, either directly or by scrolling to find it.
+
+        :param option_xpath: XPath of the option element
+        :param option_text: Text content of the option
+        :return: Clickable xpath of the option element
+        :raises: Exception if option cannot be found
+        """
+        global driver
+
+        try:
+            # Try to get clickable xpath directly
+            clickable_xpath = find_clickable_parent_xpath(option_xpath, option_text)
+            return clickable_xpath
+        except NoSuchElementException:
+            # Fallback strategy: scroll until we see the option
+            # Since we're already at the end, scroll up (towards first element)
+            logger.info(
+                f"Option not found by xpath, scrolling up to find option: {option_text}"
+            )
+            same_first_element_count = 0
+            first_element_xpath = None
+            scroll_iteration = 0
+
+            while True:
+                scroll_iteration += 1
+                # Get current visible options
+                current_options = driver.find_elements(
+                    By.XPATH, self.options_xpath_pattern
+                )
+
+                if not current_options:
+                    break
+
+                # Check if target option is visible
+                for opt in current_options:
+                    opt_text = remove_emoji(opt.text)
+                    if opt_text == option_text:
+                        # Found the option, return its clickable xpath
+                        clickable_xpath = find_clickable_parent_xpath(
+                            get_element_xpath(opt), option_text
+                        )
+                        logger.info(
+                            f"Found option after scrolling (iteration {scroll_iteration})"
+                        )
+                        return clickable_xpath
+
+                # Option not found in current view, scroll up (towards first element)
+                first_option = current_options[0]
+                current_first_xpath = get_element_xpath(first_option)
+                if current_first_xpath == first_element_xpath:
+                    same_first_element_count += 1
+                    if same_first_element_count >= 3:
+                        logger.warning(
+                            f"Reached top of dropdown without finding option: {option_text}"
+                        )
+                        raise Exception(
+                            f"Could not find option '{option_text}' after scrolling to top"
+                        )
+                else:
+                    same_first_element_count = 0
+                    first_element_xpath = current_first_xpath
+
+                actions = ActionChains(driver)
+                actions.move_to_element(first_option).perform()
 
     def proceed(self, retry=False):
         global driver
@@ -184,8 +252,8 @@ class DropDown(PageComponent):
                 select = Select(select_element)
                 select.select_by_visible_text(option["text"])
             else:
-                # Get the clickable parent xpath for this option
-                clickable_xpath = find_clickable_parent_xpath(
+                # Get the clickable xpath for this option (with fallback scrolling if needed)
+                clickable_xpath = self._get_clickable_xpath_for_option(
                     option["x_path"], option["text"]
                 )
 
@@ -361,60 +429,87 @@ class DropDown(PageComponent):
             )
 
     @classmethod
-    def build_options_list(
-        cls, xpath_pattern, dropdown_type=None, max_scroll_attempts=50
-    ):
+    def build_options_list(cls, xpath_pattern, dropdown_type=None):
         """
         Scrolls through a dropdown container and collects all visible option elements.
 
         :param dropdown_type: Type of dropdown container (e.g., "select-option", "ul-li", "ol-li", etc.)
         :param xpath_pattern: XPath pattern for the dropdown options inside the container
-        :param max_scroll_attempts: Safety limit to prevent infinite loops
-        :return: List of all option WebElement objects
+        :return: List of all option dictionaries with text and x_path
         """
         global driver
 
-        all_options = []
+        output_options = []
+        option_texts = []
 
         if dropdown_type == "select-option":
             all_options = driver.find_elements(By.XPATH, xpath_pattern)
             all_options = [
                 option for option in all_options if option.get_attribute("value")
             ]
+            logger.info(f"Found {len(all_options)} select options")
+            for option in all_options:
+                clean_text = remove_emoji(option.text)
+                if clean_text not in option_texts:
+                    output_options.append(
+                        {"text": clean_text, "x_path": get_element_xpath(option)}
+                    )
+                    option_texts.append(clean_text)
         else:
-            # Scroll the container by sending PAGE_DOWN or using JS scroll
-            last_count = 0
-            same_count_attempts = 0
+            # Scroll the container and collect options as we go
+            last_element_xpath = None
+            same_last_element_count = 0
+            scroll_iteration = 0
 
-            for _ in range(max_scroll_attempts):
+            while True:
+                scroll_iteration += 1
                 options = driver.find_elements(By.XPATH, xpath_pattern)
                 if not options:
+                    logger.info(
+                        f"No options found, stopping scroll at iteration {scroll_iteration}"
+                    )
                     break
 
+                # Process current options immediately to avoid stale elements
+                new_options_count = 0
+                for option in options:
+                    clean_text = remove_emoji(option.text)
+                    if clean_text not in option_texts:
+                        output_options.append(
+                            {"text": clean_text, "x_path": get_element_xpath(option)}
+                        )
+                        option_texts.append(clean_text)
+                        new_options_count += 1
+
+                if new_options_count > 0:
+                    logger.info(
+                        f"Scroll iteration {scroll_iteration}: Added {new_options_count} new options (total: {len(output_options)})"
+                    )
+
+                # Check if we've reached the end
                 last_option = options[-1]
+                current_last_xpath = get_element_xpath(last_option)
+                if current_last_xpath == last_element_xpath:
+                    same_last_element_count += 1
+                    logger.info(
+                        f"Same last element detected (count: {same_last_element_count}/3)"
+                    )
+                    if same_last_element_count >= 3:
+                        logger.info(
+                            f"Reached end of dropdown after {scroll_iteration} iterations"
+                        )
+                        break  # Same last element seen 3 times, stop scrolling
+                else:
+                    same_last_element_count = 0
+                    last_element_xpath = current_last_xpath
+
+                # Scroll to last option
                 actions = ActionChains(driver)
                 actions.move_to_element(last_option).perform()
 
-                if len(options) == last_count:
-                    same_count_attempts += 1
-                    if same_count_attempts >= 3:
-                        break  # No more new options
-                else:
-                    same_count_attempts = 0
-                    last_count = len(options)
-
-                all_options = options
-
-        output_options = []
-        option_texts = []
-        for option in all_options:
-            clean_text = remove_emoji(option.text)
-            if clean_text not in option_texts:
-                output_options.append(
-                    {"text": clean_text, "x_path": get_element_xpath(option)}
-                )
-                option_texts.append(clean_text)
-
+        logger.info(
+            f"Completed building options list: {len(output_options)} total options"
+        )
         return output_options
 
     def to_dict(self):
