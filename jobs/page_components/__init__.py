@@ -150,6 +150,10 @@ class ApplicationField:
             f"3. XPath should be of one interactive element only. Don't get XPath for element which has multiple "
             f"interactive elements in it (except for checkboxes and radio buttons) and the element is not interactive "
             f"itself.\n"
+            f"4. When identifying html_type, carefully analyze the element's behavior and HTML structure. If you see a "
+            f"button element that displays a selected value and opens a menu/list of options when clicked (indicated by "
+            f"attributes like aria-haspopup, aria-expanded, or presence of dropdown icons), classify it as 'dropdownButton'. "
+            f"Only use 'button' for elements that perform actions (submit, cancel, add entry) without opening selection menus.\n"
         )
 
         if self.category in ["phone_country_code", "phone_number_without_country_code"]:
@@ -173,6 +177,7 @@ class ApplicationField:
             checkBox = "check_box"
             radioButton = "radio_button"
             dropdown = "dropdown"
+            dropdownButton = "dropdown_button"
             button = "button"
 
         class FieldType(Enum):
@@ -218,7 +223,7 @@ class ApplicationField:
                 )
                 html_type: FieldHtmlType = Field(
                     ...,
-                    description="Application field html type like textbox, checkbox, dropdown etc.",
+                    description="Application field html type like textbox, checkbox, dropdown, dropdownButton etc.",
                 )
                 options: Optional[List[Option]] = Field(
                     ...,
@@ -251,7 +256,7 @@ class ApplicationField:
                 )
                 html_type: FieldHtmlType = Field(
                     ...,
-                    description="Application field html type like textbox, checkbox, dropdown etc.",
+                    description="Application field html type like textbox, checkbox, dropdown, dropdownButton etc.",
                 )
                 options: Optional[List[Option]] = Field(
                     ...,
@@ -457,7 +462,7 @@ class ApplicationField:
                     category=self.category,
                     parent_application_page=self.parent_application_page,
                 )
-            elif self.html_type == "dropdown":
+            elif self.html_type == "dropdown" or self.html_type == "dropdown_button":
                 from jobs.page_components.drop_down import DropDown
 
                 return DropDown(
@@ -584,7 +589,7 @@ class ApplicationField:
             else:
                 return "check_box", None
 
-        elif html_type == "dropdown":
+        elif html_type == "dropdown" or html_type == "dropdown_button":
             is_container_present, container_x_path = self.validate_options_container(
                 x_path, field_title, job_title, text_to_click=self.title_to_click
             )
