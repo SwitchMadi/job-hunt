@@ -308,6 +308,28 @@ class ApplicationField:
             ):
                 application_field.x_path = "/" + application_field.x_path
 
+            # Try replacing contains(text(), ...) with contains(., ...) if element not found
+            # This helps when HTML is minified and text nodes might be trimmed
+            if not element_exists(application_field.x_path):
+                contains_text_pattern = r"contains\(text\(\),\s*(['\"])([^'\"]+)\1\)"
+                match = re.search(contains_text_pattern, application_field.x_path)
+                if match:
+                    quote_char = match.group(1)
+                    text_content = match.group(2)
+                    modified_xpath = re.sub(
+                        contains_text_pattern,
+                        f"contains(., {quote_char}{text_content}{quote_char})",
+                        application_field.x_path,
+                    )
+                    if element_exists(modified_xpath):
+                        logger.info(
+                            f"Element found after replacing contains(text(), ...) with contains(., ...) "
+                            f"for {self.title} & {self.category} in "
+                            f"{self.parent_application_page.parent_job.title}. "
+                            f"Original xpath: {application_field.x_path}, Modified xpath: {modified_xpath}"
+                        )
+                        application_field.x_path = modified_xpath
+
             if (
                 (application_field.field_type.value != "date_field")
                 and not (
