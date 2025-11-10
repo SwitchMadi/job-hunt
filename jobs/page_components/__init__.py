@@ -103,7 +103,7 @@ class ApplicationField:
         self.format = None
         self.options = []
 
-    def _identify_x_path(self, retry=False, prev_x_path=None):
+    def _identify_x_path(self, retry=False, prev_x_path=None, retry_with_complex=False):
         global driver
 
         logger.info(
@@ -273,18 +273,33 @@ class ApplicationField:
                     "title is too long.",
                 )
 
+        model = "complex" if retry_with_complex else None
         application_field_found, application_field = get_gpt_response(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=ApplicationFieldInfo,
+            model=model,
         )
         if application_field_found:
             if not application_field.is_field_match_confident:
-                logger.warn(
-                    f"Field match is not confident for {self.title} & {self.category} in "
-                    f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
-                )
-                return None
+                if not retry_with_complex:
+                    logger.info(
+                        f"Field match is not confident for {self.title} & {self.category} in "
+                        f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}. "
+                        f"Retrying with complex model..."
+                    )
+                    return self._identify_x_path(
+                        retry=retry,
+                        prev_x_path=prev_x_path,
+                        retry_with_complex=True,
+                    )
+                else:
+                    logger.warn(
+                        f"Field match is not confident for {self.title} & {self.category} in "
+                        f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url} "
+                        f"even after retrying with complex model."
+                    )
+                    return None
 
             if (
                 application_field.x_path.startswith("/")
