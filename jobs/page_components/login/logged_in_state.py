@@ -1,5 +1,7 @@
 import time
 from urllib.parse import urlparse
+
+from selenium.webdriver.support.ui import WebDriverWait
 from jobs.page_components.login.base_state import LoginState
 from jobs.page_components.login.types import LoginStateType
 from jobs.page_components import logger
@@ -38,6 +40,12 @@ class LoggedInState(LoginState):
                 )
                 time.sleep(3)
                 driver.refresh()
+                WebDriverWait(driver, 10).until(
+                    lambda d: d.execute_script("return document.readyState")
+                    == "complete"
+                )
+                logger.info("Sleeping for 15 seconds after reloading window")
+                time.sleep(15)
         except Exception as e:
             logger.warning(
                 f"Error in hardcoded domain-specific logic for myworkdayjobs.com: {e}"
