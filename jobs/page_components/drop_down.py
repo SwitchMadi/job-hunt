@@ -74,6 +74,11 @@ class DropDown(PageComponent):
         try:
             # Try to get clickable xpath directly
             clickable_xpath = find_clickable_parent_xpath(option_xpath, option_text)
+
+            current_option = driver.find_element(By.XPATH, option_text)
+            actions = ActionChains(driver)
+            actions.move_to_element(current_option).perform()
+
             return clickable_xpath
         except NoSuchElementException:
             # Fallback strategy: scroll until we see the option
@@ -106,6 +111,10 @@ class DropDown(PageComponent):
                         logger.info(
                             f"Found option after scrolling (iteration {scroll_iteration})"
                         )
+
+                        actions = ActionChains(driver)
+                        actions.move_to_element(opt).perform()
+
                         return clickable_xpath
 
                 # Option not found in current view, scroll up (towards first element)
