@@ -1293,6 +1293,7 @@ class ApplicationField:
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=CorrectXPath,
+            model="complex",
         )
         if correct_x_path_found:
             x_paths = "\n".join(
