@@ -1,9 +1,12 @@
+import time
+from urllib.parse import urlparse
 from pydantic import BaseModel, Field
 
 from jobs.page_components import (
     PageComponent,
     get_page_component_class_name,
     ApplicationField,
+    logger,
 )
 from jobs.page_components.button import Button
 from utilities import constants
@@ -31,11 +34,33 @@ class NextPage(PageComponent):
         self.prev = None
         self.is_component_functional = False
 
+    def _handle_domain_specific_wait(self):
+        """
+        ===== HARDCODED DOMAIN-SPECIFIC LOGIC - SEARCH FOR "HARDCODED DOMAIN" TO FIND ALL INSTANCES =====
+        Apply domain-specific wait workarounds after clicking next page button.
+        """
+        try:
+            current_url = driver.current_url
+            parsed_url = urlparse(current_url)
+            domain = parsed_url.netloc.lower()
+
+            # myworkdayjobs.com: Wait 10 seconds after clicking next page button
+            if "myworkdayjobs.com" in domain:
+                logger.info(
+                    f"myworkdayjobs.com detected. Waiting 10 seconds after clicking next page button. "
+                    f"Job URL: {self.parent_application_page.url}"
+                )
+                time.sleep(10)
+        except Exception as e:
+            logger.warning(f"Error in hardcoded domain-specific logic: {e}")
+        # ===== END HARDCODED DOMAIN-SPECIFIC LOGIC =====
+
     def proceed(self, retry=False):
         if not self.component_identified:
             return self._identify()
 
         self.field_component.proceed()
+        self._handle_domain_specific_wait()
 
         switch_to_active_tab()
         disable_browser_alerts()
@@ -89,6 +114,8 @@ class NextPage(PageComponent):
             if self.field_component.is_component_functional:
                 self.is_component_functional = True
                 self.component_identified = True
+
+                self._handle_domain_specific_wait()
 
                 switch_to_active_tab()
                 disable_browser_alerts()
