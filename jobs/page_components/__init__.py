@@ -101,7 +101,8 @@ class ApplicationField:
         self.field_type = None
         self.html_type = None
         self.format = None
-        self.options = []
+        self.options_container_x_path = None
+        self.options_xpath_pattern = None
 
     def _identify_x_path(self, retry=False, prev_x_path=None, retry_with_complex=False):
         global driver
@@ -154,6 +155,11 @@ class ApplicationField:
             f"button element that displays a selected value and opens a menu/list of options when clicked (indicated by "
             f"attributes like aria-haspopup, aria-expanded, or presence of dropdown icons), classify it as 'dropdownButton'. "
             f"Only use 'button' for elements that perform actions (submit, cancel, add entry) without opening selection menus.\n"
+            f"5. If the field_type is checkbox or radio button, extract options_container_x_path (XPath of the parent element "
+            f"containing all checkbox/radio options) and options_xpath_pattern (XPath pattern that matches all individual "
+            f"option elements). The options_xpath_pattern will be used relative to the container element (i.e., "
+            f"container_element.find_elements(By.XPATH, pattern)), so it should be a relative XPath pattern. "
+            f"Both XPaths should avoid alphanumeric strings that may change on page reload.\n"
         )
 
         if self.category in ["phone_country_code", "phone_number_without_country_code"]:
@@ -190,18 +196,6 @@ class ApplicationField:
             multiple_choice = "multiple_choice"
             other = "other"
 
-        class Option(BaseModel):
-            text: str = Field(
-                ...,
-                description="Exact text of the checkbox / radio button / normal option",
-            )
-            x_path: str = Field(
-                ...,
-                description="XPath of the clickable checkbox / radio button which can be used in selenium "
-                "chrome driver to search & click the checkbox / radio button. If checkbox / radio button is "
-                "different from option text then give xpath of the clickable checkbox / radio button element",
-            )
-
         if user_input_element:
 
             class ApplicationFieldInfo(BaseModel):
@@ -225,9 +219,13 @@ class ApplicationField:
                     ...,
                     description="Application field html type like textbox, checkbox, dropdown, dropdownButton etc.",
                 )
-                options: Optional[List[Option]] = Field(
-                    ...,
-                    description="Clickable options to select from if the field_type is either checkbox or radio button",
+                options_container_x_path: Optional[str] = Field(
+                    default=None,
+                    description="XPath of the container element containing all checkbox/radio options. Should be provided only if html_type is check_box or radio_button.",
+                )
+                options_xpath_pattern: Optional[str] = Field(
+                    default=None,
+                    description="XPath pattern that matches all individual checkbox/radio option elements. This pattern will be used relative to the container element (i.e., container_element.find_elements(By.XPATH, pattern)), so it should be a relative XPath pattern. Should be provided only if html_type is check_box or radio_button.",
                 )
                 format: Optional[str] = Field(
                     ...,
@@ -258,9 +256,13 @@ class ApplicationField:
                     ...,
                     description="Application field html type like textbox, checkbox, dropdown, dropdownButton etc.",
                 )
-                options: Optional[List[Option]] = Field(
-                    ...,
-                    description="Clickable options to select from if the field_type is either checkbox or radio button",
+                options_container_x_path: Optional[str] = Field(
+                    default=None,
+                    description="XPath of the container element containing all checkbox/radio options. Should be provided only if html_type is check_box or radio_button.",
+                )
+                options_xpath_pattern: Optional[str] = Field(
+                    default=None,
+                    description="XPath pattern that matches all individual checkbox/radio option elements. This pattern will be used relative to the container element (i.e., container_element.find_elements(By.XPATH, pattern)), so it should be a relative XPath pattern. Should be provided only if html_type is check_box or radio_button.",
                 )
                 format: Optional[str] = Field(
                     ...,
@@ -334,7 +336,10 @@ class ApplicationField:
                 (application_field.field_type.value != "date_field")
                 and not (
                     application_field.html_type != "dropdown"
-                    and application_field.options
+                    and (
+                        application_field.options_container_x_path
+                        or application_field.options_xpath_pattern
+                    )
                 )
                 and not element_exists(application_field.x_path)
             ):
@@ -375,14 +380,21 @@ class ApplicationField:
             if not user_input_element:
                 self.title = application_field.exact_field_title or self.title
 
-            if application_field.options:
-                self.options = [
-                    {"text": option.text, "x_path": option.x_path}
-                    for option in application_field.options
-                ]
-                self.options = self._validate_options_xpaths(
-                    self.options, minified_html
+            if (
+                application_field.options_container_x_path
+                or application_field.options_xpath_pattern
+            ):
+                self.options_container_x_path = (
+                    application_field.options_container_x_path
                 )
+                self.options_xpath_pattern = application_field.options_xpath_pattern
+                # Validate the pattern
+                if self.options_container_x_path and self.options_xpath_pattern:
+                    self.options_container_x_path, self.options_xpath_pattern = (
+                        self._validate_options_pattern(
+                            self.options_container_x_path, self.options_xpath_pattern
+                        )
+                    )
         elif not retry:
             self._identify_x_path(retry=True)
         else:
@@ -393,78 +405,166 @@ class ApplicationField:
 
         return None
 
-    def _validate_options_xpaths(self, options, html):
-        all_xpaths_valid = True
-        for option in options:
-            if not element_exists(option["x_path"]):
-                all_xpaths_valid = False
-                break
+    def _validate_options_pattern(
+        self, options_container_x_path, options_xpath_pattern
+    ):
+        """Validate and fix options container XPath and pattern XPath if needed"""
+        global driver
 
-        if all_xpaths_valid:
-            return options
-
-        xpath_prompt = (
-            f"The x_path that we are trying to find is of an option under following title - \n"
-            f"Field title - {self.title}\n"
-            f"The option is following - \n"
-            f"Option text - {option['text']}"
-        )
-
-        correct_xpath = ApplicationField.extract_correct_x_path(
-            prev_x_path=option["x_path"],
-            prompt=xpath_prompt,
-            job_title=self.parent_application_page.parent_job.title,
-            job_url=self.parent_application_page.url,
-            html=html,
-            xpath_count=20,
-        )
-        if not correct_xpath:
-            raise Exception(
-                f"Couldn't extract correct x_path for the option {option['text']} under title {option['x_path']} for "
-                f"url {self.parent_application_page.parent_job.url}."
+        # Both container and pattern are required
+        if not options_container_x_path or not options_xpath_pattern:
+            logger.warning(
+                f"Missing container or pattern XPath for {self.title}. "
+                f"Container: {options_container_x_path}, Pattern: {options_xpath_pattern}"
+            )
+            return self._extract_options_pattern_using_llm(
+                prev_options_container_x_path=options_container_x_path,
+                prev_options_xpath_pattern=options_xpath_pattern,
+                failed_part=(
+                    "both"
+                    if not options_container_x_path and not options_xpath_pattern
+                    else ("container" if not options_container_x_path else "pattern")
+                ),
+                question=self.question,
             )
 
-        options_prompt = "\n".join(f"- {option['text']}" for option in options)
+        # Validate container XPath exists
+        if not element_exists(options_container_x_path):
+            logger.warning(
+                f"Container XPath {options_container_x_path} not found for {self.title}. "
+                f"Attempting to extract correct pattern..."
+            )
+            # Try to extract pattern using LLM
+            return self._extract_options_pattern_using_llm(
+                prev_options_container_x_path=options_container_x_path,
+                prev_options_xpath_pattern=options_xpath_pattern,
+                failed_part="container",
+                question=self.question,
+            )
+
+        # Validate pattern matches at least one element (scoped to container)
+        container_element = driver.find_element(By.XPATH, options_container_x_path)
+        elements = container_element.find_elements(By.XPATH, options_xpath_pattern)
+        if not elements:
+            logger.warning(
+                f"Pattern {options_xpath_pattern} matches no elements within container {options_container_x_path} for {self.title}. "
+                f"Attempting to extract correct pattern..."
+            )
+            # Try to extract pattern using LLM
+            return self._extract_options_pattern_using_llm(
+                prev_options_container_x_path=options_container_x_path,
+                prev_options_xpath_pattern=options_xpath_pattern,
+                failed_part="pattern",
+                question=self.question,
+            )
+
+        return options_container_x_path, options_xpath_pattern
+
+    def _extract_options_pattern_using_llm(
+        self,
+        prev_options_container_x_path=None,
+        prev_options_xpath_pattern=None,
+        failed_part=None,
+        question=None,
+    ):
+        """Extract options container and pattern using LLM"""
+        global driver
+
+        if question:
+            question_prompt = (
+                f"There is a checkbox/radio button field on this page asking following question under the "
+                f"title {self.title}\nQuestion - {question}"
+            )
+        else:
+            question_prompt = f"There is a checkbox/radio button field on this page with title as following -\n{self.title}"
+
+        # Try to find input block for title
+        element_identified, user_input_element = find_input_block_for_title(self.title)
+        if user_input_element:
+            container_html = user_input_element.get_attribute("outerHTML")
+        else:
+            container_html = minify_html_for_gpt_prompt(driver.page_source)
+
         user_prompt = (
-            f"Following HTML is of job application webpage for {self.parent_application_page.parent_job.title}."
-            f"HTML: {html}\n"
-            f"The webpage has following application field for applying to the job -\n"
-            f"Field title - {self.title}\n"
-            f"Field category - {self.category}\n"
-            f"The field has following options - \n"
-            f"{options_prompt}\n"
-            f"For the option with text as {option['text']}, following is the correct xpath - {correct_xpath}\n"
-            f"Fetch the xpath for all above given options, in strictly same pattern as the above given xpath."
+            f"I have HTML of job application webpage for {self.parent_application_page.parent_job.title}."
+            f"{question_prompt}\n"
+            f"Following is the HTML containing the checkbox/radio button options:\n"
+            f"{minify_html_for_gpt_prompt(container_html)}\n"
         )
 
-        class Option(BaseModel):
-            text: str = Field(..., description="Exact text of the option")
-            x_path: str = Field(
+        if prev_options_container_x_path or prev_options_xpath_pattern:
+            user_prompt += f"\nIn previous attempt, I tried following XPaths but they didn't work:\n"
+            if prev_options_container_x_path:
+                user_prompt += f"Container XPath: {prev_options_container_x_path}\n"
+            if prev_options_xpath_pattern:
+                user_prompt += f"Pattern XPath: {prev_options_xpath_pattern}\n"
+
+            if failed_part:
+                if failed_part == "container":
+                    user_prompt += (
+                        f"The container XPath failed (element not found). Please provide a correct container XPath. "
+                        f"The pattern XPath may be correct, but verify it works with the new container.\n"
+                    )
+                elif failed_part == "pattern":
+                    user_prompt += (
+                        f"The pattern XPath failed (no elements found when used within the container). "
+                        f"The container XPath is correct. Please provide a correct pattern XPath that will find "
+                        f"option elements within the container.\n"
+                    )
+                elif failed_part == "both":
+                    user_prompt += f"Both container and pattern XPaths are missing or incorrect. Please provide correct XPaths.\n"
+            else:
+                user_prompt += f"Please provide correct XPaths that will work.\n"
+
+        user_prompt += (
+            f"Return the container XPath (parent element containing all options) and XPath pattern that will match ALL "
+            f"option elements. IMPORTANT: The options_xpath_pattern will be used relative to the container element "
+            f"(i.e., container_element.find_elements(By.XPATH, pattern)), so it must be a relative XPath pattern. "
+            f"The XPath pattern should:\n"
+            f"1. Be a relative XPath that works when used with container_element.find_elements(By.XPATH, pattern)\n"
+            f"2. Not rely on HTML hierarchy\n"
+            f"3. Use attributes like class, role, data-* attributes instead (avoid alphanumeric strings)\n"
+            f"4. Return ONLY the actual clickable elements that handle option selection\n"
+            f"5. For custom implementations, find the outermost clickable element that contains the option text\n"
+            f"6. Look for elements with click handlers\n"
+            f"7. The pattern should be relative to the container element, not an absolute XPath from the document root"
+        )
+
+        class OptionsPattern(BaseModel):
+            options_container_x_path: str = Field(
                 ...,
-                description=f"XPath of the option using following pattern - {correct_xpath}",
+                description="XPath of the container element containing all checkbox/radio options",
+            )
+            options_xpath_pattern: str = Field(
+                ...,
+                description="XPath pattern that matches all individual option elements. This pattern will be used relative to the container element (i.e., container_element.find_elements(By.XPATH, pattern)), so it should be a relative XPath pattern.",
             )
 
-        class Options(BaseModel):
-            options: List[Option] = Field(
-                ...,
-                description="Options with text and x_paths",
-            )
-
-        options_xpaths_found, options = get_gpt_response(
+        pattern_found, pattern_result = get_gpt_response(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
-            response_format=Options,
+            response_format=OptionsPattern,
         )
-        if options_xpaths_found:
-            return [
-                {"text": option.text, "x_path": option.x_path}
-                for option in options.options
-            ]
-        else:
-            raise Exception(
-                f"Couldn't extract correct x_paths for the options under title {self.title} for "
-                f"url {self.parent_application_page.parent_job.url}."
-            )
+
+        if pattern_found:
+            # Validate the extracted pattern (pattern must be scoped to container)
+            if element_exists(pattern_result.options_container_x_path):
+                container_element = driver.find_element(
+                    By.XPATH, pattern_result.options_container_x_path
+                )
+                elements = container_element.find_elements(
+                    By.XPATH, pattern_result.options_xpath_pattern
+                )
+                if elements:
+                    return (
+                        pattern_result.options_container_x_path,
+                        pattern_result.options_xpath_pattern,
+                    )
+
+        raise Exception(
+            f"Couldn't extract options pattern for {self.title} at "
+            f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+        )
 
     def get_field_component(self):
         if not self.x_path:
@@ -486,7 +586,8 @@ class ApplicationField:
                 html_type=self.html_type,
                 field_title=self.title,
                 job_title=self.parent_application_page.parent_job.title,
-                options=self.options,
+                options_container_x_path=self.options_container_x_path,
+                options_xpath_pattern=self.options_xpath_pattern,
             )
 
             if self.html_type == "text_box":
@@ -528,7 +629,8 @@ class ApplicationField:
                     title=self.title,
                     question=self.question,
                     category=self.category,
-                    options=self.options,
+                    options_container_x_path=self.options_container_x_path,
+                    options_xpath_pattern=self.options_xpath_pattern,
                     parent_application_page=self.parent_application_page,
                 )
             elif self.html_type == "check_box":
@@ -539,7 +641,8 @@ class ApplicationField:
                     title=self.title,
                     question=self.question,
                     category=self.category,
-                    options=self.options,
+                    options_container_x_path=self.options_container_x_path,
+                    options_xpath_pattern=self.options_xpath_pattern,
                     parent_application_page=self.parent_application_page,
                 )
             elif self.html_type == "date_field":
@@ -560,7 +663,13 @@ class ApplicationField:
             return None
 
     def revalidate_component_type(
-        self, x_path, html_type, field_title, job_title, options=[]
+        self,
+        x_path,
+        html_type,
+        field_title,
+        job_title,
+        options_container_x_path=None,
+        options_xpath_pattern=None,
     ):
         if html_type == "text_box":
             if self.category in [
@@ -617,10 +726,15 @@ class ApplicationField:
 
             return "text_box", None
 
-        elif (html_type == "check_box") or ((html_type == "button") and options):
+        elif (html_type == "check_box") or (
+            (html_type == "button")
+            and (options_container_x_path or options_xpath_pattern)
+        ):
             from jobs.page_components.check_box import CheckBox
 
-            multiple_correct = CheckBox.validate_checkbox(options, field_title)
+            multiple_correct = CheckBox.validate_checkbox(
+                options_container_x_path, options_xpath_pattern, field_title
+            )
             if not multiple_correct:
                 return "radio_button", None
             else:

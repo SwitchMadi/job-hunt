@@ -1,13 +1,15 @@
 from selenium.webdriver.common.by import By
 
 from jobs import ApplicationField
-from jobs.page_components import PageComponent, get_page_component_class_name
+from jobs.page_components import PageComponent, get_page_component_class_name, logger
 from jobs.page_components.button import Button
 from utilities.selenium import (
     get_selenium_driver,
     get_unique_element_by_xpath,
     get_element_xpath,
+    element_exists,
 )
+from utilities import remove_emoji
 
 
 driver = get_selenium_driver()
@@ -16,13 +18,22 @@ driver.set_page_load_timeout(15)
 
 class RadioButton(PageComponent):
     def __init__(
-        self, x_path, title, question, category, options, parent_application_page
+        self,
+        x_path,
+        title,
+        question,
+        category,
+        options_container_x_path,
+        options_xpath_pattern,
+        parent_application_page,
     ):
+        self.options = []
         self.x_path = x_path
         self.title = title
         self.question = question
         self.category = category
-        self.options = options
+        self.options_container_x_path = options_container_x_path
+        self.options_xpath_pattern = options_xpath_pattern
         self.parent_application_page = parent_application_page
 
         self.is_component_functional = False
@@ -30,7 +41,55 @@ class RadioButton(PageComponent):
         self.next = None
         self.prev = None
 
+    def _build_options_list(self):
+        """Build options list from XPath pattern, scoped to container"""
+        global driver
+
+        if not self.options_xpath_pattern:
+            logger.warning(f"No options_xpath_pattern provided for {self.title}")
+            return []
+
+        if not self.options_container_x_path:
+            logger.warning(f"No options_container_x_path provided for {self.title}")
+            return []
+
+        if not element_exists(self.options_container_x_path):
+            logger.warning(
+                f"Container XPath {self.options_container_x_path} not found for {self.title}"
+            )
+            return []
+
+        output_options = []
+        option_texts = []
+
+        # Pattern must always be scoped to container
+        container_element = driver.find_element(By.XPATH, self.options_container_x_path)
+        options = container_element.find_elements(By.XPATH, self.options_xpath_pattern)
+
+        logger.info(
+            f"Found {len(options)} options using pattern {self.options_xpath_pattern} within container {self.options_container_x_path}"
+        )
+
+        for option in options:
+            clean_text = remove_emoji(option.text)
+            if clean_text and clean_text not in option_texts:
+                output_options.append(
+                    {"text": clean_text, "x_path": get_element_xpath(option)}
+                )
+                option_texts.append(clean_text)
+
+        logger.info(
+            f"Completed building options list: {len(output_options)} total options for {self.title}"
+        )
+        return output_options
+
     def proceed(self, retry=False):
+        # Build options list from pattern
+        self.options = self._build_options_list()
+
+        if not self.options:
+            logger.warning(f"No options found for {self.title}")
+            return
         answer = ApplicationField.get_field_value(
             field_category=self.category,
             user=self.parent_application_page.parent_job.user,
@@ -87,7 +146,8 @@ class RadioButton(PageComponent):
             "title": self.title,
             "question": self.question,
             "category": self.category,
-            "options": self.options,
+            "options_container_x_path": self.options_container_x_path,
+            "options_xpath_pattern": self.options_xpath_pattern,
             "next": self.next.to_dict() if self.next else None,
         }
 
@@ -98,7 +158,8 @@ class RadioButton(PageComponent):
             title=input_dict["title"],
             question=input_dict["question"],
             category=input_dict["category"],
-            options=input_dict["options"],
+            options_container_x_path=input_dict.get("options_container_x_path"),
+            options_xpath_pattern=input_dict.get("options_xpath_pattern"),
             parent_application_page=parent_application_page,
         )
 

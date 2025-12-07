@@ -1,7 +1,8 @@
 from pydantic import BaseModel, Field
+from selenium.webdriver.common.by import By
 
 from jobs import ApplicationField
-from jobs.page_components import PageComponent, get_page_component_class_name
+from jobs.page_components import PageComponent, get_page_component_class_name, logger
 from jobs.page_components.button import Button
 from utilities.selenium import (
     get_selenium_driver,
@@ -9,8 +10,9 @@ from utilities.selenium import (
     get_element_xpath,
     find_input_block_for_title,
     minify_html_for_gpt_prompt,
+    element_exists,
 )
-from utilities import constants
+from utilities import constants, remove_emoji
 from utilities.gpt import get_gpt_response
 
 
@@ -20,13 +22,22 @@ driver.set_page_load_timeout(15)
 
 class CheckBox(PageComponent):
     def __init__(
-        self, x_path, title, question, category, options, parent_application_page
+        self,
+        x_path,
+        title,
+        question,
+        category,
+        options_container_x_path,
+        options_xpath_pattern,
+        parent_application_page,
     ):
+        self.options = []
         self.x_path = x_path
         self.title = title
         self.question = question
         self.category = category
-        self.options = options
+        self.options_container_x_path = options_container_x_path
+        self.options_xpath_pattern = options_xpath_pattern
         self.parent_application_page = parent_application_page
 
         self.is_component_functional = False
@@ -34,7 +45,55 @@ class CheckBox(PageComponent):
         self.next = None
         self.prev = None
 
+    def _build_options_list(self):
+        """Build options list from XPath pattern, scoped to container"""
+        global driver
+
+        if not self.options_xpath_pattern:
+            logger.warning(f"No options_xpath_pattern provided for {self.title}")
+            return []
+
+        if not self.options_container_x_path:
+            logger.warning(f"No options_container_x_path provided for {self.title}")
+            return []
+
+        if not element_exists(self.options_container_x_path):
+            logger.warning(
+                f"Container XPath {self.options_container_x_path} not found for {self.title}"
+            )
+            return []
+
+        output_options = []
+        option_texts = []
+
+        # Pattern must always be scoped to container
+        container_element = driver.find_element(By.XPATH, self.options_container_x_path)
+        options = container_element.find_elements(By.XPATH, self.options_xpath_pattern)
+
+        logger.info(
+            f"Found {len(options)} options using pattern {self.options_xpath_pattern} within container {self.options_container_x_path}"
+        )
+
+        for option in options:
+            clean_text = remove_emoji(option.text)
+            if clean_text and clean_text not in option_texts:
+                output_options.append(
+                    {"text": clean_text, "x_path": get_element_xpath(option)}
+                )
+                option_texts.append(clean_text)
+
+        logger.info(
+            f"Completed building options list: {len(output_options)} total options for {self.title}"
+        )
+        return output_options
+
     def proceed(self, retry=False):
+        # Build options list from pattern
+        self.options = self._build_options_list()
+
+        if not self.options:
+            logger.warning(f"No options found for {self.title}")
+            return
         info = ApplicationField.get_field_value(
             field_category=self.category,
             user=self.parent_application_page.parent_job.user,
@@ -84,18 +143,32 @@ class CheckBox(PageComponent):
         return
 
     @classmethod
-    def validate_checkbox(cls, options, title):
+    def validate_checkbox(cls, options_container_x_path, options_xpath_pattern, title):
+        """Validate if checkbox allows multiple selections by building options and testing"""
         multiple_correct = False
+
+        # Both container and pattern are required
+        if not options_container_x_path or not options_xpath_pattern:
+            return cls._validate_checkbox_using_llm(title)
+
+        if not element_exists(options_container_x_path):
+            return cls._validate_checkbox_using_llm(title)
+
+        # Pattern must always be scoped to container
+        container_element = driver.find_element(By.XPATH, options_container_x_path)
+        options = container_element.find_elements(By.XPATH, options_xpath_pattern)
 
         # If there are no options or only one option, we can consider it valid
         if len(options) <= 1:
             return True
 
-        option_1 = get_unique_element_by_xpath(xpath=options[0]["x_path"], title=title)
+        # Get first two options for testing
+        option_1_xpath = get_element_xpath(options[0])
+        option_2_xpath = get_element_xpath(options[1])
+
+        option_1 = get_unique_element_by_xpath(xpath=option_1_xpath, title=title)
         if not option_1:
-            raise Exception(
-                f"Unique element not found for x_path - {options[0]['x_path']}"
-            )
+            raise Exception(f"Unique element not found for x_path - {option_1_xpath}")
 
         if (
             option_1.tag_name == "input"
@@ -112,11 +185,9 @@ class CheckBox(PageComponent):
         )
         option_button_1.proceed()
 
-        option_2 = get_unique_element_by_xpath(xpath=options[1]["x_path"], title=title)
+        option_2 = get_unique_element_by_xpath(xpath=option_2_xpath, title=title)
         if not option_2:
-            raise Exception(
-                f"Unique element not found for x_path - {options[1]['x_path']}"
-            )
+            raise Exception(f"Unique element not found for x_path - {option_2_xpath}")
         driver.execute_script("arguments[0].checked = false;", option_2)
 
         option_button_2 = Button(
@@ -178,7 +249,8 @@ class CheckBox(PageComponent):
             "title": self.title,
             "question": self.question,
             "category": self.category,
-            "options": self.options,
+            "options_container_x_path": self.options_container_x_path,
+            "options_xpath_pattern": self.options_xpath_pattern,
             "next": self.next.to_dict() if self.next else None,
         }
 
@@ -189,7 +261,8 @@ class CheckBox(PageComponent):
             title=input_dict["title"],
             question=input_dict["question"],
             category=input_dict["category"],
-            options=input_dict["options"],
+            options_container_x_path=input_dict.get("options_container_x_path"),
+            options_xpath_pattern=input_dict.get("options_xpath_pattern"),
             parent_application_page=parent_application_page,
         )
 
