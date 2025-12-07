@@ -75,7 +75,7 @@ class DropDown(PageComponent):
             # Try to get clickable xpath directly
             clickable_xpath = find_clickable_parent_xpath(option_xpath, option_text)
 
-            current_option = driver.find_element(By.XPATH, option_text)
+            current_option = driver.find_element(By.XPATH, clickable_xpath)
             actions = ActionChains(driver)
             actions.move_to_element(current_option).perform()
 
