@@ -683,19 +683,23 @@ def get_xpath_by_text(text):
             .trim();  // Finally trim again in case special chars created new leading/trailing spaces
     }
 
+    function normalizeWhitespace(str) {
+        return str.replace(/\s+/g, ' ').trim();
+    }
+
     function findSmallestElementByText(text) {
-        const cleanedInput = cleanTextEdges(text);
+        const cleanedInput = normalizeWhitespace(cleanTextEdges(text));
         const allElements = Array.from(document.querySelectorAll('body *'));
         let matchingElements;
 
         if (cleanedInput.length > 70) {
             matchingElements = allElements.filter(el => {
-                const cleanedElText = cleanTextEdges(el.textContent);
+                const cleanedElText = normalizeWhitespace(cleanTextEdges(el.textContent));
                 return cleanedElText.includes(cleanedInput);
             });
         } else {
             matchingElements = allElements.filter(el => {
-                const cleanedElText = cleanTextEdges(el.textContent);
+                const cleanedElText = normalizeWhitespace(cleanTextEdges(el.textContent));
                 return cleanedElText === cleanedInput;
             });
         }
@@ -736,8 +740,8 @@ def get_xpath_by_text(text):
                 return visibleB - visibleA;  // true > false, so visible comes first
             }
             
-            const lenA = cleanTextEdges(a.textContent).length;
-            const lenB = cleanTextEdges(b.textContent).length;
+            const lenA = normalizeWhitespace(cleanTextEdges(a.textContent)).length;
+            const lenB = normalizeWhitespace(cleanTextEdges(b.textContent)).length;
             if (lenA !== lenB) {
                 return lenA - lenB;  // shorter text first
             }
