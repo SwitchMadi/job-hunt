@@ -275,7 +275,7 @@ class ApplicationField:
                     "title is too long.",
                 )
 
-        model = "complex" if retry_with_complex else None
+        model = "complex" if retry_with_complex else "intermediate"
         application_field_found, application_field = get_gpt_response(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,

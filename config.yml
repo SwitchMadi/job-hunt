@@ -15,6 +15,7 @@ scraping:
 startup_input: C:\Users\JobHunt\Desktop\startup_input.yml
 openai_models:
   default: gpt-4o-mini
+  intermediate: gpt-5-nano
   complex: gpt-5-mini
 user_email: yzalthree@gmail.com
 admin_email: yzalthree@gmail.com

@@ -86,6 +86,8 @@ def get_gpt_response(
         # Use specified model or default model
         if model is None:
             model = config["openai_models"]["default"]
+        elif model == "intermediate":
+            model = config["openai_models"]["intermediate"]
         elif model == "complex":
             model = config["openai_models"]["complex"]
         # If model is already a string (model name), use it directly
