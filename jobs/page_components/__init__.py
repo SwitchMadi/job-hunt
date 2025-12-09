@@ -391,7 +391,7 @@ class ApplicationField:
                 # Validate the pattern
                 if self.options_container_x_path and self.options_xpath_pattern:
                     self.options_container_x_path, self.options_xpath_pattern = (
-                        self._validate_options_pattern(
+                        self._validate_mcq_options_pattern(
                             self.options_container_x_path, self.options_xpath_pattern
                         )
                     )
@@ -405,7 +405,7 @@ class ApplicationField:
 
         return None
 
-    def _validate_options_pattern(
+    def _validate_mcq_options_pattern(
         self, options_container_x_path, options_xpath_pattern
     ):
         """Validate and fix options container XPath and pattern XPath if needed"""
@@ -548,17 +548,15 @@ class ApplicationField:
 
         if pattern_found:
             # Validate the extracted pattern (pattern must be scoped to container)
-            if element_exists(pattern_result.options_container_x_path):
-                container_element = driver.find_element(
-                    By.XPATH, pattern_result.options_container_x_path
-                )
-                elements = container_element.find_elements(
-                    By.XPATH, pattern_result.options_xpath_pattern
-                )
+            container_xpath = pattern_result.options_container_x_path.x_path
+            pattern_xpath = pattern_result.options_xpath_pattern.x_path
+            if element_exists(container_xpath):
+                container_element = driver.find_element(By.XPATH, container_xpath)
+                elements = container_element.find_elements(By.XPATH, pattern_xpath)
                 if elements:
                     return (
-                        pattern_result.options_container_x_path,
-                        pattern_result.options_xpath_pattern,
+                        container_xpath,
+                        pattern_xpath,
                     )
 
         raise Exception(
