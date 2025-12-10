@@ -90,8 +90,10 @@ class TextInput(PageComponent):
             if not self.category.endswith(("- month", "- day", "- year")):
                 clear_text_field(self.x_path, title=self.title)
 
-            # Only click empty area if element is not in a popup
-            if not is_element_in_popup(self.x_path):
+            # Only click empty area if element is not in a popup and not a date sub-field
+            if not is_element_in_popup(self.x_path) and not self.category.endswith(
+                ("- month", "- day", "- year")
+            ):
                 simulate_empty_area_click(text_to_click=self.title)
 
             if start_mutation_observer:
