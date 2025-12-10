@@ -1347,7 +1347,11 @@ class ApplicationField:
         else:
             user_prompt += f"Closest answer to the question is {closest_answer}.\n"
 
-        user_prompt += "Give me correct answer for the question."
+        user_prompt += """Following general information about the application - 
+        1. Job source - LinkedIn
+        
+        Now based on all above instructions, give me correct answer for the question.
+        """
 
         field_answer_found, field_answer = get_gpt_response(
             constants.gpt["system_prompts"]["application_step_identification"],
