@@ -390,6 +390,7 @@ class DateField(PageComponent):
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=DateInfo,
+            model="intermediate",
         )
 
         if date_info_found and date_info.has_calendar and date_info.date_xpath:
@@ -688,6 +689,7 @@ class DateField(PageComponent):
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=DateInputMethod,
+            model="intermediate",
         )
 
         if input_found:
@@ -912,6 +914,7 @@ class DateField(PageComponent):
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=ComponentsXPathCorrectness,
+            model="intermediate",
         )
         if components_found:
             # Remove components based on GPT response

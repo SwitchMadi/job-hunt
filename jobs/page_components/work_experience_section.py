@@ -719,6 +719,7 @@ class WorkExperienceSection(PageComponent):
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=WorkExperienceSectionInfo,
+            model="intermediate",
         )
         if info_found:
             return info.interactive_work_experience_fields_visible
