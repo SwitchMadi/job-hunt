@@ -19,6 +19,7 @@ from utilities.selenium import (
     element_exists,
     get_element_xpath,
     find_input_block_for_title,
+    extract_element_value,
 )
 from utilities import constants
 from utilities.gpt import get_gpt_response
@@ -57,6 +58,9 @@ class DateField(PageComponent):
             "date": {},
         }
         self.date_format = None
+        self.day_format = None
+        self.month_format = None
+        self.year_format = None
         self.is_component_functional = False
 
         self.next = None
@@ -109,6 +113,7 @@ class DateField(PageComponent):
                 button = Button(
                     x_path=self.components["date"]["xpath"],
                     button_type="date",
+                    title=self.title,
                     parent_application_page=self.parent_application_page,
                 )
                 button.proceed()
@@ -481,6 +486,30 @@ class DateField(PageComponent):
                         f"Identified {component_type} component as {component_obj.__class__.__name__} "
                         f"with html_type: {field.html_type}"
                     )
+
+                    # Extract format from field if it's a TextInput and date_format is not set
+                    if (
+                        not self.date_format
+                        and component_obj.__class__.__name__ == "TextInput"
+                    ):
+                        try:
+                            element = driver.find_element(By.XPATH, component["xpath"])
+                            field_value = extract_element_value(element)
+
+                            if field_value:
+                                if component_type == "day":
+                                    self.day_format = field_value
+                                elif component_type == "month":
+                                    self.month_format = field_value
+                                elif component_type == "year":
+                                    self.year_format = field_value
+                                logger.debug(
+                                    f"Extracted {component_type}_format: {field_value}"
+                                )
+                        except Exception as e:
+                            logger.warn(
+                                f"Error extracting format from {component_type} field: {str(e)}"
+                            )
                 else:
                     all_components_valid = False
                     logger.debug(f"Failed to get component for {component_type}")
@@ -538,10 +567,20 @@ class DateField(PageComponent):
                 ("year", self.components.get("year")),
             ]:
                 if component and isinstance(component, PageComponent):
-                    if self.date_format:
+                    # Use date_format if available, otherwise use component-specific format
+                    format_to_use = self.date_format
+                    if not format_to_use:
+                        if component_type == "day":
+                            format_to_use = self.day_format
+                        elif component_type == "month":
+                            format_to_use = self.month_format
+                        elif component_type == "year":
+                            format_to_use = self.year_format
+
+                    if format_to_use:
                         date_component = self._get_date_component_in_format(
                             date=self.answer,
-                            date_format=self.date_format,
+                            date_format=format_to_use,
                             date_component=component_type,
                         )
                         component.answer = date_component
@@ -969,6 +1008,9 @@ class DateField(PageComponent):
             "class": self.__class__.__name__,
             "title": self.title,
             "date_format": self.date_format,
+            "day_format": self.day_format,
+            "month_format": self.month_format,
+            "year_format": self.year_format,
             "category": self.category,
             "components": {
                 k: v.to_dict() if isinstance(v, PageComponent) else v
@@ -995,6 +1037,9 @@ class DateField(PageComponent):
             persist_context_fields=input_dict.get("persist_context_fields", True),
         )
         instance.date_format = input_dict["date_format"]
+        instance.day_format = input_dict.get("day_format")
+        instance.month_format = input_dict.get("month_format")
+        instance.year_format = input_dict.get("year_format")
 
         # Restore component info and state
         if input_dict.get("components"):

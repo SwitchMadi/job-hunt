@@ -363,6 +363,104 @@ def element_has_area(x_path=None, element=None):
         return False
 
 
+def extract_element_value(element):
+    """
+    Extract value from an HTML element using all reliable methods.
+    Tries multiple approaches to get the actual value without modifying the DOM.
+
+    Args:
+        element: Selenium WebElement to extract value from
+
+    Returns:
+        str: Extracted value or None if no value found
+    """
+    global driver
+
+    field_value = None
+
+    try:
+        # 1. value attribute (standard for input/textarea)
+        if not field_value or not field_value.strip():
+            field_value = element.get_attribute("value")
+
+        # 2. JavaScript value property (sometimes more accurate)
+        if not field_value or not field_value.strip():
+            field_value = driver.execute_script("return arguments[0].value;", element)
+
+        # 3. text property (Selenium) - for elements displaying value as text
+        if not field_value or not field_value.strip():
+            field_value = element.text
+
+        # 4. textContent via JavaScript
+        if not field_value or not field_value.strip():
+            field_value = driver.execute_script(
+                "return arguments[0].textContent;", element
+            )
+
+        # 5. innerText via JavaScript
+        if not field_value or not field_value.strip():
+            field_value = driver.execute_script(
+                "return arguments[0].innerText;", element
+            )
+
+        # 6. innerHTML (strip HTML tags to get text value)
+        if not field_value or not field_value.strip():
+            inner_html = driver.execute_script(
+                "return arguments[0].innerHTML;", element
+            )
+            if inner_html:
+                field_value = re.sub(r"<.*?>", "", inner_html)
+
+        # 7. data-value attribute (custom attribute that may hold actual value)
+        if not field_value or not field_value.strip():
+            field_value = element.get_attribute("data-value")
+
+        # 8. aria-valuenow attribute (for sliders, progress bars - actual numeric value)
+        if not field_value or not field_value.strip():
+            field_value = element.get_attribute("aria-valuenow")
+
+        # 9. aria-valuetext attribute (text representation of value)
+        if not field_value or not field_value.strip():
+            field_value = element.get_attribute("aria-valuetext")
+
+        # 10. For select elements, get selected option value
+        if not field_value or not field_value.strip():
+            tag_name = element.tag_name.lower()
+            if tag_name == "select":
+                try:
+                    # Try selected option
+                    selected_option = element.find_element(
+                        By.XPATH, ".//option[@selected]"
+                    )
+                    field_value = selected_option.text or selected_option.get_attribute(
+                        "value"
+                    )
+                except NoSuchElementException:
+                    # Try currently selected option via JavaScript
+                    try:
+                        field_value = driver.execute_script(
+                            "return arguments[0].options[arguments[0].selectedIndex].text || arguments[0].value;",
+                            element,
+                        )
+                    except:
+                        pass
+
+        # 11. For checkboxes/radio, get checked state value
+        if not field_value or not field_value.strip():
+            input_type = element.get_attribute("type")
+            if input_type in ["checkbox", "radio"]:
+                is_checked = driver.execute_script(
+                    "return arguments[0].checked;", element
+                )
+                if is_checked:
+                    field_value = element.get_attribute("value") or "checked"
+
+        return field_value.strip() if field_value and field_value.strip() else None
+
+    except Exception as e:
+        return None
+
+
 def start_dom_mutation_observer(timeout=100):
     """
     MutationObserver that collects visible + attached DOM elements,
