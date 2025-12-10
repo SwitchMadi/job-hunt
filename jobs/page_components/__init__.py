@@ -258,11 +258,15 @@ class ApplicationField:
                 )
                 options_container_x_path: Optional[str] = Field(
                     default=None,
-                    description="XPath of the container element containing all checkbox/radio options. Should be provided only if html_type is check_box or radio_button.",
+                    description="XPath of the container element containing all checkbox/radio options. Should be "
+                    "provided only if html_type is check_box or radio_button.",
                 )
                 options_xpath_pattern: Optional[str] = Field(
                     default=None,
-                    description="XPath pattern that matches all individual checkbox/radio option elements. This pattern will be used relative to the container element (i.e., container_element.find_elements(By.XPATH, pattern)), so it should be a relative XPath pattern. Should be provided only if html_type is check_box or radio_button.",
+                    description="XPath pattern that matches all individual checkbox/radio option elements. This pattern"
+                    " will be used relative to the container element "
+                    "(i.e., container_element.find_elements(By.XPATH, pattern)), so it should be a relative"
+                    " XPath pattern. Should be provided only if html_type is check_box or radio_button.",
                 )
                 format: Optional[str] = Field(
                     ...,
