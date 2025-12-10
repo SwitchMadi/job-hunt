@@ -341,6 +341,7 @@ class WorkExperienceSection(PageComponent):
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=WorkExperienceSectionFields,
+            model="intermediate",
         )
         if fields_found:
             curr_node = None
@@ -423,6 +424,7 @@ class WorkExperienceSection(PageComponent):
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=AddWorkExperienceButton,
+            model="intermediate",
         )
         if fields_found:
             if fields.add_new_work_experience_x_path:
@@ -603,6 +605,7 @@ class WorkExperienceSection(PageComponent):
                 constants.gpt["system_prompts"]["application_step_identification"],
                 user_prompt,
                 response_format=WorkExperienceSectionFields,
+                model="intermediate",
             )
             if fields_found:
                 curr_node = None
@@ -778,6 +781,7 @@ class WorkExperienceSection(PageComponent):
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=PageElements,
+            model="intermediate",
         )
 
         if analysis_found:
@@ -875,6 +879,7 @@ class WorkExperienceSection(PageComponent):
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=WorkExperienceFieldsAnalysis,
+            model="intermediate",
         )
 
         if analysis_found:
@@ -1118,6 +1123,7 @@ class WorkExperience(PageComponent):
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=WorkExperienceFields,
+            model="intermediate",
         )
 
         additional_fields = []

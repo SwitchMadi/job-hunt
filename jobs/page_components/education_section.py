@@ -329,6 +329,7 @@ class EducationSection(PageComponent):
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=EducationSectionFields,
+            model="intermediate",
         )
         if fields_found:
             curr_node = None
@@ -411,6 +412,7 @@ class EducationSection(PageComponent):
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=AddEducationButton,
+            model="intermediate",
         )
         if fields_found:
             if fields.add_new_education_x_path:
@@ -581,6 +583,7 @@ class EducationSection(PageComponent):
                 constants.gpt["system_prompts"]["application_step_identification"],
                 user_prompt,
                 response_format=EducationSectionFields,
+                model="intermediate",
             )
             if fields_found:
                 curr_node = None
@@ -694,6 +697,7 @@ class EducationSection(PageComponent):
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=EducationSectionInfo,
+            model="intermediate",
         )
         if info_found:
             return info.interactive_education_fields_visible
@@ -756,6 +760,7 @@ class EducationSection(PageComponent):
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=PageElements,
+            model="intermediate",
         )
 
         if analysis_found:
@@ -851,6 +856,7 @@ class EducationSection(PageComponent):
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=EducationQualificationFieldsAnalysis,
+            model="intermediate",
         )
 
         if analysis_found:
@@ -1091,6 +1097,7 @@ class Education(PageComponent):
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=EducationFields,
+            model="intermediate",
         )
 
         additional_fields = []
