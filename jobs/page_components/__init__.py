@@ -11,6 +11,7 @@ from selenium.common import (
     NoSuchElementException,
 )
 from selenium.webdriver.common.by import By
+import yaml
 
 from utilities.selenium import (
     get_selenium_driver,
@@ -32,6 +33,7 @@ from utilities import constants
 from utilities.gpt import get_gpt_response
 
 
+config = yaml.safe_load(open("config.yml"))
 logger = get_logger(name="job")
 driver = get_selenium_driver()
 driver.set_page_load_timeout(15)
@@ -384,21 +386,28 @@ class ApplicationField:
             if not user_input_element:
                 self.title = application_field.exact_field_title or self.title
 
-            if (
-                application_field.options_container_x_path
-                or application_field.options_xpath_pattern
-            ):
+            # Handle checkbox/radio option patterns
+            if application_field.html_type.value in ["check_box", "radio_button"]:
+                # For checkbox/radio, we need both container and pattern
                 self.options_container_x_path = (
                     application_field.options_container_x_path
                 )
                 self.options_xpath_pattern = application_field.options_xpath_pattern
-                # Validate the pattern
-                if self.options_container_x_path and self.options_xpath_pattern:
-                    self.options_container_x_path, self.options_xpath_pattern = (
-                        self._validate_mcq_options_pattern(
-                            self.options_container_x_path, self.options_xpath_pattern
-                        )
+                # Always validate - _validate_mcq_options_pattern handles missing fields
+                self.options_container_x_path, self.options_xpath_pattern = (
+                    self._validate_mcq_options_pattern(
+                        self.options_container_x_path, self.options_xpath_pattern
                     )
+                )
+            elif (
+                application_field.options_container_x_path
+                or application_field.options_xpath_pattern
+            ):
+                # Non-checkbox/radio but has options (edge case - shouldn't happen per spec)
+                self.options_container_x_path = (
+                    application_field.options_container_x_path
+                )
+                self.options_xpath_pattern = application_field.options_xpath_pattern
         elif not retry:
             self._identify_x_path(retry=True)
         else:
@@ -1347,8 +1356,10 @@ class ApplicationField:
         else:
             user_prompt += f"Closest answer to the question is {closest_answer}.\n"
 
-        user_prompt += """Following general information about the application - 
+        user_prompt += f"""Following general information about the application - 
         1. Job source - LinkedIn
+        2. If current user email is "{config['admin_email']}" and questions is if you are currently working or studying
+         here then always answer as "No".
         
         Now based on all above instructions, give me correct answer for the question.
         """
