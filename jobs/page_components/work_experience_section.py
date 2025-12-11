@@ -9,6 +9,7 @@ from jobs.page_components import (
     ApplicationField,
 )
 from jobs.page_components.button import Button
+from jobs.page_components.check_box import CheckBox
 from utilities.selenium import (
     get_selenium_driver,
     start_dom_mutation_observer,
@@ -16,6 +17,7 @@ from utilities.selenium import (
     minify_html_for_gpt_prompt,
     is_stale,
     element_exists,
+    get_xpath_by_text,
 )
 from utilities import constants
 from utilities.gpt import get_gpt_response
@@ -516,6 +518,7 @@ class WorkExperienceSection(PageComponent):
                 experience_related_url = "experience_related_url"
                 industry = "industry"
                 employment_type = "employment_type"
+                currently_working_here = "currently_working_here"
                 other = "other"
 
             class WorkExperienceFieldInfo(BaseModel):
@@ -656,6 +659,12 @@ class WorkExperienceSection(PageComponent):
 
                         if application_field_component:
                             work_experience_fields.append(application_field_component)
+
+                    # Reorder fields to put currently_working_here fields at the start
+                    work_experience_fields = sorted(
+                        work_experience_fields,
+                        key=lambda f: f.category != "currently_working_here",
+                    )
 
                     if (
                         work_experience_fields
@@ -1045,6 +1054,15 @@ class WorkExperience(PageComponent):
             self.save_button.proceed()
 
     def _process_field(self, field):
+        # Skip end_date field if currently_working_here checkbox is checked and end_date element doesn't exist
+        if field.category == "end_date":
+            if self._should_skip_end_date_field(field):
+                logger.info(
+                    f"Skipping end_date field '{field.title}' because currently_working_here is checked "
+                    f"and end_date element doesn't exist in DOM for job {self.parent_application_page.parent_job.title}"
+                )
+                return
+
         question_backup = field.question
         field.question = (
             f"{question_backup}\n"
@@ -1061,6 +1079,45 @@ class WorkExperience(PageComponent):
 
         field.question = question_backup
         field.category = category_backup
+
+    def _should_skip_end_date_field(self, end_date_field):
+        """
+        Check if end_date field should be skipped based on currently_working_here checkbox state.
+
+        Returns True if:
+        1. A currently_working_here field exists
+        2. It's a CheckBox type
+        3. It's a boolean checkbox
+        4. It's currently checked
+        5. The end_date field element doesn't exist in DOM
+        """
+        # Find currently_working_here field
+        currently_working_field = None
+        for f in self.work_experience_fields:
+            if f.category == "currently_working_here":
+                currently_working_field = f
+                break
+
+        if not currently_working_field:
+            return False
+
+        # Check if it's a CheckBox
+        if not isinstance(currently_working_field, CheckBox):
+            return False
+
+        # Check if it's boolean type and is checked
+        if not currently_working_field.is_boolean:
+            return False
+
+        if not currently_working_field.is_checked:
+            return False
+
+        # Check if end_date field element doesn't exist in DOM using its title
+        if hasattr(end_date_field, "title") and end_date_field.title:
+            if not get_xpath_by_text(end_date_field.title):
+                return True
+
+        return False
 
     def _refetch_fields(self):
         """Fetch additional work experience fields that are not already present in existing work_experience_fields"""
@@ -1095,6 +1152,7 @@ class WorkExperience(PageComponent):
             experience_related_url = "experience_related_url"
             industry = "industry"
             employment_type = "employment_type"
+            currently_working_here = "currently_working_here"
             other = "other"
 
         class WorkExperienceFieldInfo(BaseModel):
@@ -1162,6 +1220,12 @@ class WorkExperience(PageComponent):
 
                 if application_field_component:
                     additional_fields.append(application_field_component)
+
+        # Reorder fields to put currently_working_here fields at the start
+        additional_fields = sorted(
+            additional_fields,
+            key=lambda f: f.category != "currently_working_here",
+        )
 
         return additional_fields
 
