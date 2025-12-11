@@ -41,9 +41,52 @@ class CheckBox(PageComponent):
         self.parent_application_page = parent_application_page
 
         self.is_component_functional = False
+        self.is_boolean = False
 
         self.next = None
         self.prev = None
+
+    @property
+    def is_checked(self):
+        """Check if the boolean checkbox is currently selected. Only works for boolean type."""
+        global driver
+
+        if not self.is_boolean:
+            logger.warning(
+                f"is_checked property is only applicable for boolean checkboxes. "
+                f"Field {self.title} is not a boolean checkbox."
+            )
+            return None
+
+        if not self.options_container_x_path or not self.options_xpath_pattern:
+            logger.warning(
+                f"Container or pattern XPath missing for boolean question {self.title}"
+            )
+            return None
+
+        if not element_exists(self.options_container_x_path):
+            logger.warning(
+                f"Container XPath {self.options_container_x_path} not found for {self.title}"
+            )
+            return None
+
+        container_element = driver.find_element(By.XPATH, self.options_container_x_path)
+        option_elements = container_element.find_elements(
+            By.XPATH, self.options_xpath_pattern
+        )
+
+        if not option_elements:
+            logger.warning(
+                f"No option elements found using pattern {self.options_xpath_pattern} for {self.title}"
+            )
+            return None
+
+        checkbox_element = option_elements[0]
+        return (
+            checkbox_element.tag_name == "input"
+            and checkbox_element.get_attribute("type") == "checkbox"
+            and checkbox_element.is_selected()
+        )
 
     def _find_text_containing_parent(
         self, option_element, all_option_elements, container_element
@@ -142,6 +185,14 @@ class CheckBox(PageComponent):
             f"Found {len(option_elements)} option elements using pattern {self.options_xpath_pattern} within container {self.options_container_x_path}"
         )
 
+        # Check if this is a boolean (yes/no) question with only one option
+        if len(option_elements) == 1:
+            self.is_boolean = True
+            logger.info(
+                f"Detected boolean question for {self.title} - returning Yes/No options"
+            )
+            return [{"text": "Yes", "x_path": None}, {"text": "No", "x_path": None}]
+
         for option_element in option_elements:
             # Find the parent element that contains the text
             text_element = self._find_text_containing_parent(
@@ -168,6 +219,100 @@ class CheckBox(PageComponent):
         )
         return output_options
 
+    def _save_response(self, response_text):
+        """Save field response to application page"""
+        if response_text and self.parent_application_page:
+            self.parent_application_page.save_field_response(
+                question=self.question,
+                response=response_text,
+            )
+
+    def _handle_boolean_question(self, answer):
+        """Handle boolean (Yes/No) checkbox question"""
+        global driver
+
+        # Use container and pattern xpaths to find the checkbox element
+        if not self.options_container_x_path or not self.options_xpath_pattern:
+            logger.warning(
+                f"Container or pattern XPath missing for boolean question {self.title}"
+            )
+            self.is_component_functional = False
+            return None
+
+        if not element_exists(self.options_container_x_path):
+            logger.warning(
+                f"Container XPath {self.options_container_x_path} not found for {self.title}"
+            )
+            self.is_component_functional = False
+            return None
+
+        container_element = driver.find_element(By.XPATH, self.options_container_x_path)
+        option_elements = container_element.find_elements(
+            By.XPATH, self.options_xpath_pattern
+        )
+
+        if not option_elements:
+            logger.warning(
+                f"No option elements found using pattern {self.options_xpath_pattern} for {self.title}"
+            )
+            self.is_component_functional = False
+            return None
+
+        checkbox_element = option_elements[0]
+        checkbox_xpath = get_element_xpath(checkbox_element)
+
+        if answer == "Yes":
+            # Check the checkbox
+            checkbox_button = Button(
+                x_path=checkbox_xpath,
+                button_type="checkbox",
+                parent_application_page=None,
+            )
+            checkbox_button.proceed()
+            return ["Yes"]
+        else:
+            # Ensure checkbox is unchecked
+            if (
+                checkbox_element.tag_name == "input"
+                and checkbox_element.get_attribute("type") == "checkbox"
+                and checkbox_element.is_selected()
+            ):
+                driver.execute_script("arguments[0].checked = false;", checkbox_element)
+            return ["No"]
+
+    def _handle_multi_option_checkboxes(self, answers):
+        """Handle multi-option checkbox selection - only selected answers are checked, rest are unchecked"""
+        global driver
+        selected_options_text = []
+
+        for option in self.options:
+            option_element = get_unique_element_by_xpath(option["x_path"], self.title)
+            should_be_selected = option["text"] in answers
+            is_currently_selected = (
+                option_element.tag_name == "input"
+                and option_element.get_attribute("type") == "checkbox"
+                and option_element.is_selected()
+            )
+
+            if should_be_selected:
+                # Check if not already selected
+                if not is_currently_selected:
+                    option_button = Button(
+                        x_path=get_element_xpath(option_element),
+                        button_type="checkbox",
+                        parent_application_page=None,
+                    )
+                    option_button.proceed()
+                selected_options_text.append(option["text"])
+            else:
+                # Uncheck if currently selected
+                if is_currently_selected:
+                    driver.execute_script(
+                        "arguments[0].checked = false;", option_element
+                    )
+
+        return selected_options_text
+
     def proceed(self, retry=False):
         # Build options list from pattern
         self.options = self._build_options_list()
@@ -175,53 +320,39 @@ class CheckBox(PageComponent):
         if not self.options:
             logger.warning(f"No options found for {self.title}")
             return
+
         info = ApplicationField.get_field_value(
             field_category=self.category,
             user=self.parent_application_page.parent_job.user,
         )
 
-        answers, _ = ApplicationField.extract_field_answer(
+        # Extract answer once for both boolean and multi-option cases
+        extracted_answer, _ = ApplicationField.extract_field_answer(
             job_title=self.parent_application_page.parent_job.title,
             job_url=self.parent_application_page.url,
             company_name=self.parent_application_page.parent_job.company,
             field_title=self.title,
             question=self.question,
             answer_type="enum",
-            multiple_correct=True,
+            multiple_correct=not self.is_boolean,
             options=[option["text"] for option in self.options],
             closest_answer=info if info else None,
             parsed_resume=self.parent_application_page.parent_job.user.parsed_resume,
         )
-        options_to_select = [
-            option for option in self.options if option["text"] in answers
-        ]
 
-        for option in options_to_select:
-            option_element = get_unique_element_by_xpath(option["x_path"], self.title)
-            if (
-                (option_element.tag_name == "input")
-                and (option_element.get_attribute("type") == "checkbox")
-                and option_element.is_selected()
-            ):
-                continue
+        # Handle boolean (Yes/No) questions
+        if self.is_boolean:
+            # Assume answer is definitely "Yes" or "No"
+            answer = extracted_answer if extracted_answer else "No"
+            response_text = self._handle_boolean_question(answer)
+        else:
+            # Handle multi-option checkboxes
+            response_text = self._handle_multi_option_checkboxes(extracted_answer)
 
-            option_element = Button(
-                x_path=get_element_xpath(option_element),
-                button_type="checkbox",
-                parent_application_page=None,
-            )
-            option_element.proceed()
-
-        # store the responses
-        options_text = [option["text"] for option in options_to_select]
-        if options_text and self.parent_application_page:
-            self.parent_application_page.save_field_response(
-                question=self.question,
-                response=options_text,
-            )
-
-        self.is_component_functional = True
-        return
+        # Save response once
+        if response_text:
+            self._save_response(response_text)
+            self.is_component_functional = True
 
     @classmethod
     def validate_checkbox(cls, options_container_x_path, options_xpath_pattern, title):
@@ -332,6 +463,7 @@ class CheckBox(PageComponent):
             "category": self.category,
             "options_container_x_path": self.options_container_x_path,
             "options_xpath_pattern": self.options_xpath_pattern,
+            "is_boolean": self.is_boolean,
             "next": self.next.to_dict() if self.next else None,
         }
 
@@ -348,6 +480,7 @@ class CheckBox(PageComponent):
         )
 
         instance.is_component_functional = True
+        instance.is_boolean = input_dict.get("is_boolean", False)
 
         if input_dict["next"]:
             next_class = get_page_component_class_name(
