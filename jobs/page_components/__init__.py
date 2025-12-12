@@ -9,6 +9,7 @@ from selenium.common import (
     ElementClickInterceptedException,
     ElementNotInteractableException,
     NoSuchElementException,
+    InvalidSelectorException,
 )
 from selenium.webdriver.common.by import By
 import yaml
@@ -28,8 +29,7 @@ from utilities.selenium import (
     get_unique_element_by_xpath,
 )
 from utilities.logging import get_logger
-from utilities import pascal_to_snake_casing, retry
-from utilities import constants
+from utilities import pascal_to_snake_casing, retry, constants
 from utilities.gpt import get_gpt_response
 
 
@@ -106,6 +106,7 @@ class ApplicationField:
         self.options_container_x_path = None
         self.options_xpath_pattern = None
 
+    @retry(times=2, delay=5, exceptions=InvalidSelectorException)
     def _identify_x_path(self, retry=False, prev_x_path=None, retry_with_complex=False):
         global driver
 
@@ -287,6 +288,7 @@ class ApplicationField:
             user_prompt,
             response_format=ApplicationFieldInfo,
             model=model,
+            timeout=60 if model == "intermediate" else None,
         )
         if application_field_found:
             if not application_field.is_field_match_confident:

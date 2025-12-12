@@ -72,6 +72,7 @@ def get_gpt_response(
     user_prompt,
     response_format=None,
     sleep_time=1,
+    timeout=None,
     images=[],
     model=None,
 ):
@@ -105,6 +106,9 @@ def get_gpt_response(
                 },
             ],
         }
+
+        if timeout is not None:
+            payload["timeout"] = timeout
 
         if response_format is not None:
             payload["response_format"] = response_format
@@ -158,6 +162,7 @@ def get_gpt_response(
                 user_prompt,
                 response_format=response_format,
                 sleep_time=2 * sleep_time,
+                timeout=timeout,
                 images=images,
                 model=model,
             )
