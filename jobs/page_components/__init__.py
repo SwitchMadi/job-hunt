@@ -563,8 +563,8 @@ class ApplicationField:
 
         if pattern_found:
             # Validate the extracted pattern (pattern must be scoped to container)
-            container_xpath = pattern_result.options_container_x_path.x_path
-            pattern_xpath = pattern_result.options_xpath_pattern.x_path
+            container_xpath = pattern_result.options_container_x_path
+            pattern_xpath = pattern_result.options_xpath_pattern
             if element_exists(container_xpath):
                 container_element = driver.find_element(By.XPATH, container_xpath)
                 elements = container_element.find_elements(By.XPATH, pattern_xpath)
