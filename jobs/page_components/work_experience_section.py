@@ -52,7 +52,7 @@ class WorkExperienceSection(PageComponent):
     def proceed(self, retry=False):
         if not self.is_component_functional:
             (
-                add_education_button_present,
+                add_work_ex_button_present,
                 is_comprehensive,
                 comprehensive_fields,
                 non_comprehensive_fields,
@@ -60,7 +60,7 @@ class WorkExperienceSection(PageComponent):
             if non_comprehensive_fields:
                 self._process_non_comprehensive_fields(non_comprehensive_fields)
 
-            if not add_education_button_present and not is_comprehensive:
+            if not add_work_ex_button_present and not is_comprehensive:
                 return None
 
         curr_node = self.head
@@ -77,7 +77,7 @@ class WorkExperienceSection(PageComponent):
             )
             return None
 
-        # TODO: in future, we can support multiple education sections
+        # TODO: in future, we can support multiple work ex sections
         user_work_experience = user_work_experience[
             :1
         ]  # limiting to only work experience section
@@ -150,7 +150,7 @@ class WorkExperienceSection(PageComponent):
             f"Updating new work experience fields in db for job - "
             f"{self.parent_application_page.parent_job.title}, url - {self.parent_application_page.url}"
         )
-        # TODO : Uncomment this when we support multiple education sections
+        # TODO : Uncomment this when we support multiple work ex sections
         # self.parent_application_page.update_steps(step=self, inplace=True)
 
         return
@@ -190,7 +190,7 @@ class WorkExperienceSection(PageComponent):
             elif hasattr(field, "field_title"):
                 field_title = field.field_title
 
-            field_category = "education"
+            field_category = "work_experience"
             if hasattr(field, "category"):
                 field_category = field.category
             elif hasattr(field, "field_category"):
@@ -929,7 +929,7 @@ class WorkExperienceSection(PageComponent):
 
         fields, buttons = self._extract_page_elements()
 
-        add_education_button_present = (
+        add_work_ex_button_present = (
             True
             if [button for button in buttons if button["is_add_work_experience_button"]]
             else False
@@ -960,7 +960,7 @@ class WorkExperienceSection(PageComponent):
             ]
 
         return (
-            add_education_button_present,
+            add_work_ex_button_present,
             is_comprehensive,
             comprehensive_fields,
             non_comprehensive_fields,
@@ -1045,7 +1045,7 @@ class WorkExperience(PageComponent):
                     f"section {self.work_experience_no} for job {self.parent_application_page.parent_job.title} "
                     f"at url {self.parent_application_page.url}."
                 )
-                self.work_experience_fields.append(additional_fields)
+                self.work_experience_fields.extend(additional_fields)
 
                 for field in additional_fields:
                     self._process_field(field)
