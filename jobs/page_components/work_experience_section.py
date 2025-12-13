@@ -290,6 +290,12 @@ class WorkExperienceSection(PageComponent):
                     description="Number of the observed element which is strictly having interactive work "
                     "experience fields.",
                 )
+                work_experience_container_x_path: str = Field(
+                    ...,
+                    description="XPath of the outer-most container element that contains ONLY the interactive "
+                    "work experience fields for the current work experience section number mentioned in the prompt. "
+                    "This should be stable and usable with selenium to scope subsequent field lookups.",
+                )
                 work_experience_fields: List[WorkExperienceFieldInfo] = Field(
                     ...,
                     description="Fields to start adding work experience details like company, job title, responsibilities etc.",
@@ -316,6 +322,12 @@ class WorkExperienceSection(PageComponent):
         else:
 
             class WorkExperienceSectionFields(BaseModel):
+                work_experience_container_x_path: str = Field(
+                    ...,
+                    description="XPath of the outer-most container element that contains ONLY the interactive "
+                    "work experience fields for the current work experience section number mentioned in the prompt. "
+                    "This should be stable and usable with selenium to scope subsequent field lookups.",
+                )
                 work_experience_fields: List[WorkExperienceFieldInfo] = Field(
                     ...,
                     description="Fields to start adding work experience details like company, job title, responsibilities etc.",
@@ -350,6 +362,10 @@ class WorkExperienceSection(PageComponent):
 
             if fields.work_experience_fields:
                 invalid_x_paths = {}
+                if not element_exists(fields.work_experience_container_x_path):
+                    invalid_x_paths["work_experience_container_x_path"] = (
+                        fields.work_experience_container_x_path
+                    )
                 if fields.mark_complete_button_x_path and not element_exists(
                     fields.mark_complete_button_x_path
                 ):
@@ -384,6 +400,7 @@ class WorkExperienceSection(PageComponent):
                 curr_node = WorkExperience(
                     work_experience_fields=work_experience_fields,
                     save_button=mark_complete_work_experience_button,
+                    container_x_path=fields.work_experience_container_x_path,
                     work_experience_no=self.identified_work_experiences_count + 1,
                     parent_application_page=self.parent_application_page,
                     refetch_fields=True,
@@ -545,6 +562,12 @@ class WorkExperienceSection(PageComponent):
                         description="Number of the observed element which is strictly having interactive work "
                         "experience fields.",
                     )
+                    work_experience_container_x_path: str = Field(
+                        ...,
+                        description="XPath of the outer-most container element that contains ONLY the interactive "
+                        "work experience fields. This should be stable and usable with selenium to scope subsequent "
+                        "field lookups.",
+                    )
                     work_experience_fields: Optional[List[WorkExperienceFieldInfo]] = (
                         Field(
                             ...,
@@ -576,6 +599,12 @@ class WorkExperienceSection(PageComponent):
             else:
 
                 class WorkExperienceSectionFields(BaseModel):
+                    work_experience_container_x_path: str = Field(
+                        ...,
+                        description="XPath of the outer-most container element that contains ONLY the interactive "
+                        "work experience fields. This should be stable and usable with selenium to scope subsequent "
+                        "field lookups.",
+                    )
                     work_experience_fields: Optional[List[WorkExperienceFieldInfo]] = (
                         Field(
                             ...,
@@ -633,6 +662,24 @@ class WorkExperienceSection(PageComponent):
                             raise Exception(
                                 "Couldn't extract valid x_path for mark complete button."
                             )
+                    if not element_exists(fields.work_experience_container_x_path):
+                        # Best-effort correction of container x_path
+                        prompt = (
+                            "The x_path that we are trying to extract is of the container element that wraps the "
+                            "interactive work experience fields on the page."
+                        )
+                        fields.work_experience_container_x_path = (
+                            ApplicationField.extract_correct_x_path(
+                                prev_x_path=fields.work_experience_container_x_path,
+                                prompt=prompt,
+                                job_title=self.parent_application_page.parent_job.title,
+                                job_url=self.parent_application_page.url,
+                            )
+                        )
+                        if not fields.work_experience_container_x_path:
+                            raise Exception(
+                                "Couldn't extract valid x_path for work experience container."
+                            )
 
                     work_experience_fields = []
                     for field in fields.work_experience_fields:
@@ -683,6 +730,7 @@ class WorkExperienceSection(PageComponent):
                         curr_node = WorkExperience(
                             work_experience_fields=work_experience_fields,
                             save_button=mark_complete_work_experience_button,
+                            container_x_path=fields.work_experience_container_x_path,
                             work_experience_no=self.identified_work_experiences_count
                             + 1,
                             parent_application_page=self.parent_application_page,
@@ -1018,12 +1066,16 @@ class WorkExperience(PageComponent):
         self,
         work_experience_fields,
         save_button,
+        container_x_path,
         work_experience_no,
         parent_application_page,
         refetch_fields=False,
     ):
         self.work_experience_fields = work_experience_fields
         self.save_button = save_button
+        if not container_x_path:
+            raise ValueError("WorkExperience.container_x_path is required")
+        self.container_x_path = container_x_path
         self.work_experience_no = work_experience_no
         self.parent_application_page = parent_application_page
         self.refetch_fields = refetch_fields
@@ -1236,6 +1288,7 @@ class WorkExperience(PageComponent):
                 field.to_dict() for field in self.work_experience_fields
             ],
             "save_button": self.save_button.to_dict() if self.save_button else None,
+            "container_x_path": self.container_x_path,
             "work_experience_no": self.work_experience_no,
             "next": self.next.to_dict() if self.next else None,
         }
@@ -1259,9 +1312,15 @@ class WorkExperience(PageComponent):
                 input_dict["save_button"], parent_application_page
             )
 
+        if not input_dict.get("container_x_path"):
+            raise ValueError(
+                "WorkExperience.from_dict: missing required 'container_x_path'"
+            )
+
         instance = cls(
             work_experience_fields=fields,
             save_button=save_button,
+            container_x_path=input_dict.get("container_x_path"),
             work_experience_no=input_dict["work_experience_no"],
             parent_application_page=parent_application_page,
         )
