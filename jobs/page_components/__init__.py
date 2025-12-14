@@ -92,6 +92,7 @@ class ApplicationField:
         category,
         x_path=None,
         title_to_click=None,
+        container_x_path=None,
     ):
         self.parent_application_page = parent_application_page
         self.title = title
@@ -99,6 +100,7 @@ class ApplicationField:
         self.question = question
         self.category = category
         self.x_path = x_path
+        self.container_x_path = container_x_path
 
         self.field_type = None
         self.html_type = None
@@ -117,7 +119,7 @@ class ApplicationField:
         user_input_element = None
         try:
             element_identified, user_input_element = find_input_block_for_title(
-                self.title
+                self.title, container_xpath=self.container_x_path
             )
             if not element_identified:
                 logger.warn(
@@ -494,7 +496,9 @@ class ApplicationField:
             question_prompt = f"There is a checkbox/radio button field on this page with title as following -\n{self.title}"
 
         # Try to find input block for title
-        element_identified, user_input_element = find_input_block_for_title(self.title)
+        element_identified, user_input_element = find_input_block_for_title(
+            self.title, container_xpath=self.container_x_path
+        )
         if user_input_element:
             container_html = user_input_element.get_attribute("outerHTML")
         else:
@@ -586,12 +590,14 @@ class ApplicationField:
         if self.field_type == "date_field":
             from jobs.page_components.date_field import DateField
 
-            return DateField(
+            component = DateField(
                 title=self.title,
                 question=self.question,
                 category=self.category,
                 parent_application_page=self.parent_application_page,
             )
+            component.container_x_path = self.container_x_path
+            return component
 
         if self.x_path:
             self.html_type, container_x_path = self.revalidate_component_type(
@@ -606,17 +612,19 @@ class ApplicationField:
             if self.html_type == "text_box":
                 from jobs.page_components.text_input import TextInput
 
-                return TextInput(
+                component = TextInput(
                     x_path=self.x_path,
                     title=self.title,
                     question=self.question,
                     category=self.category,
                     parent_application_page=self.parent_application_page,
                 )
+                component.container_x_path = self.container_x_path
+                return component
             elif self.html_type == "dropdown" or self.html_type == "dropdown_button":
                 from jobs.page_components.drop_down import DropDown
 
-                return DropDown(
+                component = DropDown(
                     x_path=self.x_path,
                     title=self.title,
                     question=self.question,
@@ -624,20 +632,24 @@ class ApplicationField:
                     options_container_x_path=container_x_path,
                     parent_application_page=self.parent_application_page,
                 )
+                component.container_x_path = self.container_x_path
+                return component
             elif self.html_type == "search_field":
                 from jobs.page_components.search_field import SearchField
 
-                return SearchField(
+                component = SearchField(
                     x_path=self.x_path,
                     title=self.title,
                     question=self.question,
                     category=self.category,
                     parent_application_page=self.parent_application_page,
                 )
+                component.container_x_path = self.container_x_path
+                return component
             elif self.html_type == "radio_button":
                 from jobs.page_components.radio_button import RadioButton
 
-                return RadioButton(
+                component = RadioButton(
                     x_path=self.x_path,
                     title=self.title,
                     question=self.question,
@@ -646,10 +658,12 @@ class ApplicationField:
                     options_xpath_pattern=self.options_xpath_pattern,
                     parent_application_page=self.parent_application_page,
                 )
+                component.container_x_path = self.container_x_path
+                return component
             elif self.html_type == "check_box":
                 from jobs.page_components.check_box import CheckBox
 
-                return CheckBox(
+                component = CheckBox(
                     x_path=self.x_path,
                     title=self.title,
                     question=self.question,
@@ -658,6 +672,8 @@ class ApplicationField:
                     options_xpath_pattern=self.options_xpath_pattern,
                     parent_application_page=self.parent_application_page,
                 )
+                component.container_x_path = self.container_x_path
+                return component
             elif self.html_type == "date_field":
                 from jobs.page_components.date_field import DateField
 
@@ -698,25 +714,34 @@ class ApplicationField:
 
             from jobs.page_components.search_field import SearchField
 
-            is_search_field = SearchField.validate_search_field(x_path, field_title)
+            is_search_field = SearchField.validate_search_field(
+                x_path, field_title, container_xpath=self.container_x_path
+            )
             if is_search_field:
                 return "search_field", None
 
             is_calendar_widget_present = self.validate_calendar_widget(
-                x_path, field_title, text_to_click=self.title_to_click
+                x_path,
+                field_title,
+                text_to_click=self.title_to_click,
+                container_xpath=self.container_x_path,
             )
             if is_calendar_widget_present:
                 return "date_field", None
 
             is_container_present, container_x_path = self.validate_options_container(
-                x_path, field_title, job_title, text_to_click=self.title_to_click
+                x_path,
+                field_title,
+                job_title,
+                text_to_click=self.title_to_click,
+                container_xpath=self.container_x_path,
             )
             if is_container_present and container_x_path:
                 return "dropdown", container_x_path
 
             # try once more if there is any button inside the text box element
             element_identified, user_input_element = find_input_block_for_title(
-                field_title
+                field_title, container_xpath=self.container_x_path
             )
             if element_identified and user_input_element:
                 try:
@@ -729,6 +754,7 @@ class ApplicationField:
                             field_title,
                             job_title,
                             text_to_click=self.title_to_click,
+                            container_xpath=self.container_x_path,
                         )
                     )
                     if is_container_present and container_x_path:
@@ -746,7 +772,10 @@ class ApplicationField:
             from jobs.page_components.check_box import CheckBox
 
             multiple_correct = CheckBox.validate_checkbox(
-                options_container_x_path, options_xpath_pattern, field_title
+                options_container_x_path,
+                options_xpath_pattern,
+                field_title,
+                container_xpath=self.container_x_path,
             )
             if not multiple_correct:
                 return "radio_button", None
@@ -755,7 +784,11 @@ class ApplicationField:
 
         elif html_type == "dropdown" or html_type == "dropdown_button":
             is_container_present, container_x_path = self.validate_options_container(
-                x_path, field_title, job_title, text_to_click=self.title_to_click
+                x_path,
+                field_title,
+                job_title,
+                text_to_click=self.title_to_click,
+                container_xpath=self.container_x_path,
             )
             if is_container_present:
                 return "dropdown", container_x_path
@@ -764,16 +797,20 @@ class ApplicationField:
 
     @classmethod
     def validate_options_container(
-        cls, x_path, field_title, job_title, text_to_click=None
+        cls, x_path, field_title, job_title, text_to_click=None, container_xpath=None
     ):
-        dropdown_element = get_unique_element_by_xpath(x_path, title=field_title)
+        dropdown_element = get_unique_element_by_xpath(
+            x_path, title=field_title, container_xpath=container_xpath
+        )
         dropdown_type = ApplicationField.identify_options_container_type(
             dropdown_element
         )
         if dropdown_type == "select-option":
             return True, None
 
-        simulate_empty_area_click(text_to_click=text_to_click or field_title)
+        simulate_empty_area_click(
+            text_to_click=text_to_click or field_title, container_xpath=container_xpath
+        )
 
         start_dom_mutation_observer()
 
@@ -807,7 +844,10 @@ class ApplicationField:
                 html_type="dropdown",
             )
             if is_container_present:
-                simulate_empty_area_click(text_to_click=text_to_click or field_title)
+                simulate_empty_area_click(
+                    text_to_click=text_to_click or field_title,
+                    container_xpath=container_xpath,
+                )
                 if is_element_visible(container_x_path):
                     simulate_empty_area_click()
                 return True, container_x_path
@@ -833,18 +873,25 @@ class ApplicationField:
                 )
                 if is_container_present:
                     simulate_empty_area_click(
-                        text_to_click=text_to_click or field_title
+                        text_to_click=text_to_click or field_title,
+                        container_xpath=container_xpath,
                     )
                     if is_element_visible(container_x_path):
                         simulate_empty_area_click()
                     return True, container_x_path
 
-        simulate_empty_area_click(text_to_click=text_to_click or field_title)
+        simulate_empty_area_click(
+            text_to_click=text_to_click or field_title, container_xpath=container_xpath
+        )
         return False, None
 
     @classmethod
-    def validate_calendar_widget(cls, x_path, field_title, text_to_click=None):
-        simulate_empty_area_click(text_to_click=text_to_click or field_title)
+    def validate_calendar_widget(
+        cls, x_path, field_title, text_to_click=None, container_xpath=None
+    ):
+        simulate_empty_area_click(
+            text_to_click=text_to_click or field_title, container_xpath=container_xpath
+        )
 
         start_dom_mutation_observer()
 
@@ -877,7 +924,9 @@ class ApplicationField:
                 observed_elements
             )
 
-        simulate_empty_area_click(text_to_click=text_to_click or field_title)
+        simulate_empty_area_click(
+            text_to_click=text_to_click or field_title, container_xpath=container_xpath
+        )
         return is_calendar_widget_present
 
     @classmethod

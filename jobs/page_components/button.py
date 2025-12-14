@@ -36,6 +36,7 @@ class Button(PageComponent):
         self.is_component_functional = True
         self.attempt = 1
         self.max_attempt = 3
+        self.container_x_path = None
 
     @staticmethod
     def _move_mouse_naturally(element, actions):
@@ -77,7 +78,9 @@ class Button(PageComponent):
             ):
                 self.x_path = "/" + self.x_path
 
-            element = get_unique_element_by_xpath(self.x_path, self.title)
+            element = get_unique_element_by_xpath(
+                self.x_path, self.title, container_xpath=self.container_x_path
+            )
             if not element:
                 logger.warning(
                     f"Element with XPath {self.x_path} not found. "
@@ -105,7 +108,9 @@ class Button(PageComponent):
                     f"Retrying with generalized XPath..."
                 )
                 self.x_path = generalize_xpath_attributes(self.x_path)
-                element = get_unique_element_by_xpath(self.x_path, self.title)
+                element = get_unique_element_by_xpath(
+                    self.x_path, self.title, container_xpath=self.container_x_path
+                )
 
                 if not is_element_visible(element=element):
                     logger.warning(
@@ -151,13 +156,17 @@ class Button(PageComponent):
             logger.info(
                 f"element not interactable in class Button's proceed method.\n{e.msg}\nButton instance - {vars(self)}"
             )
-            element = get_unique_element_by_xpath(self.x_path, self.title)
+            element = get_unique_element_by_xpath(
+                self.x_path, self.title, container_xpath=self.container_x_path
+            )
             driver.execute_script("arguments[0].click();", element)
         except (ElementClickInterceptedException, TimeoutException) as e:
             logger.info(
                 f"element click intercepted in class Button's proceed method.\n{e.msg}\nButton instance - {vars(self)}"
             )
-            element = get_unique_element_by_xpath(self.x_path, self.title)
+            element = get_unique_element_by_xpath(
+                self.x_path, self.title, container_xpath=self.container_x_path
+            )
             actions = ActionChains(driver)
             actions.move_to_element(element).click().perform()
         except Exception as e:
@@ -183,6 +192,7 @@ class Button(PageComponent):
             "class": self.__class__.__name__,
             "x_path": self.x_path,
             "button_type": self.button_type,
+            "container_x_path": self.container_x_path,
             "next": self.next.to_dict() if self.next else None,
         }
 
@@ -193,6 +203,7 @@ class Button(PageComponent):
             button_type=input_dict["button_type"],
             parent_application_page=parent_application_page,
         )
+        instance.container_x_path = input_dict.get("container_x_path")
         if input_dict["next"]:
             next_class = get_page_component_class_name(
                 class_name=input_dict["next"]["class"]

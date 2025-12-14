@@ -62,6 +62,7 @@ class DateField(PageComponent):
         self.month_format = None
         self.year_format = None
         self.is_component_functional = False
+        self.container_x_path = None
 
         self.next = None
         self.prev = None
@@ -83,7 +84,9 @@ class DateField(PageComponent):
         - Always calls simulate_empty_area_click() for cleanup
         """
         # Clean up any existing open widgets
-        simulate_empty_area_click(text_to_click=self.title)
+        simulate_empty_area_click(
+            text_to_click=self.title, container_xpath=self.container_x_path
+        )
 
         click_xpath = self.components.get("calendar", {}).get(
             "xpath"
@@ -102,6 +105,7 @@ class DateField(PageComponent):
                 button_type="date",
                 parent_application_page=self.parent_application_page,
             )
+            button.container_x_path = self.container_x_path
             button.proceed()
 
             observed_elements = get_observed_elements()
@@ -116,6 +120,7 @@ class DateField(PageComponent):
                     title=self.title,
                     parent_application_page=self.parent_application_page,
                 )
+                button.container_x_path = self.container_x_path
                 button.proceed()
 
                 observed_elements = get_observed_elements()
@@ -126,7 +131,9 @@ class DateField(PageComponent):
                     observed_elements
                 )
                 if not is_regex_op_successful:
-                    simulate_empty_area_click(text_to_click=self.title)
+                    simulate_empty_area_click(
+                        text_to_click=self.title, container_xpath=self.container_x_path
+                    )
 
                     start_dom_mutation_observer()
                     button.proceed()
@@ -156,10 +163,14 @@ class DateField(PageComponent):
                 self.input_method_details_identified = True
                 logger.debug(f"Successfully extracted date format: {field_value}")
 
-                simulate_empty_area_click(text_to_click=self.title)
+                simulate_empty_area_click(
+                    text_to_click=self.title, container_xpath=self.container_x_path
+                )
                 return True
 
-        simulate_empty_area_click(text_to_click=self.title)
+        simulate_empty_area_click(
+            text_to_click=self.title, container_xpath=self.container_x_path
+        )
         return False
 
     @staticmethod
@@ -416,6 +427,7 @@ class DateField(PageComponent):
                 button_type="date",
                 parent_application_page=self.parent_application_page,
             )
+            date_button.container_x_path = self.container_x_path
             date_button.proceed()
 
             return True
@@ -474,12 +486,15 @@ class DateField(PageComponent):
                     f"the date in question here?",
                     category=f"{self.category} - {component_type}",
                     x_path=component["xpath"],
+                    container_x_path=self.container_x_path,
                 )
                 field.html_type = component["html_type"]
 
                 # Get component object and its class
                 component_obj = field.get_field_component()
                 if component_obj:
+                    # Propagate container_x_path to sub-component
+                    component_obj.container_x_path = self.container_x_path
                     # Add class name to component dict
                     self.components[component_type] = component_obj
                     logger.debug(
@@ -557,6 +572,7 @@ class DateField(PageComponent):
                 parent_application_page=self.parent_application_page,
             )
             date_field.answer = self.answer
+            date_field.container_x_path = self.container_x_path
             date_field.proceed()
 
         if self.has_separate_components:
@@ -598,7 +614,9 @@ class DateField(PageComponent):
                         component.question = None
                         component.category = None
 
-        simulate_empty_area_click(self.title)
+        simulate_empty_area_click(
+            text_to_click=self.title, container_xpath=self.container_x_path
+        )
 
         # store the response
         if self.parent_application_page:
@@ -616,7 +634,7 @@ class DateField(PageComponent):
         user_input_element = None
         try:
             element_identified, user_input_element = find_input_block_for_title(
-                self.title
+                self.title, container_xpath=self.container_x_path
             )
             if not element_identified:
                 logger.warn(
@@ -1023,6 +1041,7 @@ class DateField(PageComponent):
             "input_method_details_identified": self.input_method_details_identified,
             "question": self.question,
             "persist_context_fields": self.persist_context_fields,
+            "container_x_path": self.container_x_path,
             "next": self.next.to_dict() if self.next else None,
         }
         return output
@@ -1040,6 +1059,7 @@ class DateField(PageComponent):
         instance.day_format = input_dict.get("day_format")
         instance.month_format = input_dict.get("month_format")
         instance.year_format = input_dict.get("year_format")
+        instance.container_x_path = input_dict.get("container_x_path")
 
         # Restore component info and state
         if input_dict.get("components"):

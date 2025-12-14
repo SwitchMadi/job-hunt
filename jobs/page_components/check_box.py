@@ -42,6 +42,7 @@ class CheckBox(PageComponent):
 
         self.is_component_functional = False
         self.is_boolean = False
+        self.container_x_path = None
 
         self.next = None
         self.prev = None
@@ -268,6 +269,7 @@ class CheckBox(PageComponent):
                 button_type="checkbox",
                 parent_application_page=None,
             )
+            checkbox_button.container_x_path = self.container_x_path
             checkbox_button.proceed()
             return ["Yes"]
         else:
@@ -286,7 +288,9 @@ class CheckBox(PageComponent):
         selected_options_text = []
 
         for option in self.options:
-            option_element = get_unique_element_by_xpath(option["x_path"], self.title)
+            option_element = get_unique_element_by_xpath(
+                option["x_path"], self.title, container_xpath=self.container_x_path
+            )
             should_be_selected = option["text"] in answers
             is_currently_selected = (
                 option_element.tag_name == "input"
@@ -302,6 +306,7 @@ class CheckBox(PageComponent):
                         button_type="checkbox",
                         parent_application_page=None,
                     )
+                    option_button.container_x_path = self.container_x_path
                     option_button.proceed()
                 selected_options_text.append(option["text"])
             else:
@@ -355,16 +360,26 @@ class CheckBox(PageComponent):
             self.is_component_functional = True
 
     @classmethod
-    def validate_checkbox(cls, options_container_x_path, options_xpath_pattern, title):
+    def validate_checkbox(
+        cls,
+        options_container_x_path,
+        options_xpath_pattern,
+        title,
+        container_xpath=None,
+    ):
         """Validate if checkbox allows multiple selections by building options and testing"""
         multiple_correct = False
 
         # Both container and pattern are required
         if not options_container_x_path or not options_xpath_pattern:
-            return cls._validate_checkbox_using_llm(title)
+            return cls._validate_checkbox_using_llm(
+                title, container_xpath=container_xpath
+            )
 
         if not element_exists(options_container_x_path):
-            return cls._validate_checkbox_using_llm(title)
+            return cls._validate_checkbox_using_llm(
+                title, container_xpath=container_xpath
+            )
 
         # Pattern must always be scoped to container
         container_element = driver.find_element(By.XPATH, options_container_x_path)
@@ -378,7 +393,9 @@ class CheckBox(PageComponent):
         option_1_xpath = get_element_xpath(options[0])
         option_2_xpath = get_element_xpath(options[1])
 
-        option_1 = get_unique_element_by_xpath(xpath=option_1_xpath, title=title)
+        option_1 = get_unique_element_by_xpath(
+            xpath=option_1_xpath, title=title, container_xpath=container_xpath
+        )
         if not option_1:
             raise Exception(f"Unique element not found for x_path - {option_1_xpath}")
 
@@ -388,16 +405,21 @@ class CheckBox(PageComponent):
         ):
             driver.execute_script("arguments[0].checked = false;", option_1)
         else:
-            return cls._validate_checkbox_using_llm(title)
+            return cls._validate_checkbox_using_llm(
+                title, container_xpath=container_xpath
+            )
 
         option_button_1 = Button(
             x_path=get_element_xpath(option_1),
             button_type="checkbox",
             parent_application_page=None,
         )
+        option_button_1.container_x_path = container_xpath
         option_button_1.proceed()
 
-        option_2 = get_unique_element_by_xpath(xpath=option_2_xpath, title=title)
+        option_2 = get_unique_element_by_xpath(
+            xpath=option_2_xpath, title=title, container_xpath=container_xpath
+        )
         if not option_2:
             raise Exception(f"Unique element not found for x_path - {option_2_xpath}")
         driver.execute_script("arguments[0].checked = false;", option_2)
@@ -407,6 +429,7 @@ class CheckBox(PageComponent):
             button_type="checkbox",
             parent_application_page=None,
         )
+        option_button_2.container_x_path = container_xpath
         option_button_2.proceed()
 
         if option_1.is_selected() and option_2.is_selected():
@@ -418,10 +441,12 @@ class CheckBox(PageComponent):
         return multiple_correct
 
     @staticmethod
-    def _validate_checkbox_using_llm(title):
+    def _validate_checkbox_using_llm(title, container_xpath=None):
         global driver
 
-        element_identified, user_input_element = find_input_block_for_title(title)
+        element_identified, user_input_element = find_input_block_for_title(
+            title, container_xpath=container_xpath
+        )
         if user_input_element:
             minified_html = minify_html_for_gpt_prompt(
                 user_input_element.get_attribute("outerHTML")
@@ -464,6 +489,7 @@ class CheckBox(PageComponent):
             "options_container_x_path": self.options_container_x_path,
             "options_xpath_pattern": self.options_xpath_pattern,
             "is_boolean": self.is_boolean,
+            "container_x_path": self.container_x_path,
             "next": self.next.to_dict() if self.next else None,
         }
 
@@ -479,6 +505,7 @@ class CheckBox(PageComponent):
             parent_application_page=parent_application_page,
         )
 
+        instance.container_x_path = input_dict.get("container_x_path")
         instance.is_component_functional = True
         instance.is_boolean = input_dict.get("is_boolean", False)
 

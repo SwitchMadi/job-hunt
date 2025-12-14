@@ -693,12 +693,16 @@ class WorkExperienceSection(PageComponent):
                                 parent_application_page=self.parent_application_page,
                                 persist_context_fields=False,
                             )
+                            application_field_component.container_x_path = (
+                                fields.work_experience_container_x_path
+                            )
                         else:
                             application_field = ApplicationField(
                                 parent_application_page=self.parent_application_page,
                                 title=field.field_title,
                                 question=field.field_question,
                                 category=field.field_category.value,
+                                container_x_path=fields.work_experience_container_x_path,
                             )
                             application_field_component = (
                                 application_field.get_field_component()
@@ -1086,6 +1090,13 @@ class WorkExperience(PageComponent):
         self.prev = None
 
     def proceed(self, retry=False):
+        # Fail fast if container is missing/stale
+        if not element_exists(self.container_x_path):
+            raise ValueError(
+                f"WorkExperience container_x_path is missing or stale: {self.container_x_path} "
+                f"for job {self.parent_application_page.parent_job.title} at url {self.parent_application_page.url}"
+            )
+
         for field in self.work_experience_fields:
             self._process_field(field)
 
@@ -1103,6 +1114,7 @@ class WorkExperience(PageComponent):
                     self._process_field(field)
 
         if self.save_button:
+            self.save_button.container_x_path = self.container_x_path
             self.save_button.proceed()
 
     def _process_field(self, field):
@@ -1166,7 +1178,9 @@ class WorkExperience(PageComponent):
 
         # Check if end_date field element doesn't exist in DOM using its title
         if hasattr(end_date_field, "title") and end_date_field.title:
-            if not get_xpath_by_text(end_date_field.title):
+            if not get_xpath_by_text(
+                end_date_field.title, container_xpath=self.container_x_path
+            ):
                 return True
 
         return False
@@ -1259,12 +1273,14 @@ class WorkExperience(PageComponent):
                         parent_application_page=self.parent_application_page,
                         persist_context_fields=False,
                     )
+                    application_field_component.container_x_path = self.container_x_path
                 else:
                     application_field = ApplicationField(
                         parent_application_page=self.parent_application_page,
                         title=field.field_title,
                         question=field.field_question,
                         category=field.field_category.value,
+                        container_x_path=self.container_x_path,
                     )
                     application_field_component = (
                         application_field.get_field_component()
@@ -1295,6 +1311,12 @@ class WorkExperience(PageComponent):
 
     @classmethod
     def from_dict(cls, input_dict, parent_application_page):
+        if not input_dict.get("container_x_path"):
+            raise ValueError(
+                "WorkExperience.from_dict: missing required 'container_x_path'"
+            )
+        container_x_path = input_dict.get("container_x_path")
+
         fields = []
         for field_input_dict in input_dict["work_experience_fields"]:
             field_class = get_page_component_class_name(
@@ -1312,15 +1334,10 @@ class WorkExperience(PageComponent):
                 input_dict["save_button"], parent_application_page
             )
 
-        if not input_dict.get("container_x_path"):
-            raise ValueError(
-                "WorkExperience.from_dict: missing required 'container_x_path'"
-            )
-
         instance = cls(
             work_experience_fields=fields,
             save_button=save_button,
-            container_x_path=input_dict.get("container_x_path"),
+            container_x_path=container_x_path,
             work_experience_no=input_dict["work_experience_no"],
             parent_application_page=parent_application_page,
         )

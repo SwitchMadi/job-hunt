@@ -42,6 +42,7 @@ class TextInput(PageComponent):
 
         self._answer = None
         self.is_component_functional = False
+        self.container_x_path = None
 
         self.next = None
         self.prev = None
@@ -58,7 +59,9 @@ class TextInput(PageComponent):
             ):
                 self.x_path = "/" + self.x_path
 
-            element = get_unique_element_by_xpath(self.x_path, self.title)
+            element = get_unique_element_by_xpath(
+                self.x_path, self.title, container_xpath=self.container_x_path
+            )
             if not element:
                 logger.warning(
                     f"Element with XPath {self.x_path} not found. "
@@ -74,7 +77,9 @@ class TextInput(PageComponent):
                     f"Retrying with generalized XPath..."
                 )
                 self.x_path = generalize_xpath_attributes(self.x_path)
-                element = get_unique_element_by_xpath(self.x_path, self.title)
+                element = get_unique_element_by_xpath(
+                    self.x_path, self.title, container_xpath=self.container_x_path
+                )
 
                 if not element_has_area(element=element):
                     logger.warning(
@@ -88,18 +93,24 @@ class TextInput(PageComponent):
                 return answer_input_successful
 
             if not self.category.endswith(("- month", "- day", "- year")):
-                clear_text_field(self.x_path, title=self.title)
+                clear_text_field(
+                    self.x_path, title=self.title, container_xpath=self.container_x_path
+                )
 
             # Only click empty area if element is not in a popup and not a date sub-field
             if not is_element_in_popup(self.x_path) and not self.category.endswith(
                 ("- month", "- day", "- year")
             ):
-                simulate_empty_area_click(text_to_click=self.title)
+                simulate_empty_area_click(
+                    text_to_click=self.title, container_xpath=self.container_x_path
+                )
 
             if start_mutation_observer:
                 start_dom_mutation_observer(timeout=1500)
 
-            element = get_active_element_after_click(self.x_path, title=self.title)
+            element = get_active_element_after_click(
+                self.x_path, title=self.title, container_xpath=self.container_x_path
+            )
 
             if self.category in ["otp_textbox", "date_field"]:
                 for letter in str(self.answer):
@@ -203,6 +214,7 @@ class TextInput(PageComponent):
             "title": self.title,
             "question": self.question,
             "hit_enter": self.hit_enter,
+            "container_x_path": self.container_x_path,
             "next": self.next.to_dict() if self.next else None,
         }
 
@@ -216,6 +228,7 @@ class TextInput(PageComponent):
             hit_enter=input_dict["hit_enter"],
             parent_application_page=parent_application_page,
         )
+        instance.container_x_path = input_dict.get("container_x_path")
         instance.is_component_functional = True
 
         if input_dict["next"]:

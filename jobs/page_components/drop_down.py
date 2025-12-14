@@ -54,6 +54,7 @@ class DropDown(PageComponent):
         )
 
         self.options_xpath_pattern = None
+        self.container_x_path = None
 
         self.is_component_functional = False
 
@@ -139,7 +140,9 @@ class DropDown(PageComponent):
     def proceed(self, retry=False):
         global driver
 
-        dropdown_element = get_unique_element_by_xpath(self.x_path, title=self.title)
+        dropdown_element = get_unique_element_by_xpath(
+            self.x_path, title=self.title, container_xpath=self.container_x_path
+        )
         dropdown_type = ApplicationField.identify_options_container_type(
             dropdown_element
         )
@@ -148,6 +151,7 @@ class DropDown(PageComponent):
 
         if dropdown_type != "select-option":
             simulate_empty_area_click()
+            self.dropdown_button.container_x_path = self.container_x_path
             self.dropdown_button.proceed()
 
             if (
@@ -256,7 +260,7 @@ class DropDown(PageComponent):
             if dropdown_type == "select-option":
                 # Handle standard select dropdowns
                 select_element = get_unique_element_by_xpath(
-                    self.x_path, title=self.title
+                    self.x_path, title=self.title, container_xpath=self.container_x_path
                 )
                 select = Select(select_element)
                 select.select_by_visible_text(option["text"])
@@ -273,6 +277,7 @@ class DropDown(PageComponent):
                     title=self.title,
                     parent_application_page=self.parent_application_page,
                 )
+                option_button.container_x_path = self.container_x_path
                 option_button.proceed()
 
         # Check if loop ended due to maximum iterations without completing successfully
@@ -530,6 +535,7 @@ class DropDown(PageComponent):
             "category": self.category,
             "options_xpath_pattern": self.options_xpath_pattern,
             "options_container_x_path": self.options_container_x_path,
+            "container_x_path": self.container_x_path,
             "next": self.next.to_dict() if self.next else None,
         }
 
@@ -545,6 +551,7 @@ class DropDown(PageComponent):
         )
 
         instance.options_xpath_pattern = input_dict["options_xpath_pattern"]
+        instance.container_x_path = input_dict.get("container_x_path")
         instance.is_component_functional = True
 
         if input_dict["next"]:

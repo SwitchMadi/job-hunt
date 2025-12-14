@@ -39,6 +39,7 @@ class SearchField(PageComponent):
         self.options_container_x_path = None
         self._answer = None
         self._search_phrases = []
+        self.container_x_path = None
 
         self.is_component_functional = False
 
@@ -46,7 +47,9 @@ class SearchField(PageComponent):
         self.prev = None
 
     @classmethod
-    def validate_search_field(cls, x_path, field_title, retry=False):
+    def validate_search_field(
+        cls, x_path, field_title, retry=False, container_xpath=None
+    ):
         global driver
 
         start_network_observer()
@@ -60,16 +63,17 @@ class SearchField(PageComponent):
                 parent_application_page=None,
             )
             element.answer = special_key
+            element.container_x_path = container_xpath
             element.proceed()
             time.sleep(2)  # Allow API calls to trigger
         except ElementNotInteractableException:
-            clear_text_field(x_path, title=field_title)
+            clear_text_field(x_path, title=field_title, container_xpath=container_xpath)
             simulate_empty_area_click()
             return False
         except Exception as e:
             if not retry:
                 return SearchField.validate_search_field(
-                    x_path, field_title, retry=True
+                    x_path, field_title, retry=True, container_xpath=container_xpath
                 )
             else:
                 raise e
@@ -152,7 +156,7 @@ class SearchField(PageComponent):
                 if is_search_field:
                     break
 
-        clear_text_field(x_path, title=field_title)
+        clear_text_field(x_path, title=field_title, container_xpath=container_xpath)
         simulate_empty_area_click()
 
         return is_search_field
@@ -167,9 +171,12 @@ class SearchField(PageComponent):
                     parent_application_page=None,
                 )
                 element.answer = input_key
+                element.container_x_path = self.container_x_path
 
                 if not self.options_container_x_path:
-                    simulate_empty_area_click(text_to_click=self.title)
+                    simulate_empty_area_click(
+                        text_to_click=self.title, container_xpath=self.container_x_path
+                    )
                     element.proceed(start_mutation_observer=True)
                     time.sleep(2)
                     observed_elements = get_observed_elements(timeout=10)
@@ -241,6 +248,7 @@ class SearchField(PageComponent):
                         button_type="search_option",
                         parent_application_page=self.parent_application_page,
                     )
+                    option_button.container_x_path = self.container_x_path
                     option_button.proceed()
 
                     if is_element_visible(self.options_container_x_path):
@@ -392,6 +400,7 @@ class SearchField(PageComponent):
             "category": self.category,
             "options_container_x_path": self.options_container_x_path,
             "options_xpath_pattern": self.options_xpath_pattern,
+            "container_x_path": self.container_x_path,
             "next": self.next.to_dict() if self.next else None,
         }
 
@@ -407,6 +416,7 @@ class SearchField(PageComponent):
 
         instance.options_container_x_path = input_dict["options_container_x_path"]
         instance.options_xpath_pattern = input_dict["options_xpath_pattern"]
+        instance.container_x_path = input_dict.get("container_x_path")
         instance.is_component_functional = True
 
         if input_dict["next"]:

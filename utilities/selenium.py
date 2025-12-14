@@ -876,7 +876,7 @@ def get_xpath_by_text(text, container_xpath=None):
     return xpath
 
 
-def simulate_empty_area_click(text_to_click=None):
+def simulate_empty_area_click(text_to_click=None, container_xpath=None):
     global driver
 
     # Step 1: Inject temporary element
@@ -933,7 +933,7 @@ def simulate_empty_area_click(text_to_click=None):
     if text_to_click:
         # If text is provided, click on the element with that text to bring back focus
         try:
-            xpath = get_xpath_by_text(text_to_click)
+            xpath = get_xpath_by_text(text_to_click, container_xpath=container_xpath)
             if type(xpath) is not str:
                 logging.warning(
                     f"XPath for text '{text_to_click}' is not a string: {xpath}"
@@ -1212,7 +1212,7 @@ def get_observed_network_calls():
     return js_captured_requests + driver_captured_requests
 
 
-def clear_text_field(x_path, title=None, skip_all_sections=False):
+def clear_text_field(x_path, title=None, skip_all_sections=False, container_xpath=None):
     """
     Clears the input field using keyboard shortcuts to ensure any custom handlers are triggered.
     """
@@ -1222,7 +1222,9 @@ def clear_text_field(x_path, title=None, skip_all_sections=False):
     # Only click empty area if element is not in a popup
     if not is_element_in_popup(x_path):
         simulate_empty_area_click()
-    input_field = get_active_element_after_click(x_path, title=title)
+    input_field = get_active_element_after_click(
+        x_path, title=title, container_xpath=container_xpath
+    )
 
     value = input_field.get_attribute("value") or input_field.text or ""
     if not value:
@@ -1273,7 +1275,9 @@ def clear_text_field(x_path, title=None, skip_all_sections=False):
         # Only click empty area if element is not in a popup
         if not is_element_in_popup(x_path):
             simulate_empty_area_click()
-        input_field = get_active_element_after_click(x_path, title=title)
+        input_field = get_active_element_after_click(
+            x_path, title=title, container_xpath=container_xpath
+        )
 
     # Directly set the value to empty and dispatch an input event
     driver.execute_script("arguments[0].value = '';", input_field)
@@ -1282,7 +1286,7 @@ def clear_text_field(x_path, title=None, skip_all_sections=False):
     return
 
 
-def get_active_element_after_click(x_path, title=None):
+def get_active_element_after_click(x_path, title=None, container_xpath=None):
     """
     Clicks on the element at the given XPath and returns the active element.
     This is useful for ensuring that the correct element is focused after a click.
@@ -1290,7 +1294,9 @@ def get_active_element_after_click(x_path, title=None):
 
     global driver
 
-    element = get_unique_element_by_xpath(x_path, title=title)
+    element = get_unique_element_by_xpath(
+        x_path, title=title, container_xpath=container_xpath
+    )
     driver.execute_script(
         """
         const element = arguments[0];
@@ -1940,7 +1946,7 @@ def find_first_interactive_descendant_excluding(base_el, exclude_el):
     return None
 
 
-def find_input_block_for_title(title, max_levels: int = 6):
+def find_input_block_for_title(title, max_levels: int = 6, container_xpath=None):
     """
     Traverse up the DOM from the title element (found by text) to find a parent
     that has an interactive input element either:
@@ -1950,7 +1956,7 @@ def find_input_block_for_title(title, max_levels: int = 6):
     """
     global driver
 
-    title_xpath = get_xpath_by_text(title)
+    title_xpath = get_xpath_by_text(title, container_xpath=container_xpath)
     if not title_xpath:
         return False, None
 
@@ -1984,7 +1990,7 @@ def find_input_block_for_title(title, max_levels: int = 6):
     return False, current
 
 
-def get_unique_element_by_xpath(xpath, title=None):
+def get_unique_element_by_xpath(xpath, title=None, container_xpath=None):
     """
     Returns a unique WebElement by its XPath.
     If multiple elements match, find the one that is at same level as given title.
@@ -1996,7 +2002,9 @@ def get_unique_element_by_xpath(xpath, title=None):
         return elements[0]
     elif len(elements) > 1:
         if title:
-            element_identified, user_input_element = find_input_block_for_title(title)
+            element_identified, user_input_element = find_input_block_for_title(
+                title, container_xpath=container_xpath
+            )
             if element_identified:
                 elements = user_input_element.find_elements(By.XPATH, f".{xpath}")
                 if len(elements) == 1:

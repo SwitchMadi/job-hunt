@@ -37,6 +37,7 @@ class RadioButton(PageComponent):
         self.parent_application_page = parent_application_page
 
         self.is_component_functional = False
+        self.container_x_path = None
 
         self.next = None
         self.prev = None
@@ -195,7 +196,9 @@ class RadioButton(PageComponent):
 
         option = [option for option in self.options if option["text"] == answer][0]
 
-        option_element = get_unique_element_by_xpath(option["x_path"], self.title)
+        option_element = get_unique_element_by_xpath(
+            option["x_path"], self.title, container_xpath=self.container_x_path
+        )
         if (
             option_element.tag_name == "input"
             and option_element.get_attribute("type") == "radio"
@@ -203,12 +206,13 @@ class RadioButton(PageComponent):
         ):
             pass
         else:
-            option_element = Button(
+            option_button = Button(
                 x_path=get_element_xpath(option_element),
                 button_type="radio",
                 parent_application_page=None,
             )
-            option_element.proceed()
+            option_button.container_x_path = self.container_x_path
+            option_button.proceed()
 
         # store the response
         if self.parent_application_page:
@@ -229,6 +233,7 @@ class RadioButton(PageComponent):
             "category": self.category,
             "options_container_x_path": self.options_container_x_path,
             "options_xpath_pattern": self.options_xpath_pattern,
+            "container_x_path": self.container_x_path,
             "next": self.next.to_dict() if self.next else None,
         }
 
@@ -244,6 +249,7 @@ class RadioButton(PageComponent):
             parent_application_page=parent_application_page,
         )
 
+        instance.container_x_path = input_dict.get("container_x_path")
         instance.is_component_functional = True
 
         if input_dict["next"]:
