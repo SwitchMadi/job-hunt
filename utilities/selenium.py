@@ -756,7 +756,7 @@ def take_element_screenshot(x_path, padding=40):
     return absolute_path
 
 
-def get_xpath_by_text(text):
+def get_xpath_by_text(text, container_xpath=None):
     global driver
 
     js_script = """
@@ -785,9 +785,28 @@ def get_xpath_by_text(text):
         return str.replace(/\s+/g, ' ').trim();
     }
 
-    function findSmallestElementByText(text) {
+    function findSmallestElementByText(text, containerXpath) {
         const cleanedInput = normalizeWhitespace(cleanTextEdges(text));
-        const allElements = Array.from(document.querySelectorAll('body *'));
+        let root;
+        if (containerXpath) {
+            root = document.evaluate(
+                containerXpath,
+                document,
+                null,
+                XPathResult.FIRST_ORDERED_NODE_TYPE,
+                null
+            ).singleNodeValue;
+            if (!root) {
+                return null;
+            }
+        } else {
+            root = document.body;
+        }
+
+        // Search descendants
+        const allElements = (root === document.body)
+            ? Array.from(document.querySelectorAll('body *'))
+            : Array.from(root.querySelectorAll('*'));
         let matchingElements;
 
         if (cleanedInput.length > 70) {
@@ -850,10 +869,10 @@ def get_xpath_by_text(text):
         return getElementXPath(matchingElements[0]);
     }
 
-    return findSmallestElementByText(arguments[0]);
+    return findSmallestElementByText(arguments[0], arguments[1]);
     """
 
-    xpath = driver.execute_script(js_script, text)
+    xpath = driver.execute_script(js_script, text, container_xpath)
     return xpath
 
 
