@@ -103,6 +103,7 @@ class DateField(PageComponent):
             button = Button(
                 x_path=click_xpath,
                 button_type="date",
+                title=self.title,
                 parent_application_page=self.parent_application_page,
             )
             button.container_x_path = self.container_x_path
@@ -425,6 +426,7 @@ class DateField(PageComponent):
             date_button = Button(
                 x_path=date_info.date_xpath,
                 button_type="date",
+                title=self.title,
                 parent_application_page=self.parent_application_page,
             )
             date_button.container_x_path = self.container_x_path
