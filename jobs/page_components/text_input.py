@@ -1,5 +1,7 @@
 from selenium.common import ElementNotInteractableException
 from selenium.webdriver import Keys
+import pyperclip
+from selenium.webdriver.common.action_chains import ActionChains
 
 from jobs import ApplicationField
 from jobs.page_components import PageComponent, logger, get_page_component_class_name
@@ -112,27 +114,31 @@ class TextInput(PageComponent):
                 self.x_path, title=self.title, container_xpath=self.container_x_path
             )
 
-            if self.category in ["otp_textbox", "date_field"]:
+            if self.category == "otp_textbox":
                 for letter in str(self.answer):
                     active_element = driver.switch_to.active_element
                     active_element.send_keys(f"{letter}")
 
-                if self.category == "date_field":
-                    actual_value = element.get_attribute("value") or element.text or ""
-                    if not actual_value or (
-                        not str(self.answer)
-                        .strip()
-                        .lower()
-                        .startswith(actual_value.strip().lower())
-                    ):
-                        # Force set using JavaScript if value doesn't match
-                        driver.execute_script(
-                            "arguments[0].value = arguments[1]; "
-                            "arguments[0].dispatchEvent(new Event('input', { bubbles: true })); "
-                            "arguments[0].dispatchEvent(new Event('change', { bubbles: true }));",
-                            element,
-                            str(self.answer),
-                        )
+                answer_input_successful = True
+            elif self.category == "date_field":
+                pyperclip.copy(self.answer)
+
+                ActionChains(driver).key_down(Keys.COMMAND).send_keys("v").key_up(
+                    Keys.COMMAND
+                ).perform()
+
+                actual_value = element.get_attribute("value") or element.text or ""
+                if not actual_value or (
+                    not actual_value.strip().lower() in str(self.answer).strip().lower()
+                ):
+                    # Force set using JavaScript if value doesn't match
+                    driver.execute_script(
+                        "arguments[0].value = arguments[1]; "
+                        "arguments[0].dispatchEvent(new Event('input', { bubbles: true })); "
+                        "arguments[0].dispatchEvent(new Event('change', { bubbles: true }));",
+                        element,
+                        str(self.answer),
+                    )
 
                 answer_input_successful = True
             else:
