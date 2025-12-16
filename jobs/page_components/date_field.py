@@ -571,6 +571,7 @@ class DateField(PageComponent):
                 x_path=self.components.get("date", {}).get("xpath"),
                 category="date_field",
                 question=self.question,
+                title=self.title,
                 parent_application_page=self.parent_application_page,
             )
             date_field.answer = self.answer
