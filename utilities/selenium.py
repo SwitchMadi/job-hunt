@@ -1686,10 +1686,40 @@ def is_stale(element):
         return True
 
 
-def generalize_xpath_attributes(xpath: str) -> str:
+def generalize_xpath_attributes(
+    xpath: str,
+    use_starts_with: bool = True,
+    use_contains: bool = True,
+    use_ends_with: bool = True,
+) -> str:
     """
     Converts XPath expressions to use starts-with(), contains(), and XPath 1.0-compatible ends-with().
+
+    Args:
+        xpath: The XPath expression to generalize.
+        use_starts_with: Whether to use starts-with() for the first text part.
+        use_contains: Whether to use contains() for middle text parts.
+        use_ends_with: Whether to use ends-with() for the last text part.
+
+    Returns:
+        The generalized XPath expression.
+
+    Examples:
+        # Default behavior (all matchers enabled):
+        generalize_xpath_attributes("//div[@id='btn-123-submit']")
+        # -> //div[starts-with(@id, 'btn-') and substring(@id, ...) = '-submit']
+
+        # Only starts-with (ends-with disabled, no middle parts):
+        generalize_xpath_attributes("//div[@id='btn-123-submit']", use_ends_with=False)
+        # -> //div[starts-with(@id, 'btn-')]
+
+        # Only ends-with:
+        generalize_xpath_attributes("//div[@id='btn-123-submit']", use_starts_with=False, use_contains=False)
+        # -> //div[substring(@id, ...) = '-submit']
     """
+    if not use_starts_with and not use_contains and not use_ends_with:
+        return xpath
+
     attr_value_pattern = re.compile(r'@([\w:-]+)\s*=\s*([\'"])(.*?)\2')
 
     def to_starts_with(attr, val):
@@ -1711,7 +1741,14 @@ def generalize_xpath_attributes(xpath: str) -> str:
 
         if len(text_parts) == 1 and len(parts) == 1:
             # entire string, no digits
-            return f"{to_starts_with(attr, value)} and {to_ends_with(attr, value)}"
+            matchers = []
+            if use_starts_with:
+                matchers.append(to_starts_with(attr, value))
+            if use_ends_with:
+                matchers.append(to_ends_with(attr, value))
+            if not matchers:
+                return f"@{attr}='{value}'"
+            return " and ".join(matchers)
 
         matchers = []
         for i, part in enumerate(parts):
@@ -1719,11 +1756,17 @@ def generalize_xpath_attributes(xpath: str) -> str:
                 continue
 
             if i == 0:
-                matchers.append(to_starts_with(attr, part))
+                if use_starts_with:
+                    matchers.append(to_starts_with(attr, part))
             elif i == len(parts) - 1:
-                matchers.append(to_ends_with(attr, part))
+                if use_ends_with:
+                    matchers.append(to_ends_with(attr, part))
             else:
-                matchers.append(to_contains(attr, part))
+                if use_contains:
+                    matchers.append(to_contains(attr, part))
+
+        if not matchers:
+            return f"@{attr}='{value}'"  # fallback if no matchers generated
 
         return " and ".join(matchers)
 
@@ -1990,10 +2033,14 @@ def find_input_block_for_title(title, max_levels: int = 6, container_xpath=None)
     return False, current
 
 
-def get_unique_element_by_xpath(xpath, title=None, container_xpath=None):
+def get_unique_element_by_xpath(
+    xpath, title=None, container_xpath=None, _generalization_state=None
+):
     """
     Returns a unique WebElement by its XPath.
     If multiple elements match, find the one that is at same level as given title.
+    If no elements are found, progressively generalizes the xpath using different
+    matcher combinations until at least one visible element is found.
     """
     global driver
 
@@ -2085,7 +2132,72 @@ def get_unique_element_by_xpath(xpath, title=None, container_xpath=None):
             )
             return None
     else:
-        logging.warning(f"No elements found for XPath '{xpath}'.")
+        # No elements found - try progressive generalization
+        # Define generalization strategies to try in order
+        generalization_strategies = [
+            # (use_starts_with, use_contains, use_ends_with)
+            (True, True, True),  # Full generalization (default)
+            (True, True, False),  # starts-with + contains only
+            (True, False, True),  # starts-with + ends-with only
+            (False, True, True),  # contains + ends-with only
+            (True, False, False),  # starts-with only
+            (False, False, True),  # ends-with only
+            (False, True, False),  # contains only
+        ]
+
+        # Determine which strategy to try next
+        if _generalization_state is None:
+            _generalization_state = {"original_xpath": xpath, "strategy_index": 0}
+
+        strategy_index = _generalization_state["strategy_index"]
+        original_xpath = _generalization_state["original_xpath"]
+
+        # Try remaining strategies
+        while strategy_index < len(generalization_strategies):
+            use_starts_with, use_contains, use_ends_with = generalization_strategies[
+                strategy_index
+            ]
+
+            generalized_xpath = generalize_xpath_attributes(
+                original_xpath,
+                use_starts_with=use_starts_with,
+                use_contains=use_contains,
+                use_ends_with=use_ends_with,
+            )
+
+            # Skip if generalization didn't change the xpath
+            if generalized_xpath == original_xpath or generalized_xpath == xpath:
+                strategy_index += 1
+                continue
+
+            # Check if any visible elements exist with this generalized xpath
+            test_elements = driver.find_elements(By.XPATH, generalized_xpath)
+            visible_elements = [
+                el
+                for el in test_elements
+                if el.tag_name == "input" or is_element_visible(element=el)
+            ]
+
+            if visible_elements:
+                logging.info(
+                    f"Found {len(visible_elements)} visible element(s) with generalized XPath "
+                    f"(strategy: starts_with={use_starts_with}, contains={use_contains}, ends_with={use_ends_with}). "
+                    f"Original: '{original_xpath}' -> Generalized: '{generalized_xpath}'"
+                )
+                # Recursively call with the generalized xpath
+                _generalization_state["strategy_index"] = strategy_index + 1
+                return get_unique_element_by_xpath(
+                    generalized_xpath,
+                    title=title,
+                    container_xpath=container_xpath,
+                    _generalization_state=_generalization_state,
+                )
+
+            strategy_index += 1
+
+        logging.warning(
+            f"No elements found for XPath '{xpath}' even after trying all generalization strategies."
+        )
         return None
 
 
