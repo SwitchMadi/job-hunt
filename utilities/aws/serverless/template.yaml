@@ -50,7 +50,7 @@ Resources:
             Name: ScrapeGlobalBackendJobsTrigger
             Input: !Sub |
               {
-                "ami_id": "ami-035fbd39bcf7b8441",
+                "ami_id": "ami-092e7cbbb8c64175b",
                 "branch_name": "jobs_scraping/global_backend_jobs"
               }
 
