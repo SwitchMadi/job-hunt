@@ -1266,7 +1266,7 @@ class ApplicationPage:
 
                 curr_node = self.head_step
                 while curr_node:
-                    if hasattr(curr_node, "title"):
+                    if hasattr(curr_node, "title") and curr_node.title:
                         existing_titles.add(clean_text_edges(curr_node.title).lower())
                     curr_node = curr_node.next
 
