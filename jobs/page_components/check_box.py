@@ -268,6 +268,7 @@ class CheckBox(PageComponent):
                 x_path=checkbox_xpath,
                 button_type="checkbox",
                 parent_application_page=None,
+                title=self.title,
             )
             checkbox_button.container_x_path = self.container_x_path
             checkbox_button.proceed()
@@ -305,6 +306,7 @@ class CheckBox(PageComponent):
                         x_path=get_element_xpath(option_element),
                         button_type="checkbox",
                         parent_application_page=None,
+                        title=self.title,
                     )
                     option_button.container_x_path = self.container_x_path
                     option_button.proceed()
@@ -413,6 +415,7 @@ class CheckBox(PageComponent):
             x_path=get_element_xpath(option_1),
             button_type="checkbox",
             parent_application_page=None,
+            title=title,
         )
         option_button_1.container_x_path = container_xpath
         option_button_1.proceed()
@@ -428,6 +431,7 @@ class CheckBox(PageComponent):
             x_path=get_element_xpath(option_2),
             button_type="checkbox",
             parent_application_page=None,
+            title=title,
         )
         option_button_2.container_x_path = container_xpath
         option_button_2.proceed()

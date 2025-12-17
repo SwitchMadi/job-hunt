@@ -823,6 +823,7 @@ class ApplicationField:
                 title=field_title,
                 parent_application_page=None,
             )
+            element_button.container_x_path = container_xpath
             element_button.proceed()
         except (ElementClickInterceptedException, ElementNotInteractableException):
             element_button = Button(
@@ -831,6 +832,7 @@ class ApplicationField:
                 title=field_title,
                 parent_application_page=None,
             )
+            element_button.container_x_path = container_xpath
             element_button.proceed()
 
         observed_elements = get_observed_elements()
@@ -904,6 +906,7 @@ class ApplicationField:
                 title=field_title,
                 parent_application_page=None,
             )
+            element_button.container_x_path = container_xpath
             element_button.proceed()
         except (ElementClickInterceptedException, ElementNotInteractableException):
             element_button = Button(
@@ -912,6 +915,7 @@ class ApplicationField:
                 title=field_title,
                 parent_application_page=None,
             )
+            element_button.container_x_path = container_xpath
             element_button.proceed()
 
         observed_elements = get_observed_elements()

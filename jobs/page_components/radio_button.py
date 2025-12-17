@@ -210,6 +210,7 @@ class RadioButton(PageComponent):
                 x_path=get_element_xpath(option_element),
                 button_type="radio",
                 parent_application_page=None,
+                title=self.title,
             )
             option_button.container_x_path = self.container_x_path
             option_button.proceed()
