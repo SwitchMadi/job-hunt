@@ -128,6 +128,21 @@ class EducationSection(PageComponent):
         return count
 
     def _update_nodes(self, node):
+        # Check if node with same education_no already exists to avoid duplicates
+        if isinstance(node, Education):
+            curr = self.head
+            while curr:
+                if (
+                    isinstance(curr, Education)
+                    and curr.education_no == node.education_no
+                ):
+                    logger.info(
+                        f"Skipping duplicate education node with education_no={node.education_no} "
+                        f"for job {self.parent_application_page.parent_job.title}"
+                    )
+                    return
+                curr = curr.next
+
         if self.head is None:
             self.head = node
             self.tail = node
@@ -903,15 +918,15 @@ class EducationSection(PageComponent):
             )
 
         class EducationQualificationFieldsAnalysis(BaseModel):
-            are_fields_collectively_comprehensive: bool = Field(
-                ...,
-                description="Boolean indicating whether all the fields together are comprehensive enough "
-                "to gather a candidate's specific education qualification details thoroughly.",
-            )
             individual_field_analysis: List[FieldComprehensiveness] = Field(
                 ...,
                 description="Analysis of each individual field's comprehensiveness for education qualification collection. "
                 "Return only the field numbers (1-based index) and boolean flags, not the full field titles.",
+            )
+            are_fields_collectively_comprehensive: bool = Field(
+                ...,
+                description="Boolean indicating whether all the fields together are comprehensive enough "
+                "to gather a candidate's specific education qualification details thoroughly.",
             )
 
         analysis_found, analysis = get_gpt_response(

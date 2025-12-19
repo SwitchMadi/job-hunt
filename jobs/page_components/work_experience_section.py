@@ -138,6 +138,21 @@ class WorkExperienceSection(PageComponent):
         return count
 
     def _update_nodes(self, node):
+        # Check if node with same work_experience_no already exists to avoid duplicates
+        if isinstance(node, WorkExperience):
+            curr = self.head
+            while curr:
+                if (
+                    isinstance(curr, WorkExperience)
+                    and curr.work_experience_no == node.work_experience_no
+                ):
+                    logger.info(
+                        f"Skipping duplicate work experience node with work_experience_no={node.work_experience_no} "
+                        f"for job {self.parent_application_page.parent_job.title}"
+                    )
+                    return
+                curr = curr.next
+
         if self.head is None:
             self.head = node
             self.tail = node
@@ -928,15 +943,15 @@ class WorkExperienceSection(PageComponent):
             )
 
         class WorkExperienceFieldsAnalysis(BaseModel):
-            are_fields_collectively_comprehensive: bool = Field(
-                ...,
-                description="Boolean indicating whether all the fields together are comprehensive enough "
-                "to gather a candidate's specific work experience details thoroughly.",
-            )
             individual_field_analysis: List[FieldComprehensiveness] = Field(
                 ...,
                 description="Analysis of each individual field's comprehensiveness for work experience collection. "
                 "Return only the field numbers (1-based index) and boolean flags, not the full field titles.",
+            )
+            are_fields_collectively_comprehensive: bool = Field(
+                ...,
+                description="Boolean indicating whether all the fields together are comprehensive enough "
+                "to gather a candidate's specific work experience details thoroughly.",
             )
 
         analysis_found, analysis = get_gpt_response(
