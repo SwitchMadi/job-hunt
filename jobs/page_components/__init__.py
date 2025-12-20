@@ -1415,7 +1415,7 @@ class ApplicationField:
         user_prompt += f"""Following general information about the application - 
         1. Job source - LinkedIn
         2. If current user email is "{config['admin_email']}" and questions is if you are currently working or studying
-         here then always answer as "No".
+         here then always answer as "No". If end date is asked for the same question then answer as per today's date.
         
         Now based on all above instructions, give me correct answer for the question.
         """
