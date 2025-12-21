@@ -1447,6 +1447,25 @@ class ApplicationPage:
                 self._identify_tnc_field()
             elif job_field.field_category.value == "work_experience":
                 if self.work_experience_section_identified and not only_error_fields:
+                    # Check if job_field title exists in any work experience field titles
+                    work_experience_section = None
+                    cur_application_step = self.head_step
+                    while cur_application_step:
+                        if isinstance(cur_application_step, WorkExperienceSection):
+                            work_experience_section = cur_application_step
+                            break
+                        cur_application_step = cur_application_step.next
+
+                    if work_experience_section:
+                        work_experience_field_titles = [
+                            field.title
+                            for field in work_experience_section.work_experience_fields
+                            if hasattr(field, "title") and field.title
+                        ]
+                        if job_field.field_title not in work_experience_field_titles:
+                            self._complete_application_field_identification(job_field)
+                            continue
+
                     continue
 
                 self._identify_work_experience_section()
