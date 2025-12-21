@@ -137,6 +137,15 @@ class ApplicationField:
             minified_html = minify_html_for_gpt_prompt(
                 user_input_element.get_attribute("outerHTML")
             )
+        elif self.container_x_path and element_exists(self.container_x_path):
+            logger.info(
+                f"User input element not found so using container_x_path for HTML extraction for "
+                f"field {self.title} & {self.category}..."
+            )
+            container_element = driver.find_element(By.XPATH, self.container_x_path)
+            minified_html = minify_html_for_gpt_prompt(
+                container_element.get_attribute("outerHTML")
+            )
         else:
             minified_html = minify_html_for_gpt_prompt(driver.page_source)
 
