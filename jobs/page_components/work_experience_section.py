@@ -917,13 +917,26 @@ class WorkExperienceSection(PageComponent):
             f"specific work experience details in a thorough manner\n"
             f"2. For each individual field, whether it is genuinely intended to collect comprehensive "
             f"work experience information or seems like a random/standalone question\n\n"
-            f"Consider comprehensive work experience fields to typically include things like:\n"
-            f"- Company name, job title, employment dates, location\n"
-            f"- Job responsibilities, achievements, skills used\n"
-            f"- Employment type, industry, etc.\n\n"
-            f"Fields that seem random or not intended for comprehensive work experience gathering might be:\n"
-            f"- Single generic questions about work\n"
-            f"- Isolated questions without context of building a complete work history"
+            f"IMPORTANT GUIDELINES FOR COMPREHENSIVENESS:\n"
+            f"- Fields are considered COLLECTIVELY comprehensive if they together capture the core components "
+            f"of a work experience: (1) company/organization name, (2) job title/role, and (3) time period "
+            f"(start/end dates, employment duration, or similar temporal information). Additional fields that provide "
+            f"supplementary details (responsibilities, achievements, skills, location, employment type, industry, etc.) "
+            f"are bonuses but not required for comprehensiveness.\n"
+            f"- For individual fields: A field is comprehensive if it's part of a structured work experience form that "
+            f"collects multiple related pieces of information to build a complete work history record, rather than a "
+            f"standalone generic question that doesn't require detailed information.\n"
+            f"- Time period fields can be represented in various formats (separate start/end dates, first/last year, "
+            f"employment duration, etc.) - all are valid representations.\n"
+            f"- When evaluating collective comprehensiveness, be GENEROUS - if the fields together allow building "
+            f"a complete work experience entry with the three core components mentioned above, they should be considered "
+            f"comprehensive even if some optional supplementary fields are missing.\n\n"
+            f"Examples for reference (these are just illustrative examples, not an exhaustive list):\n"
+            f"- COMPREHENSIVE: Multiple fields that together capture company, job title, and time period "
+            f"(e.g., fields asking for company name, position title, and dates/duration together form a comprehensive set).\n"
+            f"- NON-COMPREHENSIVE: Standalone questions that don't require detailed information (e.g., yes/no questions "
+            f"about having work experience, single dropdowns asking only for years of experience without details, "
+            f"questions that don't allow building a complete work history record)."
         )
 
         class FieldComprehensiveness(BaseModel):
@@ -933,8 +946,10 @@ class WorkExperienceSection(PageComponent):
             )
             is_comprehensive_work_experience_field: bool = Field(
                 ...,
-                description="Boolean flag indicating whether this specific field is genuinely intended "
-                "to collect comprehensive work experience information, not just a random work-related question.",
+                description="Boolean flag indicating whether this specific field is part of a structured "
+                "work experience form that collects multiple related pieces of information to build a "
+                "complete work history record, rather than a standalone generic question. Fields that are part of "
+                "a comprehensive form should be marked as True, even if they don't capture complete information by themselves.",
             )
             reason_for_comprehensiveness: str = Field(
                 ...,
@@ -950,7 +965,15 @@ class WorkExperienceSection(PageComponent):
             are_fields_collectively_comprehensive: bool = Field(
                 ...,
                 description="Boolean indicating whether all the fields together are comprehensive enough "
-                "to gather a candidate's specific work experience details thoroughly.",
+                "to gather a candidate's specific work experience details. Return True if the fields "
+                "collectively capture the core components: (1) company/organization name, "
+                "(2) job title/role, and (3) time period (start/end dates, employment duration, or similar "
+                "temporal information). Be generous - if these core components are present, return True even if "
+                "optional supplementary fields are missing.",
+            )
+            reason_for_collective_comprehensiveness: str = Field(
+                ...,
+                description="Reasoning for why the fields are collectively considered comprehensive or not.",
             )
 
         analysis_found, analysis = get_gpt_response(
