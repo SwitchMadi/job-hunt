@@ -943,6 +943,19 @@ class ApplicationField:
         )
         return is_calendar_widget_present
 
+    @staticmethod
+    def _format_list_field(list_field):
+        """Convert list/array to human-readable string format."""
+        if not list_field:
+            return None
+
+        if isinstance(list_field, list):
+            if len(list_field) == 0:
+                return None
+            return "\n".join(f"- {item}" for item in list_field if item)
+
+        return list_field
+
     @classmethod
     def get_field_value(cls, field_category, user):
         if field_category == "first_name":
@@ -1009,13 +1022,15 @@ class ApplicationField:
             info = user.parsed_resume.get("work_experience", [])
             if entry_no < len(info):
                 info = info[entry_no - 1]
-                return info.get("responsibilities")
+                responsibilities = info.get("responsibilities")
+                return cls._format_list_field(responsibilities)
         elif "_achievements__" in field_category and re.search(r"\d$", field_category):
             entry_no = int(field_category.split("__")[-1])
             info = user.parsed_resume.get("work_experience", [])
             if entry_no < len(info):
                 info = info[entry_no - 1]
-                return info.get("achievements")
+                achievements = info.get("achievements")
+                return cls._format_list_field(achievements)
         elif "_experience_related_url__" in field_category and re.search(
             r"\d$", field_category
         ):
