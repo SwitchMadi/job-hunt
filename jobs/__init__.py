@@ -1365,8 +1365,7 @@ class ApplicationPage:
                 )
                 field_question: str = Field(
                     ...,
-                    description="If field title on its own is not self explanatory so modify it, so that it "
-                    "makes sense as a question. Otherwise respond same as field title.",
+                    description="What is grammatically correct question, answering which will help process the field?",
                 )
                 field_category: FieldCategory = Field(
                     ...,

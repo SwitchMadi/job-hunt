@@ -541,10 +541,9 @@ class EducationSection(PageComponent):
                     description="Education field's exact title / question mentioned on the webpage, without any "
                     "modification.",
                 )
-                field_question: Optional[str] = Field(
+                field_question: str = Field(
                     ...,
-                    description="If field title on its own is not self explanatory then modify it so that it makes sense as"
-                    " a question.",
+                    description="What is grammatically correct question, answering which will help process the field?",
                 )
                 field_category: FieldCategory = Field(
                     ...,
@@ -1216,10 +1215,9 @@ class Education(PageComponent):
                 description="Education field's exact title / question mentioned on the webpage, without any "
                 "modification.",
             )
-            field_question: Optional[str] = Field(
+            field_question: str = Field(
                 ...,
-                description="If field title on its own is not self explanatory then modify it so that it makes sense as"
-                " a question.",
+                description="What is grammatically correct question, answering which will help process the field?",
             )
             field_category: FieldCategory = Field(
                 ...,
