@@ -664,7 +664,12 @@ class WorkExperienceSection(PageComponent):
                             "The x_path that we are trying to extract is of mark complete button which is used to mark"
                             " current work experience as complete."
                         )
-                        container_x_path = fields.work_experience_container_x_path if fields.work_experience_container_x_path and element_exists(fields.work_experience_container_x_path) else None
+                        container_x_path = (
+                            fields.work_experience_container_x_path
+                            if fields.work_experience_container_x_path
+                            and element_exists(fields.work_experience_container_x_path)
+                            else None
+                        )
                         fields.mark_complete_button_x_path = (
                             ApplicationField.extract_correct_x_path(
                                 prev_x_path=fields.mark_complete_button_x_path,
