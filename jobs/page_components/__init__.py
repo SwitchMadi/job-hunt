@@ -384,6 +384,46 @@ class ApplicationField:
                 else:
                     application_field.x_path = correct_x_path
 
+            # Check if container exists and xpath is not unique (exists more than once)
+            if (
+                self.container_x_path
+                and element_exists(self.container_x_path)
+                and element_exists(application_field.x_path)
+            ):
+                try:
+                    elements = driver.find_elements(By.XPATH, application_field.x_path)
+                    if len(elements) > 1:
+                        logger.warn(
+                            f"Element with x_path {application_field.x_path} exists {len(elements)} times on the page "
+                            f"for {self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}. "
+                            f"Container exists, attempting to extract a more specific xpath..."
+                        )
+                        prompt = (
+                            f"The x_path that we are trying to extract is of following application field -\n"
+                            f"Field title - {self.title}\n"
+                            f"Field category - {self.category}\n"
+                            f"CRITICAL: The current x_path exists {len(elements)} times on the page, which means it's not unique. "
+                            f"Since a container element exists with XPath: {self.container_x_path}, please extract a more specific "
+                            f"x_path that targets the element within this container. The x_path should be unique within the page "
+                            f"or be constructed relative to the container to ensure it targets the correct element."
+                        )
+                        correct_x_path = self.extract_correct_x_path(
+                            prev_x_path=application_field.x_path,
+                            prompt=prompt,
+                            job_title=self.parent_application_page.parent_job.title,
+                            job_url=self.parent_application_page.url,
+                            html=minified_html,
+                            container_x_path=self.container_x_path,
+                        )
+                        if correct_x_path:
+                            application_field.x_path = correct_x_path
+                except Exception as e:
+                    logger.warn(
+                        f"Error checking uniqueness of x_path {application_field.x_path} for "
+                        f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}. "
+                        f"Error: {str(e)}"
+                    )
+
             if self.parent_application_page.component_x_path_exists(
                 application_field.x_path
             ):
@@ -1470,7 +1510,14 @@ class ApplicationField:
 
     @classmethod
     def extract_correct_x_path(
-        cls, prev_x_path, prompt, job_title, job_url, html=None, xpath_count=10, container_x_path=None
+        cls,
+        prev_x_path,
+        prompt,
+        job_title,
+        job_url,
+        html=None,
+        xpath_count=15,
+        container_x_path=None,
     ):
         global driver
 
@@ -1491,21 +1538,34 @@ class ApplicationField:
             f"find the correct x_path.\n"
             f"Previous x_path - {prev_x_path}\n"
         )
-        
+
         if container_x_path:
             user_prompt += (
                 f"CRITICAL: Ideally, the target element should exist within a container element with XPath: {container_x_path}. "
                 f"When searching for the correct x_path, prioritize finding the element within this container.\n"
             )
-        
+
         user_prompt += f"{prompt}\n"
 
-        class CorrectXPath(BaseModel):
-            possible_x_paths: List[str] = Field(
+        class XPathEntry(BaseModel):
+            x_path: str = Field(
                 ...,
-                description=f"{xpath_count} Possible correct XPaths of the element which can be used in selenium chrome driver to "
+                description=f"Possible correct XPath of the element which can be used in selenium chrome driver to "
                 "search the element. Try to give short & simple XPaths which point to desired element. Avoid long "
                 "ancestor chains, multiple contains(@class,…) filters, or deep nesting because long XPaths can be brittle.",
+            )
+            uses_alphanumeric: bool = Field(
+                ...,
+                description="Whether this XPath uses alphanumeric strings (like 'id-123abc', 'element-456xyz', "
+                "or any attribute values containing random alphanumeric characters) that may change when the page reloads. "
+                "Set to True if the XPath contains such patterns, False otherwise.",
+            )
+
+        class CorrectXPath(BaseModel):
+            possible_x_paths: List[XPathEntry] = Field(
+                ...,
+                description=f"{xpath_count} Possible correct XPaths of the element. For each XPath, provide the x_path string "
+                "and indicate whether it uses_alphanumeric patterns.",
             )
 
         correct_x_path_found, correct_x_path = get_gpt_response(
@@ -1515,19 +1575,91 @@ class ApplicationField:
             model="complex",
         )
         if correct_x_path_found:
+            # Helper function to check if element is inside container
+            def is_in_container(x_path_entry):
+                if not container_x_path:
+                    return False
+                try:
+                    if not element_exists(x_path_entry.x_path) or not element_exists(
+                        container_x_path
+                    ):
+                        return False
+                    element = driver.find_element(By.XPATH, x_path_entry.x_path)
+                    container_element = driver.find_element(By.XPATH, container_x_path)
+                    is_contained = driver.execute_script(
+                        "return arguments[0].contains(arguments[1]);",
+                        container_element,
+                        element,
+                    )
+                    return is_contained
+                except Exception:
+                    return False
+
+            # Helper function to check if xpath exists only once on the page
+            def is_unique_on_page(x_path_entry):
+                try:
+                    elements = driver.find_elements(By.XPATH, x_path_entry.x_path)
+                    return len(elements) == 1
+                except Exception:
+                    return False
+
+            # Sort: prioritize non-alphanumeric first, then prioritize in-container,
+            # then prioritize unique (exists only once) when in container
+            # Sort key: (uses_alphanumeric, not_in_container, in_container_and_not_unique)
+            # - False (non-alphanumeric) comes before True (alphanumeric)
+            # - False (in container) comes before True (not in container)
+            # - False (unique when in container) comes before True (not unique when in container)
+            if container_x_path:
+
+                def sort_key(x):
+                    in_container = is_in_container(x)
+                    unique = is_unique_on_page(x)
+                    # Only consider uniqueness when element is in container
+                    # in_container_and_not_unique = True means it's in container but not unique
+                    in_container_and_not_unique = in_container and not unique
+                    return (
+                        x.uses_alphanumeric,
+                        not in_container,
+                        in_container_and_not_unique,
+                    )
+
+                sorted_xpaths = sorted(correct_x_path.possible_x_paths, key=sort_key)
+            else:
+                sorted_xpaths = sorted(
+                    correct_x_path.possible_x_paths, key=lambda x: x.uses_alphanumeric
+                )
+
             x_paths = "\n".join(
-                f"{i + 1}. {x_path}"
-                for i, x_path in enumerate(correct_x_path.possible_x_paths)
+                f"{i + 1}. {entry.x_path} "
+                f"{'[uses alphanumeric]' if entry.uses_alphanumeric else '[no alphanumeric]'} "
+                f"{'[in container]' if container_x_path and is_in_container(entry) else ''}"
+                f"{' [unique on page]' if container_x_path and is_in_container(entry) and is_unique_on_page(entry) else ''}"
+                for i, entry in enumerate(sorted_xpaths)
             )
+            priority_note = "non-alphanumeric first"
+            if container_x_path:
+                priority_note += ", then prioritize in-container, then prioritize unique (exists only once) when in container"
             logger.info(
-                f"Found {len(correct_x_path.possible_x_paths)} possible correct XPaths for the element.\n"
-                f"Possible XPaths -\n{x_paths}"
+                f"Found {len(sorted_xpaths)} possible correct XPaths for the element.\n"
+                f"Possible XPaths (prioritized: {priority_note}) -\n{x_paths}"
             )
 
-            for x_path in correct_x_path.possible_x_paths:
-                if element_exists(x_path):
-                    logger.info(f"Found correct x_path - {x_path}")
-                    return x_path
+            # Check xpaths in priority order
+            for entry in sorted_xpaths:
+                if element_exists(entry.x_path):
+                    container_status = ""
+                    if container_x_path:
+                        in_container = is_in_container(entry)
+                        unique = is_unique_on_page(entry)
+                        container_status = f" {'(in container)' if in_container else '(not in container)'}"
+                        if in_container and unique:
+                            container_status += " (unique on page)"
+                    logger.info(
+                        f"Found correct x_path - {entry.x_path} "
+                        f"{'(uses alphanumeric)' if entry.uses_alphanumeric else '(no alphanumeric)'}"
+                        f"{container_status}"
+                    )
+                    return entry.x_path
 
         logger.error(
             f"Correct x_path couldn't be found for {job_title}. URL - {job_url}"
