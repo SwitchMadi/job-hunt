@@ -368,6 +368,7 @@ class ApplicationField:
                     job_title=self.parent_application_page.parent_job.title,
                     job_url=self.parent_application_page.url,
                     html=minified_html,
+                    container_x_path=self.container_x_path,
                 )
                 if not correct_x_path:
                     return None
@@ -1444,7 +1445,7 @@ class ApplicationField:
 
     @classmethod
     def extract_correct_x_path(
-        cls, prev_x_path, prompt, job_title, job_url, html=None, xpath_count=10
+        cls, prev_x_path, prompt, job_title, job_url, html=None, xpath_count=10, container_x_path=None
     ):
         global driver
 
@@ -1464,8 +1465,16 @@ class ApplicationField:
             f"x_path, try to assess yourself if the x_path is correct or not. If it is not correct then try again to "
             f"find the correct x_path.\n"
             f"Previous x_path - {prev_x_path}\n"
-            f"{prompt}\n"
         )
+        
+        if container_x_path:
+            user_prompt += (
+                f"CRITICAL: Ideally, the target element should exist within a container element with XPath: {container_x_path}. "
+                f"When searching for the correct x_path, prioritize finding the element within this container. "
+                f"The XPath should be constructed relative to this container or be an absolute XPath that targets the element within this container.\n"
+            )
+        
+        user_prompt += f"{prompt}\n"
 
         class CorrectXPath(BaseModel):
             possible_x_paths: List[str] = Field(

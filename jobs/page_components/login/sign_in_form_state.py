@@ -248,26 +248,22 @@ class SignInFormState(LoginState):
 
         xpaths_fixed = False
         for xpath_name, xpath_value in missing_xpaths.items():
-            base_prompt = prompts_map.get(
+            prompt = prompts_map.get(
                 xpath_name,
                 f"The x_path that we are trying to extract is of {xpath_name}.",
             )
 
             # Include container XPath context if available (fields are relative to container)
+            container_x_path = None
             if fields.form_container_x_path and xpath_name != "form_container_x_path":
-                prompt = (
-                    f"{base_prompt} "
-                    f"CRITICAL: This element should be inside the form container with XPath: {fields.form_container_x_path}. "
-                    f"The XPath should be constructed relative to this container or be an absolute XPath that targets the element within this container."
-                )
-            else:
-                prompt = base_prompt
+                container_x_path = fields.form_container_x_path
 
             correct_x_path = ApplicationField.extract_correct_x_path(
                 prev_x_path=xpath_value,
                 prompt=prompt,
                 job_title=self.parent_application_page.parent_job.title,
                 job_url=self.parent_application_page.url,
+                container_x_path=container_x_path,
             )
             if correct_x_path:
                 # Update the field with corrected XPath
