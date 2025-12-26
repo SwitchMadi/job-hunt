@@ -1470,8 +1470,7 @@ class ApplicationField:
         if container_x_path:
             user_prompt += (
                 f"CRITICAL: Ideally, the target element should exist within a container element with XPath: {container_x_path}. "
-                f"When searching for the correct x_path, prioritize finding the element within this container. "
-                f"The XPath should be constructed relative to this container or be an absolute XPath that targets the element within this container.\n"
+                f"When searching for the correct x_path, prioritize finding the element within this container.\n"
             )
         
         user_prompt += f"{prompt}\n"
