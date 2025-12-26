@@ -1989,7 +1989,7 @@ def find_first_interactive_descendant_excluding(base_el, exclude_el):
     return None
 
 
-def find_input_block_for_title(title, max_levels: int = 6, container_xpath=None):
+def find_input_block_for_title(title, max_levels: int = 7, container_xpath=None):
     """
     Traverse up the DOM from the title element (found by text) to find a parent
     that has an interactive input element either:
