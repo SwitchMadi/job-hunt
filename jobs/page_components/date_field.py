@@ -766,6 +766,7 @@ class DateField(PageComponent):
                             prompt=prompt,
                             job_title=self.parent_application_page.parent_job.title,
                             job_url=self.parent_application_page.url,
+                            container_x_path=self.container_x_path,
                         )
                     )
 
@@ -818,6 +819,7 @@ class DateField(PageComponent):
                             prompt=prompt,
                             job_title=self.parent_application_page.parent_job.title,
                             job_url=self.parent_application_page.url,
+                            container_x_path=self.container_x_path,
                         )
 
                         if not xpath:
@@ -846,6 +848,7 @@ class DateField(PageComponent):
                     prompt=prompt,
                     job_title=self.parent_application_page.parent_job.title,
                     job_url=self.parent_application_page.url,
+                    container_x_path=self.container_x_path,
                 )
 
                 if not input_data.date_field.xpath:

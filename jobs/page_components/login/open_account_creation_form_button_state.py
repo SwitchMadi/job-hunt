@@ -127,11 +127,13 @@ class OpenAccountCreationFormButtonState(LoginState):
                 from jobs.page_components import ApplicationField
 
                 prompt = "The x_path that we are trying to extract is of button to open account creation form."
+                container_x_path = button.popup_container_x_path if button.button_in_popup and button.popup_container_x_path else None
                 correct_x_path = ApplicationField.extract_correct_x_path(
                     prev_x_path=button.button_x_path,
                     prompt=prompt,
                     job_title=self.parent_application_page.parent_job.title,
                     job_url=self.parent_application_page.url,
+                    container_x_path=container_x_path,
                 )
                 if correct_x_path:
                     button.button_x_path = correct_x_path
