@@ -1465,15 +1465,8 @@ class ApplicationField:
             f"x_path, try to assess yourself if the x_path is correct or not. If it is not correct then try again to "
             f"find the correct x_path.\n"
             f"Previous x_path - {prev_x_path}\n"
+            f"{prompt}\n"
         )
-        
-        if container_x_path:
-            user_prompt += (
-                f"CRITICAL: Ideally, the target element should exist within a container element with XPath: {container_x_path}. "
-                f"When searching for the correct x_path, prioritize finding the element within this container.\n"
-            )
-        
-        user_prompt += f"{prompt}\n"
 
         class CorrectXPath(BaseModel):
             possible_x_paths: List[str] = Field(
