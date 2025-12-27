@@ -18,6 +18,7 @@ from utilities.selenium import (
     element_exists,
     simulate_empty_area_click,
     is_element_in_popup,
+    extract_element_value,
 )
 from utilities.gpt import get_gpt_response
 from utilities import constants
@@ -160,7 +161,7 @@ class TextInput(PageComponent):
                     logger.info(
                         f"Answer for '{self.title}' doesn't meet input format expectations, reformatting..."
                     )
-                    self._answer = self._format_answer_if_needed(
+                    self._answer = self._format_answer(
                         self.answer, self._input_format_expectations
                     )
 
@@ -316,8 +317,6 @@ class TextInput(PageComponent):
         Returns:
             InputFormatExpectations object with detected constraints.
         """
-        global driver
-
         expectations = InputFormatExpectations()
 
         try:
@@ -330,29 +329,13 @@ class TextInput(PageComponent):
                 )
                 return expectations
 
-            # Helper to get current value from element
-            def get_element_value():
-                return element.get_attribute("value") or ""
-
-            # Helper to clear and reset the field
-            def clear_field():
-                try:
-                    clear_text_field(
-                        self.x_path, title=self.title, container_xpath=self.container_x_path
-                    )
-                except Exception:
-                    # Fallback: select all and delete
-                    try:
-                        element.send_keys(Keys.CONTROL + "a")
-                        element.send_keys(Keys.DELETE)
-                    except Exception:
-                        pass
-
             # Test 1: Check if numeric characters are allowed
-            clear_field()
+            clear_text_field(
+                self.x_path, title=self.title, container_xpath=self.container_x_path
+            )
             test_numeric = "12345"
             element.send_keys(test_numeric)
-            actual_value = get_element_value()
+            actual_value = extract_element_value(element) or ""
             # Check if any numeric chars were accepted
             numeric_accepted = any(c in actual_value for c in test_numeric)
             expectations.allows_numeric = numeric_accepted
@@ -361,10 +344,12 @@ class TextInput(PageComponent):
             )
 
             # Test 2: Check if alphabetic characters are allowed
-            clear_field()
+            clear_text_field(
+                self.x_path, title=self.title, container_xpath=self.container_x_path
+            )
             test_alpha = "abcde"
             element.send_keys(test_alpha)
-            actual_value = get_element_value()
+            actual_value = extract_element_value(element) or ""
             # Check if any alpha chars were accepted
             alpha_accepted = any(c in actual_value.lower() for c in test_alpha)
             expectations.allows_alpha = alpha_accepted
@@ -373,16 +358,20 @@ class TextInput(PageComponent):
             )
 
             # Test 3: Check special characters
-            clear_field()
+            clear_text_field(
+                self.x_path, title=self.title, container_xpath=self.container_x_path
+            )
             special_chars_to_test = "!@#$%^&*()-_=+[]{}|;:',.<>?/\\`~"
             allowed_special = []
             disallowed_special = []
 
             for char in special_chars_to_test:
-                clear_field()
+                clear_text_field(
+                    self.x_path, title=self.title, container_xpath=self.container_x_path
+                )
                 try:
                     element.send_keys(char)
-                    actual_value = get_element_value()
+                    actual_value = extract_element_value(element) or ""
                     if char in actual_value:
                         allowed_special.append(char)
                     else:
@@ -401,10 +390,12 @@ class TextInput(PageComponent):
             )
 
             # Test 4: Check max length
-            clear_field()
+            clear_text_field(
+                self.x_path, title=self.title, container_xpath=self.container_x_path
+            )
             test_long_string = "a" * 500
             element.send_keys(test_long_string)
-            actual_value = get_element_value()
+            actual_value = extract_element_value(element) or ""
             actual_length = len(actual_value)
 
             if actual_length < 500:
@@ -414,7 +405,9 @@ class TextInput(PageComponent):
                 logger.debug("No max length constraint detected (500+ chars accepted)")
 
             # Clean up: clear the field after detection
-            clear_field()
+            clear_text_field(
+                self.x_path, title=self.title, container_xpath=self.container_x_path
+            )
 
             logger.info(
                 f"Input format expectations detected for '{self.title}': "
@@ -483,11 +476,14 @@ class TextInput(PageComponent):
 
         return True
 
-    def _format_answer_if_needed(
+    def _format_answer(
         self, answer: str, expectations: InputFormatExpectations
     ) -> str:
         """
         Format the answer to meet input format expectations using GPT.
+
+        This method should only be called when the answer does not meet the
+        detected input format expectations.
 
         Args:
             answer: The original answer string.
