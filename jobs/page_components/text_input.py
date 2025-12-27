@@ -56,19 +56,19 @@ class InputFormatExpectations(BaseModel):
         return cls(**data)
 
 
-# Categories that should skip input validation (known formats or special handling)
-SKIP_INPUT_VALIDATION_CATEGORIES = {
-    "otp_textbox",
-    "date_field",
-    "password",
-    "username",
-    "email",
+# Categories that should undergo input format validation
+VALIDATE_INPUT_FORMAT_CATEGORIES = {
     "phone_country_code",
     "phone_number_without_country_code",
-    "first_name",
-    "middle_name",
-    "last_name",
-    "full_name",
+    "other",
+}
+
+# Patterns in category names that should trigger validation (for dynamic categories)
+VALIDATE_INPUT_FORMAT_PATTERNS = {
+    "work_experience__responsibilities__",
+    "work_experience__achievements__",
+    "work_experience__other__",
+    "education__other__",
 }
 
 
@@ -287,6 +287,12 @@ class TextInput(PageComponent):
         """
         Determine if input format validation should be performed for this field.
 
+        Validation is performed only for specific categories:
+        - Phone related fields (phone_country_code, phone_number_without_country_code)
+        - Other (generic text fields)
+        - Work experience: responsibilities, achievements, other
+        - Education: other
+
         Args:
             skip_validation: If True, skip validation regardless of category.
 
@@ -297,15 +303,21 @@ class TextInput(PageComponent):
         if skip_validation:
             return False
 
-        # Skip for special categories
-        if self.category in SKIP_INPUT_VALIDATION_CATEGORIES:
+        # Skip if no category
+        if not self.category:
             return False
 
-        # Skip for date sub-fields
-        if self.category and self.category.endswith(("- month", "- day", "- year")):
-            return False
+        # Check if category is in the explicit validation list
+        if self.category in VALIDATE_INPUT_FORMAT_CATEGORIES:
+            return True
 
-        return True
+        # Check if category matches any of the validation patterns (for dynamic categories)
+        for pattern in VALIDATE_INPUT_FORMAT_PATTERNS:
+            if pattern in self.category:
+                return True
+
+        # All other categories should not be validated
+        return False
 
     def _detect_input_format_expectations(self) -> InputFormatExpectations:
         """
