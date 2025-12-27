@@ -75,8 +75,8 @@ class PhoneInfo(PageComponent):
 
         user_input_element = None
         try:
-            element_identified, user_input_element = find_input_block_for_title(
-                self.title
+            element_identified, user_input_element, computed_container_xpath = (
+                find_input_block_for_title(self.title)
             )
             if not element_identified:
                 logger.warn(

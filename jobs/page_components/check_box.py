@@ -448,8 +448,8 @@ class CheckBox(PageComponent):
     def _validate_checkbox_using_llm(title, container_xpath=None):
         global driver
 
-        element_identified, user_input_element = find_input_block_for_title(
-            title, container_xpath=container_xpath
+        element_identified, user_input_element, computed_container_xpath = (
+            find_input_block_for_title(title, container_xpath=container_xpath)
         )
         if user_input_element:
             minified_html = minify_html_for_gpt_prompt(

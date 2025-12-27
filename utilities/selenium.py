@@ -1567,6 +1567,7 @@ def minify_html_for_gpt_prompt(html_content):
         "tbody",
         "tfoot",
         "i",
+        "fieldset",
     ]
 
     # Remove all children from each SVG tag so that only the tag remains with its attributes
@@ -1975,6 +1976,42 @@ def is_interactive_element(el):
         return False
 
 
+def get_interactive_elements_in_container(container_xpath):
+    """
+    Get interactive elements and their count within a container element.
+
+    Args:
+        container_xpath: XPath of the container element
+
+    Returns:
+        tuple: (list of WebElements, dict with tag counts) - (interactive_elements, tag_counts)
+        - interactive_elements: List of all interactive WebElements found in the container
+        - tag_counts: Dictionary mapping tag names to their counts (e.g., {'input': 2, 'textarea': 1})
+    """
+    global driver
+
+    try:
+        container_element = driver.find_element(By.XPATH, container_xpath)
+        # Find all descendants that are interactive
+        all_descendants = container_element.find_elements(By.XPATH, ".//*")
+
+        interactive_elements = []
+        tag_counts = {}
+
+        for el in all_descendants:
+            if is_interactive_element(el):
+                interactive_elements.append(el)
+                tag_name = el.tag_name.lower()
+                tag_counts[tag_name] = tag_counts.get(tag_name, 0) + 1
+
+        return interactive_elements, tag_counts
+    except Exception as e:
+        logging.warning(
+            f"Error getting interactive elements in container {container_xpath}: {e}"
+        )
+        return [], {}
+
+
 def find_first_interactive_descendant_excluding(base_el, exclude_el):
     try:
         all_descendants = base_el.find_elements(By.XPATH, ".//*")
@@ -1996,41 +2033,108 @@ def find_input_block_for_title(title, max_levels: int = 7, container_xpath=None)
     - on the element itself
     - as a sibling
     - or in a common ancestor outside the title's own subtree
+
+    Returns:
+        tuple: (bool, WebElement, str|None) - (found, container_element, container_xpath)
+        - found: True if input block found, False otherwise
+        - container_element: The parent container WebElement, or None/current if not found
+        - container_xpath: The computed container xpath (only if container_xpath was not provided as input, else None)
     """
     global driver
 
     title_xpath = get_xpath_by_text(title, container_xpath=container_xpath)
     if not title_xpath:
-        return False, None
+        # Can't compute container_xpath if title not found
+        return False, None, None
 
     title_element = driver.find_element(By.XPATH, title_xpath)
+
+    # Only compute container_xpath if it wasn't provided as input
+    computed_container_xpath = None
+    text_xpath = None
+    if container_xpath is None:
+        # Generate text xpath based on quote type and verify it points to same element
+        # Format per requirements:
+        # - If text contains single quote: (//*[text()[contains(normalize-space(.), 'TEXT')]])[last()]
+        # - If text contains double quote: (//*[text()[contains(normalize-space(.), "TEXT")]])[last()]
+        if "'" in title:
+            # Text contains single quote, use single quotes in xpath format (escape by doubling)
+            escaped_title = title.replace("'", "''")
+            text_xpath = f"(//*[text()[contains(normalize-space(.), '{escaped_title}')]])[last()]"
+        elif '"' in title:
+            # Text contains double quote, use double quotes in xpath format
+            # Need to use concat() to handle double quotes properly in XPath
+            # Split the string at double quotes and use concat to rebuild
+            parts = title.split('"')
+            concat_parts = []
+            for i, part in enumerate(parts):
+                if part:  # Add the text part
+                    concat_parts.append(f"'{part}'")
+                if i < len(parts) - 1:  # Add the double quote (except after last part)
+                    concat_parts.append('"')
+            concat_expr = ", ".join(concat_parts)
+            text_xpath = f"(//*[text()[contains(normalize-space(.), concat({concat_expr}))]])[last()]"
+        else:
+            # Text contains neither quote, use single quotes (default)
+            text_xpath = (
+                f"(//*[text()[contains(normalize-space(.), '{title}')]])[last()]"
+            )
+
+        # Verify text_xpath points to the same element as title_element
+        try:
+            text_xpath_element = driver.find_element(By.XPATH, text_xpath)
+            # Compare if both elements refer to the same DOM node using JavaScript
+            # This works even if elements don't have id attributes
+            is_same_element = driver.execute_script(
+                "return arguments[0] === arguments[1];",
+                text_xpath_element,
+                title_element,
+            )
+            if not is_same_element:
+                text_xpath = None  # Don't use if it doesn't point to same element
+        except Exception:
+            text_xpath = None  # Don't use if xpath is invalid or element not found
+
+    ancestor_level = 0
 
     # 1. Check if the title element itself is interactive
     if is_interactive_element(title_element):
         parent = title_element.find_element(By.XPATH, "..")
-        return True, parent
+        ancestor_level = 1
+        if container_xpath is None and text_xpath:
+            computed_container_xpath = f"{text_xpath}/ancestor::*[1]"
+        return True, parent, computed_container_xpath
 
     # 2. Check if any siblings are interactive
     parent = title_element.find_element(By.XPATH, "..")
     siblings = parent.find_elements(By.XPATH, "./*")
     for sib in siblings:
         if sib.id != title_element.id and is_interactive_element(sib):
-            return True, parent
+            ancestor_level = 1
+            if container_xpath is None and text_xpath:
+                computed_container_xpath = f"{text_xpath}/ancestor::*[1]"
+            return True, parent, computed_container_xpath
 
     # 3. Traverse upwards and search other descendant interactive inputs
     current = title_element
-    for _ in range(max_levels):
+    for level in range(1, max_levels + 1):
         parent = current.find_element(By.XPATH, "..")
 
         interactive_input = find_first_interactive_descendant_excluding(
             parent, title_element
         )
         if interactive_input:
-            return True, parent
+            ancestor_level = level
+            if container_xpath is None and text_xpath:
+                computed_container_xpath = f"{text_xpath}/ancestor::*[{level}]"
+            return True, parent, computed_container_xpath
 
         current = parent
 
-    return False, current
+    # No input found, but return the last traversed element
+    if container_xpath is None and text_xpath:
+        computed_container_xpath = f"{text_xpath}/ancestor::*[{max_levels}]"
+    return False, current, computed_container_xpath
 
 
 def get_unique_element_by_xpath(
@@ -2049,7 +2153,7 @@ def get_unique_element_by_xpath(
         return elements[0]
     elif len(elements) > 1:
         if title:
-            element_identified, user_input_element = find_input_block_for_title(
+            element_identified, user_input_element, _ = find_input_block_for_title(
                 title, container_xpath=container_xpath
             )
             if element_identified:

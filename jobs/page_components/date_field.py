@@ -636,8 +636,10 @@ class DateField(PageComponent):
 
         user_input_element = None
         try:
-            element_identified, user_input_element = find_input_block_for_title(
-                self.title, container_xpath=self.container_x_path
+            element_identified, user_input_element, computed_container_xpath = (
+                find_input_block_for_title(
+                    self.title, container_xpath=self.container_x_path
+                )
             )
             if not element_identified:
                 logger.warn(

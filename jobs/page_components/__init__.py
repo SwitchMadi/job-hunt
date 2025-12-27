@@ -2,7 +2,7 @@ import time
 from abc import ABC, abstractmethod
 import re
 import importlib
-from pydantic import BaseModel, Field, Len
+from pydantic import BaseModel, Field
 from enum import Enum
 from typing import Optional, List, Annotated
 from selenium.common import (
@@ -27,6 +27,7 @@ from utilities.selenium import (
     get_element_xpath,
     find_input_block_for_title,
     get_unique_element_by_xpath,
+    get_interactive_elements_in_container,
 )
 from utilities.logging import get_logger
 from utilities import pascal_to_snake_casing, retry, constants
@@ -117,9 +118,12 @@ class ApplicationField:
         )
 
         user_input_element = None
+        computed_container_xpath = None
         try:
-            element_identified, user_input_element = find_input_block_for_title(
-                self.title, container_xpath=self.container_x_path
+            element_identified, user_input_element, computed_container_xpath = (
+                find_input_block_for_title(
+                    self.title, container_xpath=self.container_x_path
+                )
             )
             if not element_identified:
                 logger.warn(
@@ -137,6 +141,8 @@ class ApplicationField:
             minified_html = minify_html_for_gpt_prompt(
                 user_input_element.get_attribute("outerHTML")
             )
+            if (not self.container_x_path) and computed_container_xpath:
+                self.container_x_path = computed_container_xpath
         elif self.container_x_path and element_exists(self.container_x_path):
             logger.info(
                 f"User input element not found so using container_x_path for HTML extraction for "
@@ -351,6 +357,20 @@ class ApplicationField:
                         )
                         application_field.x_path = modified_xpath
 
+            # Form xpath from container if conditions are met
+            if (
+                application_field.html_type in ["text_box", "dropdown"]
+                and application_field.field_type.value in ["text_field", "other"]
+                and (
+                    not application_field.x_path
+                    or not element_exists(application_field.x_path)
+                )
+                and self.container_x_path
+            ):
+                formed_xpath = self._form_xpath_from_container(self.container_x_path)
+                if formed_xpath:
+                    application_field.x_path = formed_xpath
+
             if (
                 (application_field.field_type.value != "date_field")
                 and not (
@@ -386,7 +406,9 @@ class ApplicationField:
 
             # Check if container exists and xpath is not unique (exists more than once)
             if (
-                self.container_x_path
+                application_field.html_type in ["text_box", "dropdown"]
+                and application_field.field_type.value in ["text_field", "other"]
+                and self.container_x_path
                 and element_exists(self.container_x_path)
                 and element_exists(application_field.x_path)
             ):
@@ -527,6 +549,49 @@ class ApplicationField:
 
         return options_container_x_path, options_xpath_pattern
 
+    def _form_xpath_from_container(self, container_xpath):
+        """
+        Form xpath relative to container xpath if there's exactly one interactive element.
+
+        Args:
+            container_xpath: XPath of the container element
+
+        Returns:
+            str or None: XPath relative to container (e.g., container_xpath//input) if exactly
+                        one interactive element found, None otherwise
+        """
+        global driver
+
+        try:
+            interactive_elements, tag_counts = get_interactive_elements_in_container(
+                container_xpath
+            )
+
+            # Only form xpath if there's exactly one interactive element
+            if len(interactive_elements) != 1:
+                logger.info(
+                    f"Container {container_xpath} has {len(interactive_elements)} interactive elements, "
+                    f"not forming xpath from container for field {self.title}"
+                )
+                return None
+
+            # Get the tag name of the single interactive element
+            tag_name = interactive_elements[0].tag_name.lower()
+
+            # Form xpath relative to container: container_xpath//tag_name
+            relative_xpath = f"{container_xpath}//{tag_name}"
+
+            logger.info(
+                f"Formed xpath from container for field {self.title}: {relative_xpath}"
+            )
+
+            return relative_xpath
+        except Exception as e:
+            logger.warning(
+                f"Error forming xpath from container {container_xpath} for field {self.title}: {e}"
+            )
+            return None
+
     def _extract_options_pattern_using_llm(
         self,
         prev_options_container_x_path=None,
@@ -546,8 +611,10 @@ class ApplicationField:
             question_prompt = f"There is a checkbox/radio button field on this page with title as following -\n{self.title}"
 
         # Try to find input block for title
-        element_identified, user_input_element = find_input_block_for_title(
-            self.title, container_xpath=self.container_x_path
+        element_identified, user_input_element, computed_container_xpath = (
+            find_input_block_for_title(
+                self.title, container_xpath=self.container_x_path
+            )
         )
         if user_input_element:
             container_html = user_input_element.get_attribute("outerHTML")
@@ -790,8 +857,10 @@ class ApplicationField:
                 return "dropdown", container_x_path
 
             # try once more if there is any button inside the text box element
-            element_identified, user_input_element = find_input_block_for_title(
-                field_title, container_xpath=self.container_x_path
+            element_identified, user_input_element, computed_container_xpath = (
+                find_input_block_for_title(
+                    field_title, container_xpath=self.container_x_path
+                )
             )
             if element_identified and user_input_element:
                 try:
@@ -1562,10 +1631,10 @@ class ApplicationField:
             )
 
         class CorrectXPath(BaseModel):
-            possible_x_paths: Annotated[
-                List[XPathEntry], Len(min_length=xpath_count, max_length=xpath_count)
-            ] = Field(
+            possible_x_paths: List[XPathEntry] = Field(
                 ...,
+                min_items=xpath_count,
+                max_items=xpath_count,
                 description=f"{xpath_count} Possible correct XPaths of the element. For each XPath, provide the x_path string "
                 "and indicate whether it uses_alphanumeric patterns.",
             )
