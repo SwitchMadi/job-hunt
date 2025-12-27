@@ -2,7 +2,7 @@ import time
 from abc import ABC, abstractmethod
 import re
 import importlib
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from enum import Enum
 from typing import Optional, List
 from selenium.common import (
@@ -1561,12 +1561,28 @@ class ApplicationField:
                 "Set to True if the XPath contains such patterns, False otherwise.",
             )
 
+        # Create validator function that captures xpath_count from outer scope
+        def create_xpath_count_validator(count):
+            @field_validator('possible_x_paths')
+            @classmethod
+            def validate_xpath_count(cls, v):
+                if len(v) != count:
+                    raise ValueError(
+                        f"Expected exactly {count} XPaths, but got {len(v)}. "
+                        f"Please provide exactly {count} XPath entries."
+                    )
+                return v
+            return validate_xpath_count
+
         class CorrectXPath(BaseModel):
             possible_x_paths: List[XPathEntry] = Field(
                 ...,
                 description=f"{xpath_count} Possible correct XPaths of the element. For each XPath, provide the x_path string "
                 "and indicate whether it uses_alphanumeric patterns.",
+                min_length=xpath_count,
+                max_length=xpath_count,
             )
+            validate_xpath_count = create_xpath_count_validator(xpath_count)
 
         correct_x_path_found, correct_x_path = get_gpt_response(
             constants.gpt["system_prompts"]["application_step_identification"],
