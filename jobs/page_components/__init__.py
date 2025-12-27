@@ -2,9 +2,9 @@ import time
 from abc import ABC, abstractmethod
 import re
 import importlib
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, Len
 from enum import Enum
-from typing import Optional, List
+from typing import Optional, List, Annotated
 from selenium.common import (
     ElementClickInterceptedException,
     ElementNotInteractableException,
@@ -1562,12 +1562,10 @@ class ApplicationField:
             )
 
         class CorrectXPath(BaseModel):
-            possible_x_paths: List[XPathEntry] = Field(
+            possible_x_paths: Annotated[List[XPathEntry], Len(min_length=xpath_count, max_length=xpath_count)] = Field(
                 ...,
                 description=f"{xpath_count} Possible correct XPaths of the element. For each XPath, provide the x_path string "
                 "and indicate whether it uses_alphanumeric patterns.",
-                min_length=xpath_count,
-                max_length=xpath_count,
             )
 
         correct_x_path_found, correct_x_path = get_gpt_response(
