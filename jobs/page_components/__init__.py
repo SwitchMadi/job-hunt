@@ -1562,7 +1562,9 @@ class ApplicationField:
             )
 
         class CorrectXPath(BaseModel):
-            possible_x_paths: Annotated[List[XPathEntry], Len(min_length=xpath_count, max_length=xpath_count)] = Field(
+            possible_x_paths: Annotated[
+                List[XPathEntry], Len(min_length=xpath_count, max_length=xpath_count)
+            ] = Field(
                 ...,
                 description=f"{xpath_count} Possible correct XPaths of the element. For each XPath, provide the x_path string "
                 "and indicate whether it uses_alphanumeric patterns.",

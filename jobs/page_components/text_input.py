@@ -43,7 +43,8 @@ class InputFormatExpectations(BaseModel):
         description="List of special characters that are explicitly disallowed.",
     )
     max_length: Optional[int] = Field(
-        default=None, description="Maximum character length allowed. None means no limit detected."
+        default=None,
+        description="Maximum character length allowed. None means no limit detected.",
     )
 
     def to_dict(self) -> dict:
@@ -103,7 +104,9 @@ class TextInput(PageComponent):
         self.next = None
         self.prev = None
 
-    def proceed(self, retry=False, start_mutation_observer=False, skip_input_validation=False):
+    def proceed(
+        self, retry=False, start_mutation_observer=False, skip_input_validation=False
+    ):
         global driver
 
         answer_input_successful = False
@@ -149,10 +152,14 @@ class TextInput(PageComponent):
                 return answer_input_successful
 
             # Input format validation and formatting (for non-special categories)
-            if self._should_validate_input_format(skip_validation=skip_input_validation):
+            if self._should_validate_input_format(
+                skip_validation=skip_input_validation
+            ):
                 # Detect input format expectations if not already done
                 if self._input_format_expectations is None:
-                    self._input_format_expectations = self._detect_input_format_expectations()
+                    self._input_format_expectations = (
+                        self._detect_input_format_expectations()
+                    )
 
                 # Check if answer meets expectations and format if needed
                 if not self._answer_meets_expectations(
@@ -455,7 +462,10 @@ class TextInput(PageComponent):
         answer_str = str(answer)
 
         # Check max length
-        if expectations.max_length is not None and len(answer_str) > expectations.max_length:
+        if (
+            expectations.max_length is not None
+            and len(answer_str) > expectations.max_length
+        ):
             logger.debug(
                 f"Answer exceeds max length: {len(answer_str)} > {expectations.max_length}"
             )
@@ -467,12 +477,16 @@ class TextInput(PageComponent):
 
         # If answer has numeric but field doesn't allow numeric
         if has_numeric and not expectations.allows_numeric:
-            logger.debug("Answer contains numeric characters but field doesn't allow them")
+            logger.debug(
+                "Answer contains numeric characters but field doesn't allow them"
+            )
             return False
 
         # If answer has alpha but field doesn't allow alpha
         if has_alpha and not expectations.allows_alpha:
-            logger.debug("Answer contains alphabetic characters but field doesn't allow them")
+            logger.debug(
+                "Answer contains alphabetic characters but field doesn't allow them"
+            )
             return False
 
         # Check special characters
@@ -483,14 +497,14 @@ class TextInput(PageComponent):
                     and not char.isspace()
                     and char in expectations.disallowed_special_characters
                 ):
-                    logger.debug(f"Answer contains disallowed special character: '{char}'")
+                    logger.debug(
+                        f"Answer contains disallowed special character: '{char}'"
+                    )
                     return False
 
         return True
 
-    def _format_answer(
-        self, answer: str, expectations: InputFormatExpectations
-    ) -> str:
+    def _format_answer(self, answer: str, expectations: InputFormatExpectations) -> str:
         """
         Format the answer to meet input format expectations using GPT.
 
@@ -518,7 +532,9 @@ class TextInput(PageComponent):
             constraints.append("NO alphabetic characters (a-z, A-Z) are allowed")
 
         if expectations.max_length is not None:
-            constraints.append(f"Maximum length is {expectations.max_length} characters")
+            constraints.append(
+                f"Maximum length is {expectations.max_length} characters"
+            )
 
         if expectations.disallowed_special_characters:
             disallowed_chars = "".join(expectations.disallowed_special_characters)
