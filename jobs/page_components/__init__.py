@@ -216,14 +216,26 @@ class ApplicationField:
             multiple_choice = "multiple_choice"
             other = "other"
 
+        class XPathInfo(BaseModel):
+            x_path: Optional[str] = Field(
+                ...,
+                description="XPath of the application field which can be used in selenium chrome driver to search the "
+                "application field. Don't use HTML hierarchy to construct XPath. XPath of the first field "
+                "if there are many.",
+            )
+            uses_alphanumeric: bool = Field(
+                ...,
+                description="Whether this XPath uses alphanumeric strings (like 'id-123abc', 'element-456xyz', "
+                "or any attribute values containing random alphanumeric characters) that may change when the page reloads. "
+                "Set to True if the XPath contains such patterns, False otherwise.",
+            )
+
         if user_input_element:
 
             class ApplicationFieldInfo(BaseModel):
-                x_path: Optional[str] = Field(
+                x_path_info: XPathInfo = Field(
                     ...,
-                    description="XPath of the application field which can be used in selenium chrome driver to search the "
-                    "application field. Don't use HTML hierarchy to construct XPath. XPath of the first field "
-                    "if there are many.",
+                    description="XPath information of the application field, including the xpath string and whether it uses alphanumeric IDs.",
                 )
                 is_field_match_confident: bool = Field(
                     ...,
@@ -256,11 +268,9 @@ class ApplicationField:
         else:
 
             class ApplicationFieldInfo(BaseModel):
-                x_path: Optional[str] = Field(
+                x_path_info: XPathInfo = Field(
                     ...,
-                    description="XPath of the application field which can be used in selenium chrome driver to search the "
-                    "application field. Don't use HTML hierarchy to construct XPath. XPath of the first field "
-                    "if there are many.",
+                    description="XPath information of the application field, including the xpath string and whether it uses alphanumeric IDs.",
                 )
                 is_field_match_confident: bool = Field(
                     ...,
@@ -329,33 +339,40 @@ class ApplicationField:
                     return None
 
             if (
-                application_field.x_path.startswith("/")
-                and not application_field.x_path.startswith("//")
-                and not element_exists(application_field.x_path)
+                application_field.x_path_info.x_path
+                and application_field.x_path_info.x_path.startswith("/")
+                and not application_field.x_path_info.x_path.startswith("//")
+                and not element_exists(application_field.x_path_info.x_path)
             ):
-                application_field.x_path = "/" + application_field.x_path
+                application_field.x_path_info.x_path = (
+                    "/" + application_field.x_path_info.x_path
+                )
 
             # Try replacing contains(text(), ...) with contains(., ...) if element not found
             # This helps when HTML is minified and text nodes might be trimmed
-            if not element_exists(application_field.x_path):
+            if application_field.x_path_info.x_path and not element_exists(
+                application_field.x_path_info.x_path
+            ):
                 contains_text_pattern = r"contains\(text\(\),\s*(['\"])([^'\"]+)\1\)"
-                match = re.search(contains_text_pattern, application_field.x_path)
+                match = re.search(
+                    contains_text_pattern, application_field.x_path_info.x_path
+                )
                 if match:
                     quote_char = match.group(1)
                     text_content = match.group(2)
                     modified_xpath = re.sub(
                         contains_text_pattern,
                         f"contains(., {quote_char}{text_content}{quote_char})",
-                        application_field.x_path,
+                        application_field.x_path_info.x_path,
                     )
                     if element_exists(modified_xpath):
                         logger.info(
                             f"Element found after replacing contains(text(), ...) with contains(., ...) "
                             f"for {self.title} & {self.category} in "
                             f"{self.parent_application_page.parent_job.title}. "
-                            f"Original xpath: {application_field.x_path}, Modified xpath: {modified_xpath}"
+                            f"Original xpath: {application_field.x_path_info.x_path}, Modified xpath: {modified_xpath}"
                         )
-                        application_field.x_path = modified_xpath
+                        application_field.x_path_info.x_path = modified_xpath
 
             # Form xpath from container if conditions are met
             if (
@@ -363,14 +380,22 @@ class ApplicationField:
                 in ["text_box", "dropdown", "dropdown_button"]
                 and application_field.field_type.value in ["text_field", "other"]
                 and (
-                    not application_field.x_path
-                    or not element_exists(application_field.x_path)
+                    not application_field.x_path_info.x_path
+                    or not element_exists(application_field.x_path_info.x_path)
+                    or application_field.x_path_info.uses_alphanumeric
                 )
                 and self.container_x_path
             ):
                 formed_xpath = self._form_xpath_from_container(self.container_x_path)
                 if formed_xpath:
-                    application_field.x_path = formed_xpath
+                    logger.info(
+                        f"Replacing xpath {'(has alphanumeric IDs)' if application_field.x_path_info.uses_alphanumeric else ''} "
+                        f"with container-based xpath for {self.title} & {self.category} in "
+                        f"{self.parent_application_page.parent_job.title}. "
+                        f"Original xpath: {application_field.x_path_info.x_path}, Container based xpath: {formed_xpath}"
+                    )
+                    application_field.x_path_info.x_path = formed_xpath
+                    application_field.x_path_info.uses_alphanumeric = False
 
             if (
                 (application_field.field_type.value != "date_field")
@@ -381,10 +406,11 @@ class ApplicationField:
                         or application_field.options_xpath_pattern
                     )
                 )
-                and not element_exists(application_field.x_path)
+                and application_field.x_path_info.x_path
+                and not element_exists(application_field.x_path_info.x_path)
             ):
                 logger.warn(
-                    f"Element with x_path {application_field.x_path} doesn't exist for "
+                    f"Element with x_path {application_field.x_path_info.x_path} doesn't exist for "
                     f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
                 )
                 prompt = (
@@ -393,7 +419,7 @@ class ApplicationField:
                     f"Field category - {self.category}\n"
                 )
                 correct_x_path = self.extract_correct_x_path(
-                    prev_x_path=application_field.x_path,
+                    prev_x_path=application_field.x_path_info.x_path,
                     prompt=prompt,
                     job_title=self.parent_application_page.parent_job.title,
                     job_url=self.parent_application_page.url,
@@ -403,7 +429,7 @@ class ApplicationField:
                 if not correct_x_path:
                     return None
                 else:
-                    application_field.x_path = correct_x_path
+                    application_field.x_path_info.x_path = correct_x_path
 
             # Check if container exists and xpath is not unique (exists more than once)
             if (
@@ -412,13 +438,16 @@ class ApplicationField:
                 and application_field.field_type.value in ["text_field", "other"]
                 and self.container_x_path
                 and element_exists(self.container_x_path)
-                and element_exists(application_field.x_path)
+                and application_field.x_path_info.x_path
+                and element_exists(application_field.x_path_info.x_path)
             ):
                 try:
-                    elements = driver.find_elements(By.XPATH, application_field.x_path)
+                    elements = driver.find_elements(
+                        By.XPATH, application_field.x_path_info.x_path
+                    )
                     if len(elements) > 1:
                         logger.warn(
-                            f"Element with x_path {application_field.x_path} exists {len(elements)} times on the page "
+                            f"Element with x_path {application_field.x_path_info.x_path} exists {len(elements)} times on the page "
                             f"for {self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}. "
                             f"Container exists, attempting to extract a more specific xpath..."
                         )
@@ -432,7 +461,7 @@ class ApplicationField:
                             f"or be constructed relative to the container to ensure it targets the correct element."
                         )
                         correct_x_path = self.extract_correct_x_path(
-                            prev_x_path=application_field.x_path,
+                            prev_x_path=application_field.x_path_info.x_path,
                             prompt=prompt,
                             job_title=self.parent_application_page.parent_job.title,
                             job_url=self.parent_application_page.url,
@@ -440,23 +469,26 @@ class ApplicationField:
                             container_x_path=self.container_x_path,
                         )
                         if correct_x_path:
-                            application_field.x_path = correct_x_path
+                            application_field.x_path_info.x_path = correct_x_path
                 except Exception as e:
                     logger.warn(
-                        f"Error checking uniqueness of x_path {application_field.x_path} for "
+                        f"Error checking uniqueness of x_path {application_field.x_path_info.x_path} for "
                         f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}. "
                         f"Error: {str(e)}"
                     )
 
-            if self.parent_application_page.component_x_path_exists(
-                application_field.x_path
+            if (
+                application_field.x_path_info.x_path
+                and self.parent_application_page.component_x_path_exists(
+                    application_field.x_path_info.x_path
+                )
             ):
                 logger.warn(
-                    f"Page component with following x_path already exists - {application_field.x_path}"
+                    f"Page component with following x_path already exists - {application_field.x_path_info.x_path}"
                 )
                 return
 
-            self.x_path = application_field.x_path
+            self.x_path = application_field.x_path_info.x_path
             self.field_type = application_field.field_type.value
             self.html_type = application_field.html_type.value
             self.format = application_field.format
