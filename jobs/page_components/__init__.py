@@ -359,7 +359,8 @@ class ApplicationField:
 
             # Form xpath from container if conditions are met
             if (
-                application_field.html_type in ["text_box", "dropdown"]
+                application_field.html_type.value
+                in ["text_box", "dropdown", "dropdown_button"]
                 and application_field.field_type.value in ["text_field", "other"]
                 and (
                     not application_field.x_path
@@ -374,7 +375,7 @@ class ApplicationField:
             if (
                 (application_field.field_type.value != "date_field")
                 and not (
-                    application_field.html_type != "dropdown"
+                    application_field.html_type.value != "dropdown"
                     and (
                         application_field.options_container_x_path
                         or application_field.options_xpath_pattern
@@ -406,7 +407,8 @@ class ApplicationField:
 
             # Check if container exists and xpath is not unique (exists more than once)
             if (
-                application_field.html_type in ["text_box", "dropdown"]
+                application_field.html_type.value
+                in ["text_box", "dropdown", "dropdown_button"]
                 and application_field.field_type.value in ["text_field", "other"]
                 and self.container_x_path
                 and element_exists(self.container_x_path)

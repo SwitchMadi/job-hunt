@@ -2054,31 +2054,39 @@ def find_input_block_for_title(title, max_levels: int = 7, container_xpath=None)
     text_xpath = None
     if container_xpath is None:
         # Generate text xpath based on quote type and verify it points to same element
-        # Format per requirements:
-        # - If text contains single quote: (//*[text()[contains(normalize-space(.), 'TEXT')]])[last()]
-        # - If text contains double quote: (//*[text()[contains(normalize-space(.), "TEXT")]])[last()]
-        if "'" in title:
-            # Text contains single quote, use single quotes in xpath format (escape by doubling)
-            escaped_title = title.replace("'", "''")
-            text_xpath = f"(//*[text()[contains(normalize-space(.), '{escaped_title}')]])[last()]"
-        elif '"' in title:
-            # Text contains double quote, use double quotes in xpath format
-            # Need to use concat() to handle double quotes properly in XPath
-            # Split the string at double quotes and use concat to rebuild
-            parts = title.split('"')
-            concat_parts = []
-            for i, part in enumerate(parts):
-                if part:  # Add the text part
-                    concat_parts.append(f"'{part}'")
-                if i < len(parts) - 1:  # Add the double quote (except after last part)
-                    concat_parts.append('"')
-            concat_expr = ", ".join(concat_parts)
-            text_xpath = f"(//*[text()[contains(normalize-space(.), concat({concat_expr}))]])[last()]"
+        # Pattern: //*[contains(normalize-space(string(.)), 'INPUT_TEXT')][not(.//*[contains(normalize-space(string(.)), 'INPUT_TEXT')])]
+        # For quotes, use concat() approach:
+        # - Single quote in title: use "'" in concat (double quotes around single quote)
+        # - Double quote in title: use '"' in concat (single quotes around double quote)
+        if "'" in title or '"' in title:
+            # Build concat() expression by splitting at quotes
+            parts = []
+            current_part = ""
+            for char in title:
+                if char == "'":
+                    if current_part:
+                        parts.append(f"'{current_part}'")
+                        current_part = ""
+                    parts.append(
+                        '"\'"'
+                    )  # Single quote: double quotes around single quote
+                elif char == '"':
+                    if current_part:
+                        parts.append(f"'{current_part}'")
+                        current_part = ""
+                    parts.append(
+                        "'\"'"
+                    )  # Double quote: single quotes around double quote
+                else:
+                    current_part += char
+            if current_part:
+                parts.append(f"'{current_part}'")
+
+            concat_expr = ", ".join(parts)
+            text_xpath = f"//*[contains(normalize-space(string(.)), concat({concat_expr}))][not(.//*[contains(normalize-space(string(.)), concat({concat_expr}))])]"
         else:
             # Text contains neither quote, use single quotes (default)
-            text_xpath = (
-                f"(//*[text()[contains(normalize-space(.), '{title}')]])[last()]"
-            )
+            text_xpath = f"//*[contains(normalize-space(string(.)), '{title}')][not(.//*[contains(normalize-space(string(.)), '{title}')])]"
 
         # Verify text_xpath points to the same element as title_element
         try:
