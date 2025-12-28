@@ -333,6 +333,12 @@ class TextInput(PageComponent):
         Uses Selenium to send different types of characters and observe what the
         field accepts. No forced JavaScript value setting is used.
 
+        Detection order:
+        1. Numeric check
+        2. Alpha check
+        3. Length check (using allowed character types from steps 1-2)
+        4. Special characters check in batches (only if alpha is acceptable)
+
         Returns:
             InputFormatExpectations object with detected constraints.
         """
@@ -376,52 +382,104 @@ class TextInput(PageComponent):
                 f"Alpha test: sent '{test_alpha}', got '{actual_value}', allows_alpha={alpha_accepted}"
             )
 
-            # Test 3: Check special characters
+            # Test 3: Check max length using appropriate character type based on what's allowed
             clear_text_field(
                 self.x_path, title=self.title, container_xpath=self.container_x_path
             )
-            special_chars_to_test = "!@#$%^&*()-_=+[]{}|;:',.<>?/\\`~"
-            allowed_special = []
-            disallowed_special = []
 
-            for char in special_chars_to_test:
-                clear_text_field(
-                    self.x_path, title=self.title, container_xpath=self.container_x_path
-                )
-                try:
-                    element.send_keys(char)
-                    actual_value = extract_element_value(element) or ""
-                    if char in actual_value:
-                        allowed_special.append(char)
-                    else:
-                        disallowed_special.append(char)
-                except Exception as e:
-                    logger.debug(f"Error testing special char '{char}': {e}")
-                    disallowed_special.append(char)
-
-            if allowed_special:
-                expectations.allowed_special_characters = allowed_special
-            if disallowed_special:
-                expectations.disallowed_special_characters = disallowed_special
-
-            logger.debug(
-                f"Special chars test: allowed={allowed_special}, disallowed={disallowed_special}"
-            )
-
-            # Test 4: Check max length
-            clear_text_field(
-                self.x_path, title=self.title, container_xpath=self.container_x_path
-            )
-            test_long_string = "a" * 500
-            element.send_keys(test_long_string)
-            actual_value = extract_element_value(element) or ""
-            actual_length = len(actual_value)
-
-            if actual_length < 500:
-                expectations.max_length = actual_length
-                logger.debug(f"Max length detected: {actual_length}")
+            # Build test string based on what's allowed
+            if expectations.allows_numeric and expectations.allows_alpha:
+                # Both allowed: use alphanumeric
+                test_long_string = "a1b2c3d4e5" * 50  # 500 chars total
+            elif expectations.allows_numeric:
+                # Only numeric: use numeric
+                test_long_string = "1234567890" * 50  # 500 chars total
+            elif expectations.allows_alpha:
+                # Only alpha: use alpha
+                test_long_string = "abcdefghij" * 50  # 500 chars total
             else:
-                logger.debug("No max length constraint detected (500+ chars accepted)")
+                # Neither allowed: skip length test (field likely has other constraints)
+                test_long_string = ""
+                logger.debug("Neither numeric nor alpha allowed, skipping length test")
+
+            if test_long_string:
+                element.send_keys(test_long_string)
+                actual_value = extract_element_value(element) or ""
+                actual_length = len(actual_value)
+
+                if actual_length < 500:
+                    expectations.max_length = actual_length
+                    logger.debug(f"Max length detected: {actual_length}")
+                else:
+                    logger.debug(
+                        "No max length constraint detected (500+ chars accepted)"
+                    )
+
+            # Test 4: Check special characters in batches (only if alpha is acceptable)
+            if expectations.allows_alpha:
+                special_chars_to_test = "!@#$%^&*()-_=+[]{}|;:',.<>?/\\`~"
+                allowed_special = []
+                disallowed_special = []
+
+                # Determine batch size based on max_length
+                # If max_length is not detected, assume we can test all at once
+                batch_size = len(special_chars_to_test)  # Default: test all at once
+                if expectations.max_length is not None:
+                    batch_size = expectations.max_length
+                    logger.debug(
+                        f"Max length ({expectations.max_length}) detected, testing special chars in batches of {batch_size}"
+                    )
+
+                # Split special characters into batches
+                num_batches = (
+                    len(special_chars_to_test) + batch_size - 1
+                ) // batch_size
+                logger.debug(
+                    f"Testing {len(special_chars_to_test)} special chars in {num_batches} batch(es)"
+                )
+
+                # Test each batch
+                for batch_idx in range(num_batches):
+                    start_idx = batch_idx * batch_size
+                    end_idx = min(start_idx + batch_size, len(special_chars_to_test))
+                    batch_chars = special_chars_to_test[start_idx:end_idx]
+
+                    clear_text_field(
+                        self.x_path,
+                        title=self.title,
+                        container_xpath=self.container_x_path,
+                    )
+
+                    # Send the batch of special characters
+                    element.send_keys(batch_chars)
+                    actual_value = extract_element_value(element) or ""
+
+                    # Check which characters from this batch were accepted
+                    for char in batch_chars:
+                        if char in actual_value:
+                            allowed_special.append(char)
+                        else:
+                            disallowed_special.append(char)
+
+                    logger.debug(
+                        f"Special chars batch {batch_idx + 1}/{num_batches}: "
+                        f"sent '{batch_chars}', received '{actual_value}', "
+                        f"allowed={[c for c in batch_chars if c in actual_value]}, "
+                        f"disallowed={[c for c in batch_chars if c not in actual_value]}"
+                    )
+
+                if allowed_special:
+                    expectations.allowed_special_characters = allowed_special
+                if disallowed_special:
+                    expectations.disallowed_special_characters = disallowed_special
+
+                logger.debug(
+                    f"Special chars test complete: allowed={allowed_special}, disallowed={disallowed_special}"
+                )
+            else:
+                logger.debug(
+                    "Alpha not allowed, skipping special character test (fields that only accept numeric typically don't accept special chars)"
+                )
 
             # Clean up: clear the field after detection
             clear_text_field(
