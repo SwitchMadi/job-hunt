@@ -1317,6 +1317,33 @@ class ApplicationPage:
         return None, None
 
     # Identify application fields
+    # This method reads and identifies the following job fields from application pages:
+    # - Personal Information:
+    #   * first_name - First name field
+    #   * middle_name - Middle name field
+    #   * last_name - Last name field
+    #   * full_name - Full name field
+    #   * salutation_prefix - Salutation/Prefix field (Mr., Mrs., etc.)
+    # - Contact Information:
+    #   * email - Email address field
+    #   * phone_country_code - Phone country code field
+    #   * phone_number_without_country_code - Phone number field (without country code)
+    # - Authentication:
+    #   * password - Password field
+    # - Documents & Experience:
+    #   * resume_upload - Resume upload field
+    #   * cover_letter - Cover letter field
+    #   * work_experience - Work experience section/fields
+    #   * education - Education section/fields
+    # - Other:
+    #   * tnc - Terms and conditions checkbox
+    #   * other - Any other application field that doesn't fit the above categories
+    #
+    # Each identified field contains:
+    # - field_title: Exact title/question from the webpage
+    # - field_question: Grammatically correct question for the field
+    # - field_category: One of the FieldCategory enum values listed above
+    # - error: Error message (only when identify_only_errors=True)
     def _identify_application_fields(
         self,
         identify_only_errors=False,
