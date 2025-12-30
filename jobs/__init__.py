@@ -1329,13 +1329,20 @@ class ApplicationPage:
                 "errors on the page / around job fields. Analyse the whole HTML very carefully for extracting all the "
                 "errors & their fields. Strictly ignore the fields where there is no error. Very carefully note that "
                 "if a field is required, that doesn't mean that it has an error. It should have some error message to "
-                "be considered as error."
+                "be considered as error. Only extract fields that are interactive (can be filled, clicked, or selected). "
+                "Use HTML identifiers like input, button, select, textarea, checkbox, radio to assess if elements are "
+                "interactive. Ensure fields are not disabled, readonly (unless appropriate for the field type), or hidden. "
+                "Ignore static text, labels without associated inputs, or non-interactive elements."
             )
         else:
             prompt_part = (
                 "The webpage has job application related fields. Analyse the whole HTML very carefully for "
-                "extracting all the application fields. While extracting field titles, strictly extract exact field "
-                "titles as they are mentioned on the webpage, without any modification whatsoever."
+                "extracting all the application fields. Only extract fields that are interactive (can be filled, clicked, "
+                "or selected). Use HTML identifiers like input, button, select, textarea, checkbox, radio to assess if "
+                "elements are interactive. Ensure fields are not disabled, readonly (unless appropriate for the field type), "
+                "or hidden. Ignore static text, labels without associated inputs, or non-interactive elements. "
+                "While extracting field titles, strictly extract exact field titles as they are mentioned on the webpage, "
+                "without any modification whatsoever."
             )
 
         class FieldCategory(Enum):
@@ -1361,22 +1368,26 @@ class ApplicationPage:
                 field_title: str = Field(
                     ...,
                     description="Application field's exact title / question mentioned on the webpage, without any "
-                    "modification whatsoever. Just pick what's in HTML and respond as it is, not matter how long it is.",
+                    "modification whatsoever. Just pick what's in HTML and respond as it is, not matter how long it is. "
+                    "Only include fields that are interactive (input, select, textarea, checkbox, radio, button elements) "
+                    "and are not disabled, readonly (unless appropriate), or hidden.",
                 )
                 field_question: str = Field(
                     ...,
-                    description="What is grammatically correct question, answering which will help process the field?",
+                    description="What is grammatically correct question, answering which will help process the field? "
+                    "This should be for an interactive field that can be filled, clicked, or selected.",
                 )
                 field_category: FieldCategory = Field(
                     ...,
                     description="Application field category like email, work_experience, education, city etc. Note that "
-                    "TnC field must be a checkbox kind of field, not expect any answer.",
+                    "TnC field must be a checkbox kind of field, not expect any answer. Only categorize interactive fields "
+                    "that can be interacted with (input, select, textarea, checkbox, radio, button).",
                 )
                 error: str | None = Field(
                     None,
                     description="The error message shown for this field. Very carefully note that "
                     "if a field is required, that doesn't mean that it has an error. It should have some error message to "
-                    "be considered as error.",
+                    "be considered as error. Only include errors for interactive fields.",
                 )
 
         else:
@@ -1385,17 +1396,21 @@ class ApplicationPage:
                 field_title: str = Field(
                     ...,
                     description="Application field's exact title / question mentioned on the webpage, without any "
-                    "modification whatsoever. Just pick what's in HTML and respond as it is, not matter how long it is.",
+                    "modification whatsoever. Just pick what's in HTML and respond as it is, not matter how long it is. "
+                    "Only include fields that are interactive (input, select, textarea, checkbox, radio, button elements) "
+                    "and are not disabled, readonly (unless appropriate), or hidden.",
                 )
                 field_question: str = Field(
                     ...,
                     description="If field title on its own is not self explanatory so modify it, so that it "
-                    "makes sense as a question. Otherwise respond same as field title.",
+                    "makes sense as a question. Otherwise respond same as field title. This should be for an interactive "
+                    "field that can be filled, clicked, or selected.",
                 )
                 field_category: FieldCategory = Field(
                     ...,
                     description="Application field category like email, work_experience, education, city etc. Note that "
-                    "TnC field must be a checkbox kind of field, not expect any answer.",
+                    "TnC field must be a checkbox kind of field, not expect any answer. Only categorize interactive fields "
+                    "that can be interacted with (input, select, textarea, checkbox, radio, button).",
                 )
 
         class JobFields(BaseModel):
