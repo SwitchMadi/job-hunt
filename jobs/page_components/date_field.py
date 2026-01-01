@@ -189,7 +189,18 @@ class DateField(PageComponent):
         a) First try with leading zero (e.g. "05" for day=5). Replace *all* such occurrences if found.
         b) Otherwise try without leading zero (e.g. "5"). Replace *all* such occurrences if found.
         c) If neither is found, return original.
+
+        Only performs replacement if date_str contains exactly 3 groups (day, month, year).
         """
+
+        # Split date string by common delimiters to identify groups
+        # Groups are sequences of digits or letters separated by delimiters
+        groups = re.split(r"[/\-\s\.,]+", date_str)
+        groups = [g.strip() for g in groups if g.strip()]
+
+        # Only proceed if there are exactly 3 groups (day, month, year)
+        if len(groups) != 3:
+            return date_str
 
         # Case 1: day = 1, month = 1
         if day == 1 and month == 1:
