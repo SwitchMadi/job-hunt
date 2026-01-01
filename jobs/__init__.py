@@ -1329,13 +1329,21 @@ class ApplicationPage:
                 "errors on the page / around job fields. Analyse the whole HTML very carefully for extracting all the "
                 "errors & their fields. Strictly ignore the fields where there is no error. Very carefully note that "
                 "if a field is required, that doesn't mean that it has an error. It should have some error message to "
-                "be considered as error."
+                "be considered as error. Only extract fields that are interactive and can be filled, clicked, or selected. "
+                "Assess interactivity by examining HTML element types and attributes - for example, elements like input, "
+                "button, select, textarea, checkbox, radio, or other form controls that allow user interaction. Ensure fields "
+                "are not disabled, readonly (unless appropriate for the field type), or hidden. Ignore static text, labels "
+                "without associated inputs, or non-interactive elements."
             )
         else:
             prompt_part = (
                 "The webpage has job application related fields. Analyse the whole HTML very carefully for "
-                "extracting all the application fields. While extracting field titles, strictly extract exact field "
-                "titles as they are mentioned on the webpage, without any modification whatsoever."
+                "extracting all the application fields. Only extract fields that are interactive and can be filled, clicked, "
+                "or selected. Assess interactivity by examining HTML element types and attributes - for example, elements "
+                "like input, button, select, textarea, checkbox, radio, or other form controls that allow user interaction. "
+                "Ensure fields are not disabled, readonly (unless appropriate for the field type), or hidden. Ignore static "
+                "text, labels without associated inputs, or non-interactive elements. While extracting field titles, strictly "
+                "extract exact field titles as they are mentioned on the webpage, without any modification whatsoever."
             )
 
         class FieldCategory(Enum):
@@ -1399,7 +1407,14 @@ class ApplicationPage:
                 )
 
         class JobFields(BaseModel):
-            job_fields: list[ApplicationFieldInfo]
+            job_fields: list[ApplicationFieldInfo] = Field(
+                ...,
+                description="List of interactive job application fields. Only include fields that are interactive and can "
+                "be filled, clicked, or selected. Assess interactivity by examining HTML element types and attributes - "
+                "for example, elements like input, button, select, textarea, checkbox, radio, or other form controls that "
+                "allow user interaction. Ensure fields are not disabled, readonly (unless appropriate for the field type), "
+                "or hidden. Ignore static text, labels without associated inputs, or non-interactive elements.",
+            )
 
         # Helper function to get fields using GPT with consistent prompt structure
         def _get_fields_from_gpt(prompt_part_text):
