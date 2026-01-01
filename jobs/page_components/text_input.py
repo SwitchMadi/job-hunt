@@ -61,6 +61,9 @@ class InputFormatExpectations(BaseModel):
 VALIDATE_INPUT_FORMAT_CATEGORIES = {
     "phone_country_code",
     "phone_number_without_country_code",
+    "work_experience",
+    "education",
+    "cover_letter",
     "other",
 }
 
