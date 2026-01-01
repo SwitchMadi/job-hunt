@@ -370,3 +370,19 @@ def get_call_trace():
         )
 
     return trace
+
+
+def get_formatted_today_date():
+    """Returns today's date in format: 'day(st/nd/rd/th), month year' (e.g., '15th January 2025')"""
+    today = datetime.datetime.now()
+    day = today.day
+    month = today.strftime("%B")
+    year = today.year
+
+    # Add ordinal suffix
+    if 10 <= day % 100 <= 20:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
+
+    return f"{day}{suffix} {month} {year}"

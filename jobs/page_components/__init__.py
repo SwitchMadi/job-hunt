@@ -30,7 +30,7 @@ from utilities.selenium import (
     get_interactive_elements_in_container,
 )
 from utilities.logging import get_logger
-from utilities import pascal_to_snake_casing, retry, constants
+from utilities import pascal_to_snake_casing, retry, constants, get_formatted_today_date
 from utilities.gpt import get_gpt_response
 
 
@@ -1583,7 +1583,7 @@ class ApplicationField:
         1. Job source - LinkedIn
         2. If current user email is "{config['admin_email']}" and questions is if you are currently working or studying
          here then always answer as "No". If end date is asked for the same work experience or education qualification 
-         then answer as per today's date.
+         then answer as per today's date i.e. {get_formatted_today_date()}.
         
         Now based on all above instructions, give me correct answer for the question.
         """
