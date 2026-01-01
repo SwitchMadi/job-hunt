@@ -1333,7 +1333,9 @@ class ApplicationPage:
                 "Assess interactivity by examining HTML element types and attributes - for example, elements like input, "
                 "button, select, textarea, checkbox, radio, or other form controls that allow user interaction. Ensure fields "
                 "are not disabled, readonly (unless appropriate for the field type), or hidden. Ignore static text, labels "
-                "without associated inputs, or non-interactive elements."
+                "without associated inputs, or non-interactive elements. Strictly ignore page navigation buttons such as "
+                "'Next', 'Previous', 'Back', 'Submit', 'Continue', 'Go to next step', 'Return to previous screen', or any "
+                "other buttons used for page navigation or form submission. These are not application data fields."
             )
         else:
             prompt_part = (
@@ -1342,8 +1344,11 @@ class ApplicationPage:
                 "or selected. Assess interactivity by examining HTML element types and attributes - for example, elements "
                 "like input, button, select, textarea, checkbox, radio, or other form controls that allow user interaction. "
                 "Ensure fields are not disabled, readonly (unless appropriate for the field type), or hidden. Ignore static "
-                "text, labels without associated inputs, or non-interactive elements. While extracting field titles, strictly "
-                "extract exact field titles as they are mentioned on the webpage, without any modification whatsoever."
+                "text, labels without associated inputs, or non-interactive elements. Strictly ignore page navigation buttons "
+                "such as 'Next', 'Previous', 'Back', 'Submit', 'Continue', 'Go to next step', 'Return to previous screen', or "
+                "any other buttons used for page navigation or form submission. These are not application data fields. "
+                "While extracting field titles, strictly extract exact field titles as they are mentioned on the webpage, "
+                "without any modification whatsoever."
             )
 
         class FieldCategory(Enum):
@@ -1413,7 +1418,10 @@ class ApplicationPage:
                 "be filled, clicked, or selected. Assess interactivity by examining HTML element types and attributes - "
                 "for example, elements like input, button, select, textarea, checkbox, radio, or other form controls that "
                 "allow user interaction. Ensure fields are not disabled, readonly (unless appropriate for the field type), "
-                "or hidden. Ignore static text, labels without associated inputs, or non-interactive elements.",
+                "or hidden. Ignore static text, labels without associated inputs, or non-interactive elements. Strictly ignore "
+                "page navigation buttons such as 'Next', 'Previous', 'Back', 'Submit', 'Continue', 'Go to next step', "
+                "'Return to previous screen', or any other buttons used for page navigation or form submission. These are "
+                "not application data fields.",
             )
 
         # Helper function to get fields using GPT with consistent prompt structure
