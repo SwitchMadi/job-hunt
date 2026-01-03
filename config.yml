@@ -13,6 +13,26 @@ scraping:
       - https://www.linkedin.com/jobs/search/?f_E=2%2C3%2C4&f_TPR=r86400&geoId=103644278&keywords=data%20analyst&origin=JOB_SEARCH_PAGE_JOB_FILTER&refresh=true&spellCorrectionEnabled=true
       - https://www.linkedin.com/jobs/search/?f_TPR=r86400&geoId=103644278&keywords=business%20analyst&origin=JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE&refresh=true
 startup_input: C:\Users\JobHunt\Desktop\startup_input.yml
+llm_providers:
+  default: openai
+  # Expected env var: OPENAI_API_KEY or OPENAI_KEY
+  openai:
+    models:
+      default: gpt-4o-mini
+      intermediate: gpt-5-nano
+      complex: gpt-5-mini
+  # Expected env var: ANTHROPIC_API_KEY
+  anthropic:
+    models:
+      default: claude-3-5-sonnet-latest
+      intermediate: claude-3-5-haiku-latest
+      complex: claude-sonnet-4-20250514
+  # Expected env var: GOOGLE_API_KEY or GEMINI_API_KEY
+  gemini:
+    models:
+      default: gemini-2.0-flash
+      intermediate: gemini-2.0-flash
+      complex: gemini-2.5-pro-preview-06-05
 openai_models:
   default: gpt-4o-mini
   intermediate: gpt-5-nano
