@@ -19,8 +19,10 @@ from utilities.selenium import (
     is_element_visible,
     clear_text_field,
 )
-from utilities.gpt import get_gpt_response
+from utilities.llm import create_llm_service
 from utilities import constants
+
+_llm_service = create_llm_service(provider="openai")
 
 
 driver = get_selenium_driver()
@@ -374,7 +376,7 @@ class SearchField(PageComponent):
             f"ideal for fuzzy searches. Give 20 phrases in order asked earlier."
         )
 
-        search_phrases_found, search_phrases = get_gpt_response(
+        search_phrases_found, search_phrases = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=SearchPhrases,

@@ -7,11 +7,13 @@ from jobs.page_components.login.base_state import LoginState
 from jobs.page_components.login.types import LoginStateType
 from jobs.page_components import logger
 from utilities import constants
-from utilities.gpt import get_gpt_response
+from utilities.llm import create_llm_service
 from utilities.selenium import (
     get_selenium_driver,
     minify_html_for_gpt_prompt,
 )
+
+_llm_service = create_llm_service(provider="openai")
 
 driver = get_selenium_driver()
 
@@ -95,7 +97,7 @@ class AccountAlreadyExistsState(LoginState):
                 "ALWAYS prioritize button inside popup if popup exists and has it.",
             )
 
-        options_found, options = get_gpt_response(
+        options_found, options = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=SignInOptions,

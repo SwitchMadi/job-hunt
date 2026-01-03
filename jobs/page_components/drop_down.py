@@ -13,7 +13,7 @@ from jobs.page_components import (
 )
 from jobs.page_components.button import Button
 from utilities import constants, remove_emoji
-from utilities.gpt import get_gpt_response
+from utilities.llm import create_llm_service
 from utilities.selenium import (
     find_clickable_parent_xpath,
     get_selenium_driver,
@@ -25,6 +25,7 @@ from utilities.selenium import (
     get_unique_element_by_xpath,
 )
 
+_llm_service = create_llm_service(provider="openai")
 
 driver = get_selenium_driver()
 driver.set_page_load_timeout(15)
@@ -419,7 +420,7 @@ class DropDown(PageComponent):
                 description="XPath pattern that matches all option elements in the dropdown",
             )
 
-        pattern_found, pattern_result = get_gpt_response(
+        pattern_found, pattern_result = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=OptionsXPath,

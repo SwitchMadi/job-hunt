@@ -58,7 +58,7 @@ class OpenAILLMService(LLMServiceInterface, BaseLLMService):
     ) -> Union[str, tuple[bool, T]]:
         """
         Chat completion with optional structured output.
-        Follows the exact pattern from get_gpt_response() in utilities/gpt/__init__.py
+        Implements LLMServiceInterface.chat() for OpenAI provider.
 
         Args:
             system_prompt: System prompt
@@ -226,7 +226,7 @@ class OpenAILLMService(LLMServiceInterface, BaseLLMService):
     ) -> str:
         """
         Query a file using OpenAI Assistants API.
-        Follows the exact pattern from query_file() in utilities/gpt/file_assistant.py
+        Implements LLMServiceInterface.query_file() for OpenAI provider.
 
         Args:
             query: Query string

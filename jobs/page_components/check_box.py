@@ -13,7 +13,9 @@ from utilities.selenium import (
     element_exists,
 )
 from utilities import constants, remove_emoji
-from utilities.gpt import get_gpt_response
+from utilities.llm import create_llm_service
+
+_llm_service = create_llm_service(provider="openai")
 
 
 driver = get_selenium_driver()
@@ -473,7 +475,7 @@ class CheckBox(PageComponent):
                 description="Can the field can have multiple correct answers?",
             )
 
-        checkbox_validation_done, checkbox_validation = get_gpt_response(
+        checkbox_validation_done, checkbox_validation = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=ApplicationFieldInfo,

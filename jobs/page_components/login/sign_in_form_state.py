@@ -10,7 +10,7 @@ from jobs.page_components.button import Button
 from jobs.page_components.text_input import TextInput
 from jobs.page_components import logger
 from utilities import constants
-from utilities.gpt import get_gpt_response
+from utilities.llm import create_llm_service
 from utilities.selenium import (
     get_selenium_driver,
     minify_html_for_gpt_prompt,
@@ -20,6 +20,8 @@ from utilities.selenium import (
 )
 from selenium.webdriver.common.by import By
 from urllib.parse import urlparse
+
+_llm_service = create_llm_service(provider="openai")
 
 driver = get_selenium_driver()
 
@@ -188,7 +190,7 @@ class SignInFormState(LoginState):
                 "math puzzles, checkbox challenges, etc.",
             )
 
-        fields_found, fields = get_gpt_response(
+        fields_found, fields = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=SignInFormFields,
@@ -393,7 +395,7 @@ class SignInFormState(LoginState):
                 "For captcha: Use when there are visible captchas or security challenges blocking login.",
             )
 
-        result_found, result = get_gpt_response(
+        result_found, result = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=LoginResultCheck,

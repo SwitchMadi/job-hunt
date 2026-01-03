@@ -20,7 +20,9 @@ from utilities.selenium import (
     get_xpath_by_text,
 )
 from utilities import constants
-from utilities.gpt import get_gpt_response
+from utilities.llm import create_llm_service
+
+_llm_service = create_llm_service(provider="openai")
 
 
 driver = get_selenium_driver()
@@ -366,7 +368,7 @@ class WorkExperienceSection(PageComponent):
                     "It may or may not be present.",
                 )
 
-        fields_found, fields = get_gpt_response(
+        fields_found, fields = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=WorkExperienceSectionFields,
@@ -454,7 +456,7 @@ class WorkExperienceSection(PageComponent):
                 description="XPath of button to add new / another work experience.",
             )
 
-        fields_found, fields = get_gpt_response(
+        fields_found, fields = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=AddWorkExperienceButton,
@@ -647,7 +649,7 @@ class WorkExperienceSection(PageComponent):
                         "job application itself.",
                     )
 
-            fields_found, fields = get_gpt_response(
+            fields_found, fields = _llm_service.chat(
                 constants.gpt["system_prompts"]["application_step_identification"],
                 user_prompt,
                 response_format=WorkExperienceSectionFields,
@@ -797,7 +799,7 @@ class WorkExperienceSection(PageComponent):
                 "not on page instructions or labels.",
             )
 
-        info_found, info = get_gpt_response(
+        info_found, info = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=WorkExperienceSectionInfo,
@@ -860,7 +862,7 @@ class WorkExperienceSection(PageComponent):
                 ..., description="List of all buttons found on the page."
             )
 
-        analysis_found, analysis = get_gpt_response(
+        analysis_found, analysis = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=PageElements,
@@ -981,7 +983,7 @@ class WorkExperienceSection(PageComponent):
                 description="Reasoning for why the fields are collectively considered comprehensive or not.",
             )
 
-        analysis_found, analysis = get_gpt_response(
+        analysis_found, analysis = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=WorkExperienceFieldsAnalysis,
@@ -1287,7 +1289,7 @@ class WorkExperience(PageComponent):
                 "details like company, job title, responsibilities etc.",
             )
 
-        fields_found, fields = get_gpt_response(
+        fields_found, fields = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=WorkExperienceFields,

@@ -17,7 +17,7 @@ from utilities.selenium import (
     close_selenium_driver,
     revoke_optional_permissions,
 )
-from utilities.gpt import get_gpt_response
+from utilities.llm import create_llm_service
 from utilities.logging import get_logger
 from utilities.sql import get_sql_query_output, execute_sql_query
 from utilities.aws.s3 import S3Bucket
@@ -44,6 +44,7 @@ from jobs.page_components.radio_button import RadioButton
 from jobs.page_components.search_field import SearchField
 from jobs.page_components.popup import Popup
 
+_llm_service = create_llm_service(provider="openai")
 
 config = yaml.safe_load(open("config.yml"))
 logger = get_logger(name="job")
@@ -372,7 +373,7 @@ class ApplicationPage:
             {self.parent_job.title}. Answer should strictly be just the relevant key's name or "Cannot determine" -
             {html_prompt}"""
 
-        job_application_page_key = get_gpt_response(
+        job_application_page_key = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
         )
@@ -886,7 +887,7 @@ class ApplicationPage:
                 "decision",
             )
 
-        submission_found, submission = get_gpt_response(
+        submission_found, submission = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=ApplicationSubmission,
@@ -1026,7 +1027,7 @@ class ApplicationPage:
             "If a message is present, include the exact text or a short summary in evidence."
         )
 
-        availability_found, availability = get_gpt_response(
+        availability_found, availability = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=JobAvailabilityAssessment,
@@ -1155,7 +1156,7 @@ class ApplicationPage:
                 description="Webpage has some prompt visible regarding cookies consent",
             )
 
-        elements_found, elements = get_gpt_response(
+        elements_found, elements = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=WebPageElements,
@@ -1433,7 +1434,7 @@ class ApplicationPage:
                 f"{prompt_part_text}\n"
             )
 
-            job_fields_found, job_fields = get_gpt_response(
+            job_fields_found, job_fields = _llm_service.chat(
                 constants.gpt["system_prompts"]["application_step_identification"],
                 user_prompt_text,
                 response_format=JobFields,

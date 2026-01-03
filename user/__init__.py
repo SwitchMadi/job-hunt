@@ -13,11 +13,12 @@ from utilities.sql import get_sql_query_output, execute_sql_query, get_sql_conne
 from utilities.google_services.drive import DriveResource
 from utilities.logging import get_logger
 from utilities import generate_password, encrypt_string, decrypt_string, constants
-from utilities.gpt.file_assistant import query_file
-from utilities.gpt import get_gpt_response
+from utilities.llm import create_llm_service
 from utilities.aws.s3 import S3Bucket
 from user.resume import Resume
 from plan import Plan
+
+_llm_service = create_llm_service(provider="openai")
 
 
 logger = get_logger(name="user")
@@ -1019,7 +1020,7 @@ class User:
                 s3.fetch_data(file_s3_path=self.resume, file_local_path=file_local_path)
 
             logger.info(f"Parsing resume for user_id - {self.id}...")
-            resume_summary = query_file(
+            resume_summary = _llm_service.query_file(
                 query="Extract resume content in structured manner. Do not leave any information and do not add any of "
                 "your comments.",
                 file=file_local_path,
@@ -1031,7 +1032,7 @@ class User:
                 f"Resume summary -\n"
                 f"{resume_summary}"
             )
-            resume_info_extracted, resume_info = get_gpt_response(
+            resume_info_extracted, resume_info = _llm_service.chat(
                 constants.gpt["system_prompts"]["resume_parser"],
                 user_prompt,
                 response_format=Resume,

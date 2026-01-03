@@ -33,10 +33,6 @@ llm_providers:
       default: gemini-2.0-flash
       intermediate: gemini-2.0-flash
       complex: gemini-2.5-pro-preview-06-05
-openai_models:
-  default: gpt-4o-mini
-  intermediate: gpt-5-nano
-  complex: gpt-5-mini
 user_email: yzalthree@gmail.com
 admin_email: yzalthree@gmail.com
 websocket:

@@ -9,12 +9,14 @@ from jobs.page_components.login.types import LoginStateType
 from jobs.page_components.button import Button
 from jobs.page_components import logger
 from utilities import constants
-from utilities.gpt import get_gpt_response
+from utilities.llm import create_llm_service
 from utilities.selenium import (
     get_selenium_driver,
     minify_html_for_gpt_prompt,
     is_element_visible,
 )
+
+_llm_service = create_llm_service(provider="openai")
 
 driver = get_selenium_driver()
 
@@ -115,7 +117,7 @@ class OpenAccountCreationFormButtonState(LoginState):
                 "If button_in_popup is true, use relative XPath: popup_container_x_path//button[...]. Otherwise use absolute XPath.",
             )
 
-        button_found, button = get_gpt_response(
+        button_found, button = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=AccountCreationButton,
@@ -225,7 +227,7 @@ class OpenAccountCreationFormButtonState(LoginState):
                 "Only return account_creation_form if the form is actually visible (either in popup or outside).",
             )
 
-        next_found, next_step = get_gpt_response(
+        next_found, next_step = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=NextStep,

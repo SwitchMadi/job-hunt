@@ -11,12 +11,14 @@ from jobs.page_components.text_input import TextInput
 from jobs.page_components import logger, get_page_component_class_name
 from utilities import constants
 from utilities.google_services.gmail import Gmail
-from utilities.gpt import get_gpt_response
+from utilities.llm import create_llm_service
 from utilities.selenium import (
     get_selenium_driver,
     element_exists,
     minify_html_for_gpt_prompt,
 )
+
+_llm_service = create_llm_service(provider="openai")
 
 driver = get_selenium_driver()
 
@@ -115,7 +117,7 @@ class AccountVerificationState(LoginState):
                 "This button is clicked after entering the OTP to verify the account. Return empty string if link method or no button present.",
             )
 
-        component_identified, component = get_gpt_response(
+        component_identified, component = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=VerifyAccountComponent,
@@ -206,7 +208,7 @@ class AccountVerificationState(LoginState):
                     "This is the unique identifier of the email that contains the account verification link or OTP code.",
                 )
 
-            verification_email_search_succeeded, verification_email = get_gpt_response(
+            verification_email_search_succeeded, verification_email = _llm_service.chat(
                 constants.gpt["system_prompts"]["application_step_identification"],
                 user_prompt,
                 response_format=VerificationEmail,
@@ -249,7 +251,7 @@ class AccountVerificationState(LoginState):
                 "This is the verification code or one-time password that needs to be entered into the OTP text field when verification method is 'otp_code'.",
             )
 
-        email_verification_info_found, email_verification_info = get_gpt_response(
+        email_verification_info_found, email_verification_info = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=EmailVerificationInfo,
@@ -301,7 +303,7 @@ class AccountVerificationState(LoginState):
                 "Determine if verification succeeded and user is now logged in (logged_in) or if verification failed with an error message (verification_failed).",
             )
 
-        result_found, result = get_gpt_response(
+        result_found, result = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=VerificationResultCheck,

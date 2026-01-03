@@ -20,8 +20,10 @@ from utilities.selenium import (
     is_element_in_popup,
     extract_element_value,
 )
-from utilities.gpt import get_gpt_response
+from utilities.llm import create_llm_service
 from utilities import constants
+
+_llm_service = create_llm_service(provider="openai")
 
 
 class InputFormatExpectations(BaseModel):
@@ -640,7 +642,7 @@ class TextInput(PageComponent):
             )
 
         try:
-            format_success, result = get_gpt_response(
+            format_success, result = _llm_service.chat(
                 constants.gpt["system_prompts"]["application_step_identification"],
                 user_prompt,
                 response_format=FormattedAnswer,

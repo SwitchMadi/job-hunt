@@ -12,13 +12,15 @@ from jobs.page_components.login.types import (
 )
 from jobs.page_components import logger
 from utilities import constants
-from utilities.gpt import get_gpt_response
+from utilities.llm import create_llm_service
 from utilities.selenium import (
     get_selenium_driver,
     minify_html_for_gpt_prompt,
     element_exists,
     is_element_visible,
 )
+
+_llm_service = create_llm_service(provider="openai")
 
 driver = get_selenium_driver()
 
@@ -117,7 +119,7 @@ class StartState(LoginState):
                 "If the button is inside a popup/modal, prioritize that over a button behind the popup.",
             )
 
-        options_found, options = get_gpt_response(
+        options_found, options = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=StartStateOptions,

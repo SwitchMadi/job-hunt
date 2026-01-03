@@ -175,10 +175,6 @@ class BaseLLMService:
         # Provider configuration
         self._provider_config = self.config.get("llm_providers", {})
 
-        # Fallback to legacy config if needed
-        if not self._provider_config:
-            self._legacy_models = self.config.get("openai_models", {})
-
     def _calculate_cost(
         self, model_str: str, input_tokens: int, output_tokens: int
     ) -> dict[str, float]:
@@ -253,13 +249,9 @@ class BaseLLMService:
             model_name = provider_config.get("models", {}).get(model)
 
             if not model_name:
-                # Fallback to legacy config if available
-                if hasattr(self, "_legacy_models"):
-                    model_name = self._legacy_models.get(model, "gpt-4o-mini")
-                else:
-                    raise ValueError(
-                        f"Model alias '{model}' not found for provider '{self.provider}'"
-                    )
+                raise ValueError(
+                    f"Model alias '{model}' not found for provider '{self.provider}'"
+                )
         else:
             # Direct model name - remove provider prefix if present
             if ":" in model:
@@ -397,12 +389,16 @@ class BaseLLMService:
                     )
 
 
+# Module-level dictionary of singleton instances per provider
+_provider_instances: dict[str, LLMServiceInterface] = {}
+
+
 def create_llm_service(
     provider: Optional[str] = None, config_path: str = "config.yml"
 ) -> LLMServiceInterface:
     """
     Factory function to create LLM service instances.
-    Similar to PaymentGatewayFactory.create_gateway().
+    Implements singleton pattern per provider - returns the same instance for each provider.
 
     Args:
         provider: Provider name ("openai", "anthropic", etc.)
@@ -410,7 +406,7 @@ def create_llm_service(
         config_path: Path to config.yml file
 
     Returns:
-        LLMServiceInterface instance
+        LLMServiceInterface instance (singleton per provider)
     """
     config = yaml.safe_load(open(config_path))
     provider_config = config.get("llm_providers", {})
@@ -418,6 +414,10 @@ def create_llm_service(
     # Determine provider
     if provider is None:
         provider = provider_config.get("default", "openai")
+
+    # Return existing singleton for this provider if it exists
+    if provider in _provider_instances:
+        return _provider_instances[provider]
 
     # Validate provider exists in config
     if provider_config and provider not in provider_config:
@@ -430,13 +430,17 @@ def create_llm_service(
     if provider == "openai":
         from utilities.llm.openai_service import OpenAILLMService
 
-        return OpenAILLMService(config_path=config_path)
+        instance = OpenAILLMService(config_path=config_path)
     elif provider == "anthropic":
         raise NotImplementedError("Anthropic provider not yet implemented")
     elif provider == "gemini":
         raise NotImplementedError("Gemini provider not yet implemented")
     else:
         raise ValueError(f"Unsupported provider: {provider}")
+
+    # Store singleton instance for this provider
+    _provider_instances[provider] = instance
+    return instance
 
 
 # Export main classes and functions

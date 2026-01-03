@@ -20,7 +20,9 @@ from utilities.selenium import (
     get_xpath_by_text,
 )
 from utilities import constants
-from utilities.gpt import get_gpt_response
+from utilities.llm import create_llm_service
+
+_llm_service = create_llm_service(provider="openai")
 
 
 driver = get_selenium_driver()
@@ -354,7 +356,7 @@ class EducationSection(PageComponent):
                     "It may or may not be present.",
                 )
 
-        fields_found, fields = get_gpt_response(
+        fields_found, fields = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=EducationSectionFields,
@@ -442,7 +444,7 @@ class EducationSection(PageComponent):
                 description="XPath of button to add new / another education qualification.",
             )
 
-        fields_found, fields = get_gpt_response(
+        fields_found, fields = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=AddEducationButton,
@@ -625,7 +627,7 @@ class EducationSection(PageComponent):
                         "job application itself.",
                     )
 
-            fields_found, fields = get_gpt_response(
+            fields_found, fields = _llm_service.chat(
                 constants.gpt["system_prompts"]["application_step_identification"],
                 user_prompt,
                 response_format=EducationSectionFields,
@@ -774,7 +776,7 @@ class EducationSection(PageComponent):
                 "not on page instructions or labels.",
             )
 
-        info_found, info = get_gpt_response(
+        info_found, info = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=EducationSectionInfo,
@@ -837,7 +839,7 @@ class EducationSection(PageComponent):
                 ..., description="List of all buttons found on the page."
             )
 
-        analysis_found, analysis = get_gpt_response(
+        analysis_found, analysis = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=PageElements,
@@ -959,7 +961,7 @@ class EducationSection(PageComponent):
                 description="Reasoning for why the fields are collectively considered comprehensive or not.",
             )
 
-        analysis_found, analysis = get_gpt_response(
+        analysis_found, analysis = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=EducationQualificationFieldsAnalysis,
@@ -1262,7 +1264,7 @@ class Education(PageComponent):
                 "details like college, degree etc.",
             )
 
-        fields_found, fields = get_gpt_response(
+        fields_found, fields = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=EducationFields,

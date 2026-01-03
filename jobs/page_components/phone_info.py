@@ -15,8 +15,10 @@ from utilities.selenium import (
     minify_html_for_gpt_prompt,
     find_input_block_for_title,
 )
-from utilities.gpt import get_gpt_response
+from utilities.llm import create_llm_service
 from utilities import constants
+
+_llm_service = create_llm_service(provider="openai")
 
 driver = get_selenium_driver()
 driver.set_page_load_timeout(15)
@@ -136,7 +138,7 @@ class PhoneInfo(PageComponent):
                 ..., description="List of phone related fields found on the page"
             )
 
-        fields_found, fields = get_gpt_response(
+        fields_found, fields = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=PhoneFields,

@@ -22,7 +22,9 @@ from utilities.selenium import (
     extract_element_value,
 )
 from utilities import constants
-from utilities.gpt import get_gpt_response
+from utilities.llm import create_llm_service
+
+_llm_service = create_llm_service(provider="openai")
 
 
 driver = get_selenium_driver()
@@ -414,7 +416,7 @@ class DateField(PageComponent):
                 f"Previous XPath - {prev_xpath}\n"
             )
 
-        date_info_found, date_info = get_gpt_response(
+        date_info_found, date_info = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=DateInfo,
@@ -758,7 +760,7 @@ class DateField(PageComponent):
                 f"{self.title}.",
             )
 
-        input_found, input_data = get_gpt_response(
+        input_found, input_data = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=DateInputMethod,
@@ -986,7 +988,7 @@ class DateField(PageComponent):
                 description="Whether the day component XPath is correct and should be kept.",
             )
 
-        components_found, components_data = get_gpt_response(
+        components_found, components_data = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=ComponentsXPathCorrectness,
@@ -1028,7 +1030,7 @@ class DateField(PageComponent):
                 description="Extracted date component in the specified format",
             )
 
-        date_component_found, date_component_data = get_gpt_response(
+        date_component_found, date_component_data = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=DateComponentFormat,

@@ -5,13 +5,15 @@ import time
 from jobs.page_components import PageComponent, get_page_component_class_name, logger
 from jobs.page_components.button import Button
 from utilities import constants
-from utilities.gpt import get_gpt_response
+from utilities.llm import create_llm_service
 from utilities.selenium import (
     get_selenium_driver,
     minify_html_for_gpt_prompt,
     disable_browser_alerts,
     switch_to_active_tab,
 )
+
+_llm_service = create_llm_service(provider="openai")
 
 driver = get_selenium_driver()
 driver.set_page_load_timeout(15)
@@ -78,7 +80,7 @@ class Popup(PageComponent):
                 "popup is present.",
             )
 
-        popup_button_found, popup_button = get_gpt_response(
+        popup_button_found, popup_button = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=PopupButton,

@@ -31,7 +31,9 @@ from utilities.selenium import (
 )
 from utilities.logging import get_logger
 from utilities import pascal_to_snake_casing, retry, constants, get_formatted_today_date
-from utilities.gpt import get_gpt_response
+from utilities.llm import create_llm_service
+
+_llm_service = create_llm_service(provider="openai")
 
 
 config = yaml.safe_load(open("config.yml"))
@@ -310,7 +312,7 @@ class ApplicationField:
                 )
 
         model = "complex" if retry_with_complex else "intermediate"
-        application_field_found, application_field = get_gpt_response(
+        application_field_found, application_field = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=ApplicationFieldInfo,
@@ -710,7 +712,7 @@ class ApplicationField:
                 description="XPath pattern that matches all individual option elements. This pattern will be used relative to the container element (i.e., container_element.find_elements(By.XPATH, pattern)), so it should be a relative XPath pattern.",
             )
 
-        pattern_found, pattern_result = get_gpt_response(
+        pattern_found, pattern_result = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=OptionsPattern,
@@ -1415,7 +1417,7 @@ class ApplicationField:
                 f"Previous XPath - {prev_xpath}\n"
             )
 
-        validation_found, validation = get_gpt_response(
+        validation_found, validation = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=ContainerValidation,
@@ -1588,7 +1590,7 @@ class ApplicationField:
         Now based on all above instructions, give me correct answer for the question.
         """
 
-        field_answer_found, field_answer = get_gpt_response(
+        field_answer_found, field_answer = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=FieldAnswer,
@@ -1673,7 +1675,7 @@ class ApplicationField:
                 "and indicate whether it uses_alphanumeric patterns.",
             )
 
-        correct_x_path_found, correct_x_path = get_gpt_response(
+        correct_x_path_found, correct_x_path = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=CorrectXPath,
