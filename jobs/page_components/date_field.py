@@ -420,7 +420,6 @@ class DateField(PageComponent):
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=DateInfo,
-            model="intermediate",
         )
 
         if date_info_found and date_info.has_calendar and date_info.date_xpath:
