@@ -1,5 +1,8 @@
 from typing import Optional, List
-from selenium.common import ElementNotInteractableException
+from selenium.common import (
+    ElementNotInteractableException,
+    StaleElementReferenceException,
+)
 from selenium.webdriver import Keys
 import pyperclip
 from selenium.webdriver.common.action_chains import ActionChains
@@ -331,6 +334,36 @@ class TextInput(PageComponent):
         # All other categories should not be validated
         return False
 
+    def _send_keys_and_get_value(self, element, text: str) -> tuple[Optional, str]:
+        """
+        Send keys to element and extract value, handling stale element references.
+
+        Args:
+            element: The WebElement to interact with
+            text: The text to send via send_keys
+
+        Returns:
+            Tuple of (element, actual_value). Element may be re-fetched if stale.
+        """
+        try:
+            element.send_keys(text)
+            actual_value = extract_element_value(element) or ""
+            return element, actual_value
+        except StaleElementReferenceException:
+            # Re-fetch element if it became stale
+            element = get_unique_element_by_xpath(
+                self.x_path, self.title, container_xpath=self.container_x_path
+            )
+            if element:
+                element.send_keys(text)
+                actual_value = extract_element_value(element) or ""
+                return element, actual_value
+            else:
+                logger.warning(
+                    f"Could not re-fetch stale element. XPath: {self.x_path}"
+                )
+                return None, ""
+
     def _detect_input_format_expectations(self) -> InputFormatExpectations:
         """
         Detect input format expectations by probing the text field with various inputs.
@@ -364,8 +397,10 @@ class TextInput(PageComponent):
                 self.x_path, title=self.title, container_xpath=self.container_x_path
             )
             test_numeric = "12345"
-            element.send_keys(test_numeric)
-            actual_value = extract_element_value(element) or ""
+            element, actual_value = self._send_keys_and_get_value(element, test_numeric)
+            if element is None:
+                return expectations
+
             # Check if any numeric chars were accepted
             numeric_accepted = any(c in actual_value for c in test_numeric)
             expectations.allows_numeric = numeric_accepted
@@ -378,8 +413,10 @@ class TextInput(PageComponent):
                 self.x_path, title=self.title, container_xpath=self.container_x_path
             )
             test_alpha = "abcde"
-            element.send_keys(test_alpha)
-            actual_value = extract_element_value(element) or ""
+            element, actual_value = self._send_keys_and_get_value(element, test_alpha)
+            if element is None:
+                return expectations
+
             # Check if any alpha chars were accepted
             alpha_accepted = any(c in actual_value.lower() for c in test_alpha)
             expectations.allows_alpha = alpha_accepted
@@ -408,8 +445,12 @@ class TextInput(PageComponent):
                 logger.debug("Neither numeric nor alpha allowed, skipping length test")
 
             if test_long_string:
-                element.send_keys(test_long_string)
-                actual_value = extract_element_value(element) or ""
+                element, actual_value = self._send_keys_and_get_value(
+                    element, test_long_string
+                )
+                if element is None:
+                    return expectations
+
                 actual_length = len(actual_value)
 
                 if actual_length < 500:
@@ -456,8 +497,11 @@ class TextInput(PageComponent):
                     )
 
                     # Send the batch of special characters
-                    element.send_keys(batch_chars)
-                    actual_value = extract_element_value(element) or ""
+                    element, actual_value = self._send_keys_and_get_value(
+                        element, batch_chars
+                    )
+                    if element is None:
+                        break
 
                     # Check which characters from this batch were accepted
                     for char in batch_chars:
