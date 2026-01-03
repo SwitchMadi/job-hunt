@@ -52,7 +52,7 @@ class OpenAILLMService(LLMServiceInterface, BaseLLMService):
         user_prompt: str,
         response_format: Optional[Type[T]] = None,
         sleep_time: int = 1,
-        timeout: Optional[float] = None,
+        timeout: Optional[float] = 2 * 60,
         images: Optional[list[str]] = None,
         model: Optional[str] = None,
     ) -> Union[str, tuple[bool, T]]:
