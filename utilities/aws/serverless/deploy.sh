@@ -3,7 +3,7 @@ rm -rf .aws-sam
 rm -rf ~/Desktop/SharedLayer
 mkdir ~/Desktop/SharedLayer
 mkdir ~/Desktop/SharedLayer/python
-cp -r ~/Desktop/switchmadi/codebase/job-hunt/ ~/Desktop/SharedLayer/python
+rsync -av --exclude='.cursor' --exclude='temp' --exclude='venv' --exclude='config_temp.yml' --exclude='.git' --exclude='.idea' ~/Desktop/switchmadi/codebase/job-hunt/ ~/Desktop/SharedLayer/python/
 
 cp ~/Desktop/switchmadi/codebase/job-hunt/config.yml ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_share_jobs/
 cp ~/Desktop/switchmadi/codebase/job-hunt/config.yml ~/Desktop/switchmadi/codebase/job-hunt/scripts/lambdas/trigger_job_scrape/
