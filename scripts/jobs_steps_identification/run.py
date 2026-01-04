@@ -104,7 +104,7 @@ try:
                 ]
             )
             try:
-                proc.wait(timeout=30 * 60)  # Wait for 30 minutes
+                proc.wait(timeout=90 * 60)  # Wait for 90 minutes
             except Exception as e:
                 if isinstance(e, subprocess.TimeoutExpired):
                     proc.kill()
