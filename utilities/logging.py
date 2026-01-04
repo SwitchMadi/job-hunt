@@ -49,6 +49,30 @@ def get_logger(
             aws_secret_access_key=os.getenv("JH_AWS_SECRET_ACCESS_KEY"),
             region_name=os.getenv("JH_AWS_AWS_REGION"),
         )
+
+        # Pre-check/create log group to avoid Watchtower timeout on first log
+        # This ensures the log group exists before Watchtower tries to send logs,
+        # preventing the background thread from timing out while creating it
+        try:
+            log_groups = boto3_logs_client.describe_log_groups(
+                logGroupNamePrefix=cloudwatch_log_group
+            )
+            log_group_exists = any(
+                lg["logGroupName"] == cloudwatch_log_group
+                for lg in log_groups.get("logGroups", [])
+            )
+            if not log_group_exists:
+                try:
+                    boto3_logs_client.create_log_group(
+                        logGroupName=cloudwatch_log_group
+                    )
+                except Exception:
+                    # Log group might have been created by another process, or we don't have permissions
+                    pass
+        except Exception:
+            # If we can't check/create, let Watchtower handle it
+            pass
+
         cloudwatch_handler = {
             "class": "watchtower.CloudWatchLogHandler",
             "level": cloudwatch_log_level,
