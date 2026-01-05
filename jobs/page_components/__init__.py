@@ -311,12 +311,13 @@ class ApplicationField:
                     "title is too long.",
                 )
 
-        model = "complex" if retry_with_complex else "default"
+        model = "complex" if retry_with_complex else "intermediate"
         application_field_found, application_field = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=ApplicationFieldInfo,
             model=model,
+            timeout=60 if model == "intermediate" else None,
         )
         if application_field_found:
             if not application_field.is_field_match_confident:
