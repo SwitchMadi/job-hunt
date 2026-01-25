@@ -466,8 +466,6 @@ class ApplicationField:
         Returns:
             str | None: Corrected XPath or None if unrecoverable
         """
-        global driver
-
         xpath = application_field.x_path_info.x_path
         uses_alphanumeric = application_field.x_path_info.uses_alphanumeric
 
@@ -481,7 +479,7 @@ class ApplicationField:
             xpath = "/" + xpath
 
         # Step 2: Fix contains(text(), ...) pattern
-        xpath = self._fix_contains_text_xpath(xpath, application_field)
+        xpath = self._fix_contains_text_xpath(xpath)
 
         # Step 3: Try forming XPath from container if conditions are met
         xpath, uses_alphanumeric = self._try_form_xpath_from_container(
@@ -498,7 +496,7 @@ class ApplicationField:
 
         return xpath
 
-    def _fix_contains_text_xpath(self, xpath, application_field):
+    def _fix_contains_text_xpath(self, xpath):
         """
         Fix contains(text(), ...) pattern in XPath.
 
@@ -507,7 +505,6 @@ class ApplicationField:
 
         Args:
             xpath: Current XPath string
-            application_field: LLM response with field info
 
         Returns:
             str: Fixed XPath (may be unchanged)
