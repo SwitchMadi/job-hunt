@@ -13,7 +13,6 @@ from utilities.aws.s3 import S3Bucket
 from utilities.aws.websocket import WebSocketClient
 from utilities.sql import get_sql_query_output
 
-
 logger = get_logger("jobs_application")
 
 config = yaml.safe_load(open("config.yml"))

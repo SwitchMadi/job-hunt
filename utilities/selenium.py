@@ -31,7 +31,6 @@ import psutil
 import json
 from urllib.parse import urlparse, parse_qsl
 
-
 driver = None
 
 
@@ -193,13 +192,11 @@ def disable_browser_alerts():
     global driver
 
     # disable browser alerts
-    driver.execute_script(
-        """
+    driver.execute_script("""
         window.alert = function() {};
         window.confirm = function() { return true; };
         window.prompt = function() { return null; };
-    """
-    )
+    """)
 
     return True
 
@@ -541,8 +538,7 @@ def get_observed_elements(timeout=3, poll_frequency=0.25):
     end_time = time.time() + timeout
     while (time.time() < end_time) and (len(elements) == 0):
         try:
-            elements = driver.execute_script(
-                """
+            elements = driver.execute_script("""
               return (function() {
                 if (!window.__observedElements) return [];
             
@@ -563,8 +559,7 @@ def get_observed_elements(timeout=3, poll_frequency=0.25):
                     el => !validElements.some(other => other !== el && other.contains(el))
                 );
               })();
-            """
-            )
+            """)
 
             if elements:
                 elements = [element for element in elements if not is_stale(element)]
@@ -585,15 +580,13 @@ def stop_dom_mutation_observer():
     """
     global driver
 
-    driver.execute_script(
-        """
+    driver.execute_script("""
         if (window.__observer) {
             window.__observer.disconnect();
             window.__observer = null;
         }
         window.__observedElements = [];
-    """
-    )
+    """)
 
 
 def get_element_xpath(element, xpath_type="full"):
@@ -1086,8 +1079,7 @@ def import_seleniumwire_ca_cert():
 def start_network_observer():
     global driver
 
-    driver.execute_script(
-        """
+    driver.execute_script("""
         window.capturedRequests = [];
         if (!window.__networkObserverInstalled) {
             (function() {
@@ -1157,8 +1149,7 @@ def start_network_observer():
                 window.__networkObserverInstalled = true;
             })();
         }
-    """
-    )
+    """)
 
     # Clear any previously captured requests from chromedriver performance logs
     driver.get_log("performance")
@@ -1167,8 +1158,7 @@ def start_network_observer():
 def stop_network_observer():
     global driver
 
-    driver.execute_script(
-        """
+    driver.execute_script("""
         if (window._originalFetch) {
             window.fetch = window._originalFetch;
         }
@@ -1178,8 +1168,7 @@ def stop_network_observer():
         }
         window.__networkObserverInstalled = false;
         window.capturedRequests = [];
-    """
-    )
+    """)
 
 
 def get_observed_network_calls():

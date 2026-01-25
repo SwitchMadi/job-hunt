@@ -392,13 +392,11 @@ class ApplicationPage:
                 break
 
         if not self.original_application_page_identified:
-            logger.critical(
-                f"""No application page identified.
+            logger.critical(f"""No application page identified.
                 job_application_page_key - {job_application_page_key}
                 main_page - {self.url}
                 iframe_urls - {iframe_urls}
-            """
-            )
+            """)
 
         return
 

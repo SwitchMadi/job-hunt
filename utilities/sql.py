@@ -8,7 +8,6 @@ from psycopg2.extras import execute_values
 
 from utilities.logging import get_logger
 
-
 logger = get_logger(name="sql")
 
 
