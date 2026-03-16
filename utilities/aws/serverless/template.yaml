@@ -50,7 +50,7 @@ Resources:
             Name: ScrapeGlobalBackendJobsTrigger
             Input: !Sub |
               {
-                "ami_id": "ami-092e7cbbb8c64175b",
+                "ami_id": "ami-044b9eafb8787fd9f",
                 "branch_name": "jobs_scraping/global_backend_jobs"
               }
 
@@ -424,8 +424,6 @@ Resources:
      Layers:
        - !Ref JobHuntCommonLayer
      AutoPublishAlias: live
-     ProvisionedConcurrencyConfig:
-       ProvisionedConcurrentExecutions: 1
      Events:
        UploadResumePost:
          Type: Api
