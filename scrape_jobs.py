@@ -21,10 +21,6 @@ from utilities.selenium import (
     kill_selenium_chrome,
 )
 
-
-import ssl
-ssl._create_default_https_context = ssl._create_unverified_context
-
 # Parse command line arguments
 parser = argparse.ArgumentParser(description="Scrape jobs from various sources")
 parser.add_argument(
