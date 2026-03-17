@@ -23,9 +23,7 @@ from utilities.selenium import (
 
 
 import ssl
-import certifi
-
-ssl._create_default_https_context = lambda: ssl.create_default_context(cafile=certifi.where())
+ssl._create_default_https_context = ssl._create_unverified_context
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(description="Scrape jobs from various sources")
