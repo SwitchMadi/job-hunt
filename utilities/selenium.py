@@ -85,7 +85,7 @@ def get_selenium_driver():
                     )  # Profile directory
 
                 # Create driver
-                driver = uc.Chrome(options=options)
+                driver = uc.Chrome(options=options, driver_executable_path=config["chromedriver"])
             else:
                 # Setup Chrome options
                 options = Options()
