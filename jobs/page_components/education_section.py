@@ -9,6 +9,7 @@ from jobs.page_components import (
     ApplicationField,
 )
 from jobs.page_components.button import Button
+from jobs.page_components.check_box import CheckBox
 from utilities.selenium import (
     get_selenium_driver,
     start_dom_mutation_observer,
@@ -16,9 +17,12 @@ from utilities.selenium import (
     minify_html_for_gpt_prompt,
     is_stale,
     element_exists,
+    get_xpath_by_text,
 )
 from utilities import constants
-from utilities.gpt import get_gpt_response
+from utilities.llm import create_llm_service
+
+_llm_service = create_llm_service(provider="openai")
 
 
 driver = get_selenium_driver()
@@ -126,6 +130,21 @@ class EducationSection(PageComponent):
         return count
 
     def _update_nodes(self, node):
+        # Check if node with same education_no already exists to avoid duplicates
+        if isinstance(node, Education):
+            curr = self.head
+            while curr:
+                if (
+                    isinstance(curr, Education)
+                    and curr.education_no == node.education_no
+                ):
+                    logger.info(
+                        f"Skipping duplicate education node with education_no={node.education_no} "
+                        f"for job {self.parent_application_page.parent_job.title}"
+                    )
+                    return
+                curr = curr.next
+
         if self.head is None:
             self.head = node
             self.tail = node
@@ -276,6 +295,12 @@ class EducationSection(PageComponent):
                     description="Number of the observed element which is strictly having interactive education "
                     "qualification fields.",
                 )
+                education_container_x_path: str = Field(
+                    ...,
+                    description="XPath of the outer-most container element that contains ONLY the interactive "
+                    "education qualification fields for the current education qualification section number mentioned in the prompt. "
+                    "This should be stable and usable with selenium to scope subsequent field lookups.",
+                )
                 education_fields: List[EducationFieldInfo] = Field(
                     ...,
                     description="Fields to start adding education qualification details like college, degree etc.",
@@ -302,6 +327,12 @@ class EducationSection(PageComponent):
         else:
 
             class EducationSectionFields(BaseModel):
+                education_container_x_path: str = Field(
+                    ...,
+                    description="XPath of the outer-most container element that contains ONLY the interactive "
+                    "education qualification fields for the current education qualification section number mentioned in the prompt. "
+                    "This should be stable and usable with selenium to scope subsequent field lookups.",
+                )
                 education_fields: List[EducationFieldInfo] = Field(
                     ...,
                     description="Fields to start adding education qualification details like college, degree etc.",
@@ -325,16 +356,21 @@ class EducationSection(PageComponent):
                     "It may or may not be present.",
                 )
 
-        fields_found, fields = get_gpt_response(
+        fields_found, fields = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=EducationSectionFields,
+            model="intermediate",
         )
         if fields_found:
             curr_node = None
 
             if fields.education_fields:
                 invalid_x_paths = {}
+                if not element_exists(fields.education_container_x_path):
+                    invalid_x_paths["education_container_x_path"] = (
+                        fields.education_container_x_path
+                    )
                 if fields.mark_complete_button_x_path and not element_exists(
                     fields.mark_complete_button_x_path
                 ):
@@ -369,6 +405,7 @@ class EducationSection(PageComponent):
                 curr_node = Education(
                     education_fields=education_fields,
                     save_button=mark_complete_education_button,
+                    container_x_path=fields.education_container_x_path,
                     education_no=self.identified_educations_count + 1,
                     parent_application_page=self.parent_application_page,
                     refetch_fields=True,
@@ -407,10 +444,11 @@ class EducationSection(PageComponent):
                 description="XPath of button to add new / another education qualification.",
             )
 
-        fields_found, fields = get_gpt_response(
+        fields_found, fields = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=AddEducationButton,
+            model="intermediate",
         )
         if fields_found:
             if fields.add_new_education_x_path:
@@ -496,6 +534,7 @@ class EducationSection(PageComponent):
                 location = "location"
                 start_date = "start_date"
                 end_date = "end_date"
+                currently_studying_here = "currently_studying_here"
                 other = "other"
 
             class EducationFieldInfo(BaseModel):
@@ -504,10 +543,9 @@ class EducationSection(PageComponent):
                     description="Education field's exact title / question mentioned on the webpage, without any "
                     "modification.",
                 )
-                field_question: Optional[str] = Field(
+                field_question: str = Field(
                     ...,
-                    description="If field title on its own is not self explanatory then modify it so that it makes sense as"
-                    " a question.",
+                    description="What is grammatically correct question, answering which will help process the field?",
                 )
                 field_category: FieldCategory = Field(
                     ...,
@@ -521,6 +559,12 @@ class EducationSection(PageComponent):
                         ...,
                         description="Number of the observed element which is strictly having interactive education "
                         "qualification fields.",
+                    )
+                    education_container_x_path: str = Field(
+                        ...,
+                        description="XPath of the outer-most container element that contains ONLY the interactive "
+                        "education qualification fields. This should be stable and usable with selenium to scope subsequent "
+                        "field lookups.",
                     )
                     education_fields: Optional[List[EducationFieldInfo]] = Field(
                         ...,
@@ -551,6 +595,12 @@ class EducationSection(PageComponent):
             else:
 
                 class EducationSectionFields(BaseModel):
+                    education_container_x_path: str = Field(
+                        ...,
+                        description="XPath of the outer-most container element that contains ONLY the interactive "
+                        "education qualification fields. This should be stable and usable with selenium to scope subsequent "
+                        "field lookups.",
+                    )
                     education_fields: Optional[List[EducationFieldInfo]] = Field(
                         ...,
                         description="Strictly interactive & clearly visible fields to add education qualification details "
@@ -577,10 +627,11 @@ class EducationSection(PageComponent):
                         "job application itself.",
                     )
 
-            fields_found, fields = get_gpt_response(
+            fields_found, fields = _llm_service.chat(
                 constants.gpt["system_prompts"]["application_step_identification"],
                 user_prompt,
                 response_format=EducationSectionFields,
+                model="intermediate",
             )
             if fields_found:
                 curr_node = None
@@ -593,17 +644,42 @@ class EducationSection(PageComponent):
                             "The x_path that we are trying to extract is of mark complete button which is used to mark"
                             " current education qualification as complete."
                         )
+                        container_x_path = (
+                            fields.education_container_x_path
+                            if fields.education_container_x_path
+                            and element_exists(fields.education_container_x_path)
+                            else None
+                        )
                         fields.mark_complete_button_x_path = (
                             ApplicationField.extract_correct_x_path(
                                 prev_x_path=fields.mark_complete_button_x_path,
                                 prompt=prompt,
                                 job_title=self.parent_application_page.parent_job.title,
                                 job_url=self.parent_application_page.url,
+                                container_x_path=container_x_path,
                             )
                         )
                         if not fields.mark_complete_button_x_path:
                             raise Exception(
                                 "Couldn't extract valid x_path for mark complete button."
+                            )
+                    if not element_exists(fields.education_container_x_path):
+                        # Best-effort correction of container x_path
+                        prompt = (
+                            "The x_path that we are trying to extract is of the container element that wraps the "
+                            "interactive education qualification fields on the page."
+                        )
+                        fields.education_container_x_path = (
+                            ApplicationField.extract_correct_x_path(
+                                prev_x_path=fields.education_container_x_path,
+                                prompt=prompt,
+                                job_title=self.parent_application_page.parent_job.title,
+                                job_url=self.parent_application_page.url,
+                            )
+                        )
+                        if not fields.education_container_x_path:
+                            raise Exception(
+                                "Couldn't extract valid x_path for education container."
                             )
 
                     education_fields = []
@@ -618,12 +694,16 @@ class EducationSection(PageComponent):
                                 parent_application_page=self.parent_application_page,
                                 persist_context_fields=False,
                             )
+                            application_field_component.container_x_path = (
+                                fields.education_container_x_path
+                            )
                         else:
                             application_field = ApplicationField(
                                 parent_application_page=self.parent_application_page,
                                 title=field.field_title,
                                 question=field.field_question,
                                 category=field.field_category.value,
+                                container_x_path=fields.education_container_x_path,
                             )
                             application_field_component = (
                                 application_field.get_field_component()
@@ -631,6 +711,12 @@ class EducationSection(PageComponent):
 
                         if application_field_component:
                             education_fields.append(application_field_component)
+
+                    # Reorder fields to put currently_studying_here fields at the start
+                    education_fields = sorted(
+                        education_fields,
+                        key=lambda f: f.category != "currently_studying_here",
+                    )
 
                     if (
                         education_fields
@@ -649,13 +735,13 @@ class EducationSection(PageComponent):
                         curr_node = Education(
                             education_fields=education_fields,
                             save_button=mark_complete_education_button,
+                            container_x_path=fields.education_container_x_path,
                             education_no=self.identified_educations_count + 1,
                             parent_application_page=self.parent_application_page,
                             refetch_fields=True,
                         )
 
-                if curr_node:
-                    return curr_node
+                return curr_node
 
         logger.warn(
             f"Couldn't extract education fields for {self.parent_application_page.parent_job.title}. "
@@ -690,10 +776,11 @@ class EducationSection(PageComponent):
                 "not on page instructions or labels.",
             )
 
-        info_found, info = get_gpt_response(
+        info_found, info = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=EducationSectionInfo,
+            model="intermediate",
         )
         if info_found:
             return info.interactive_education_fields_visible
@@ -752,10 +839,11 @@ class EducationSection(PageComponent):
                 ..., description="List of all buttons found on the page."
             )
 
-        analysis_found, analysis = get_gpt_response(
+        analysis_found, analysis = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=PageElements,
+            model="intermediate",
         )
 
         if analysis_found:
@@ -813,11 +901,26 @@ class EducationSection(PageComponent):
             f"specific education qualification details in a thorough manner\n"
             f"2. For each individual field, whether it is genuinely intended to collect comprehensive "
             f"education qualification information or seems like a random/standalone question\n\n"
-            f"Consider comprehensive education qualification fields to typically include things like:\n"
-            f"- College name, degree, major, location, start date, completion date etc.\n\n"
-            f"Fields that seem random or not intended for comprehensive education qualification gathering might be:\n"
-            f"- Single generic questions about education\n"
-            f"- Isolated questions without context of building a complete educational history"
+            f"IMPORTANT GUIDELINES FOR COMPREHENSIVENESS:\n"
+            f"- Fields are considered COLLECTIVELY comprehensive if they together capture the core components "
+            f"of an education qualification: (1) institution/college/university name, (2) academic focus "
+            f"(degree type, major, field of study, or similar), and (3) time period (start/end dates, years attended, "
+            f"graduation year, or similar temporal information). Additional fields that provide supplementary details "
+            f"are bonuses but not required for comprehensiveness.\n"
+            f"- For individual fields: A field is comprehensive if it's part of a structured education form that "
+            f"collects multiple related pieces of information to build a complete education record, rather than a "
+            f"standalone generic question that doesn't require detailed information.\n"
+            f"- Time period fields can be represented in various formats (separate start/end dates, first/last year, "
+            f"years attended, graduation date, etc.) - all are valid representations.\n"
+            f"- When evaluating collective comprehensiveness, be GENEROUS - if the fields together allow building "
+            f"a complete education entry with the three core components mentioned above, they should be considered "
+            f"comprehensive even if some optional supplementary fields are missing.\n\n"
+            f"Examples for reference (these are just illustrative examples, not an exhaustive list):\n"
+            f"- COMPREHENSIVE: Multiple fields that together capture institution, academic focus, and time period "
+            f"(e.g., fields asking for school name, degree/major, and dates/years together form a comprehensive set).\n"
+            f"- NON-COMPREHENSIVE: Standalone questions that don't require detailed information (e.g., yes/no questions "
+            f"about having a degree, single dropdowns asking only for highest education level without details, "
+            f"questions that don't allow building a complete education record)."
         )
 
         class FieldComprehensiveness(BaseModel):
@@ -827,8 +930,10 @@ class EducationSection(PageComponent):
             )
             is_comprehensive_education_qualification_field: bool = Field(
                 ...,
-                description="Boolean flag indicating whether this specific field is genuinely intended "
-                "to collect comprehensive education qualification information, not just a random education-related question.",
+                description="Boolean flag indicating whether this specific field is part of a structured "
+                "education qualification form that collects multiple related pieces of information to build a "
+                "complete education record, rather than a standalone generic question. Fields that are part of "
+                "a comprehensive form should be marked as True, even if they don't capture complete information by themselves.",
             )
             reason_for_comprehensiveness: str = Field(
                 ...,
@@ -836,21 +941,31 @@ class EducationSection(PageComponent):
             )
 
         class EducationQualificationFieldsAnalysis(BaseModel):
-            are_fields_collectively_comprehensive: bool = Field(
-                ...,
-                description="Boolean indicating whether all the fields together are comprehensive enough "
-                "to gather a candidate's specific education qualification details thoroughly.",
-            )
             individual_field_analysis: List[FieldComprehensiveness] = Field(
                 ...,
                 description="Analysis of each individual field's comprehensiveness for education qualification collection. "
                 "Return only the field numbers (1-based index) and boolean flags, not the full field titles.",
             )
+            are_fields_collectively_comprehensive: bool = Field(
+                ...,
+                description="Boolean indicating whether all the fields together are comprehensive enough "
+                "to gather a candidate's specific education qualification details. Return True if the fields "
+                "collectively capture the core components: (1) institution/college/university name, "
+                "(2) academic focus (degree type, major, field of study, or similar), and (3) time period "
+                "(start/end dates, years attended, graduation year, or similar temporal information). "
+                "Be generous - if these core components are present, return True even if optional "
+                "supplementary fields are missing.",
+            )
+            reason_for_collective_comprehensiveness: str = Field(
+                ...,
+                description="Reasoning for why the fields are collectively considered comprehensive or not.",
+            )
 
-        analysis_found, analysis = get_gpt_response(
+        analysis_found, analysis = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=EducationQualificationFieldsAnalysis,
+            model="intermediate",
         )
 
         if analysis_found:
@@ -982,12 +1097,16 @@ class Education(PageComponent):
         self,
         education_fields,
         save_button,
+        container_x_path,
         education_no,
         parent_application_page,
         refetch_fields=False,
     ):
         self.education_fields = education_fields
         self.save_button = save_button
+        if not container_x_path:
+            raise ValueError("Education.container_x_path is required")
+        self.container_x_path = container_x_path
         self.education_no = education_no
         self.parent_application_page = parent_application_page
         self.refetch_fields = refetch_fields
@@ -998,7 +1117,23 @@ class Education(PageComponent):
         self.prev = None
 
     def proceed(self, retry=False):
+        # Fail fast if container is missing/stale
+        if not element_exists(self.container_x_path):
+            raise ValueError(
+                f"Education container_x_path is missing or stale: {self.container_x_path} "
+                f"for job {self.parent_application_page.parent_job.title} at url {self.parent_application_page.url}"
+            )
+
         for field in self.education_fields:
+            # Skip end_date field if currently_studying_here checkbox is checked and end_date element doesn't exist
+            if field.category == "end_date":
+                if self._should_skip_end_date_field(field):
+                    logger.info(
+                        f"Skipping end_date field '{field.title}' because currently_studying_here is checked "
+                        f"and end_date element doesn't exist in DOM for job {self.parent_application_page.parent_job.title}"
+                    )
+                    continue
+
             self._process_field(field)
 
         if self.refetch_fields:
@@ -1009,12 +1144,13 @@ class Education(PageComponent):
                     f"section {self.education_no} for job {self.parent_application_page.parent_job.title} "
                     f"at url {self.parent_application_page.url}."
                 )
-                self.education_fields.append(additional_fields)
+                self.education_fields.extend(additional_fields)
 
                 for field in additional_fields:
                     self._process_field(field)
 
         if self.save_button:
+            self.save_button.container_x_path = self.container_x_path
             self.save_button.proceed()
 
     def _process_field(self, field):
@@ -1032,6 +1168,47 @@ class Education(PageComponent):
 
         field.question = question_backup
         field.category = category_backup
+
+    def _should_skip_end_date_field(self, end_date_field):
+        """
+        Check if end_date field should be skipped based on currently_studying_here checkbox state.
+
+        Returns True if:
+        1. A currently_studying_here field exists
+        2. It's a CheckBox type
+        3. It's a boolean checkbox
+        4. It's currently checked
+        5. The end_date field element doesn't exist in DOM
+        """
+        # Find currently_studying_here field
+        currently_studying_field = None
+        for f in self.education_fields:
+            if f.category == "currently_studying_here":
+                currently_studying_field = f
+                break
+
+        if not currently_studying_field:
+            return False
+
+        # Check if it's a CheckBox
+        if not isinstance(currently_studying_field, CheckBox):
+            return False
+
+        # Check if it's boolean type and is checked
+        if not currently_studying_field.is_boolean:
+            return False
+
+        if not currently_studying_field.is_checked:
+            return False
+
+        # Check if end_date field element doesn't exist in DOM using its title
+        if hasattr(end_date_field, "title") and end_date_field.title:
+            if not get_xpath_by_text(
+                end_date_field.title, container_xpath=self.container_x_path
+            ):
+                return True
+
+        return False
 
     def _refetch_fields(self):
         """Fetch additional education fields that are not already present in existing education_fields"""
@@ -1062,6 +1239,7 @@ class Education(PageComponent):
             location = "location"
             start_date = "start_date"
             end_date = "end_date"
+            currently_studying_here = "currently_studying_here"
             other = "other"
 
         class EducationFieldInfo(BaseModel):
@@ -1070,10 +1248,9 @@ class Education(PageComponent):
                 description="Education field's exact title / question mentioned on the webpage, without any "
                 "modification.",
             )
-            field_question: Optional[str] = Field(
+            field_question: str = Field(
                 ...,
-                description="If field title on its own is not self explanatory then modify it so that it makes sense as"
-                " a question.",
+                description="What is grammatically correct question, answering which will help process the field?",
             )
             field_category: FieldCategory = Field(
                 ...,
@@ -1087,10 +1264,11 @@ class Education(PageComponent):
                 "details like college, degree etc.",
             )
 
-        fields_found, fields = get_gpt_response(
+        fields_found, fields = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=EducationFields,
+            model="intermediate",
         )
 
         additional_fields = []
@@ -1113,12 +1291,14 @@ class Education(PageComponent):
                         parent_application_page=self.parent_application_page,
                         persist_context_fields=False,
                     )
+                    application_field_component.container_x_path = self.container_x_path
                 else:
                     application_field = ApplicationField(
                         parent_application_page=self.parent_application_page,
                         title=field.field_title,
                         question=field.field_question,
                         category=field.field_category.value,
+                        container_x_path=self.container_x_path,
                     )
                     application_field_component = (
                         application_field.get_field_component()
@@ -1127,6 +1307,12 @@ class Education(PageComponent):
                 if application_field_component:
                     additional_fields.append(application_field_component)
 
+        # Reorder fields to put currently_studying_here fields at the start
+        additional_fields = sorted(
+            additional_fields,
+            key=lambda f: f.category != "currently_studying_here",
+        )
+
         return additional_fields
 
     def to_dict(self):
@@ -1134,12 +1320,17 @@ class Education(PageComponent):
             "class": self.__class__.__name__,
             "education_fields": [field.to_dict() for field in self.education_fields],
             "save_button": self.save_button.to_dict() if self.save_button else None,
+            "container_x_path": self.container_x_path,
             "education_no": self.education_no,
             "next": self.next.to_dict() if self.next else None,
         }
 
     @classmethod
     def from_dict(cls, input_dict, parent_application_page):
+        if not input_dict.get("container_x_path"):
+            raise ValueError("Education.from_dict: missing required 'container_x_path'")
+        container_x_path = input_dict.get("container_x_path")
+
         fields = []
         for field_input_dict in input_dict["education_fields"]:
             field_class = get_page_component_class_name(
@@ -1160,9 +1351,11 @@ class Education(PageComponent):
         instance = cls(
             education_fields=fields,
             save_button=save_button,
+            container_x_path=container_x_path,
             education_no=input_dict["education_no"],
             parent_application_page=parent_application_page,
         )
+        instance.is_component_functional = True
 
         if input_dict["next"]:
             next_class = get_page_component_class_name(

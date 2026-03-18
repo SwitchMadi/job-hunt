@@ -1,15 +1,18 @@
 import time
 from abc import ABC, abstractmethod
 import re
+import importlib
 from pydantic import BaseModel, Field
 from enum import Enum
-from typing import Optional, List
+from typing import Optional, List, Annotated
 from selenium.common import (
     ElementClickInterceptedException,
     ElementNotInteractableException,
     NoSuchElementException,
+    InvalidSelectorException,
 )
 from selenium.webdriver.common.by import By
+import yaml
 
 from utilities.selenium import (
     get_selenium_driver,
@@ -24,13 +27,16 @@ from utilities.selenium import (
     get_element_xpath,
     find_input_block_for_title,
     get_unique_element_by_xpath,
+    get_interactive_elements_in_container,
 )
 from utilities.logging import get_logger
-from utilities import pascal_to_snake_casing, retry
-from utilities import constants
-from utilities.gpt import get_gpt_response
+from utilities import pascal_to_snake_casing, retry, constants, get_formatted_today_date
+from utilities.llm import create_llm_service
+
+_llm_service = create_llm_service(provider="openai")
 
 
+config = yaml.safe_load(open("config.yml"))
 logger = get_logger(name="job")
 driver = get_selenium_driver()
 driver.set_page_load_timeout(15)
@@ -44,11 +50,26 @@ def get_page_component_class_name(class_name):
         module_name = "work_experience_section"
     elif class_name == "Education":
         module_name = "education_section"
+    elif class_name.endswith("State") and not class_name.startswith("Login"):
+        # Login state classes (e.g., StartState, SignInFormState)
+        # Map to login subfolder - module_name already has _state suffix, so we're good
+        module_name = f"jobs.page_components.login.{module_name}"
 
     try:
         return globals()[class_name]
     except KeyError:
-        return eval(f'globals()["{module_name}"].{class_name}')
+        # Use importlib for nested module imports (e.g., login.account_creation_form_state)
+        try:
+            module = importlib.import_module(module_name)
+            return getattr(module, class_name)
+        except (ImportError, AttributeError) as e:
+            # Fallback to eval for backward compatibility
+            try:
+                return eval(f'globals()["{module_name}"].{class_name}')
+            except Exception:
+                raise ImportError(
+                    f"Could not import {class_name} from {module_name}: {e}"
+                )
 
 
 class PageComponent(ABC):
@@ -74,6 +95,7 @@ class ApplicationField:
         category,
         x_path=None,
         title_to_click=None,
+        container_x_path=None,
     ):
         self.parent_application_page = parent_application_page
         self.title = title
@@ -81,23 +103,135 @@ class ApplicationField:
         self.question = question
         self.category = category
         self.x_path = x_path
+        self.container_x_path = container_x_path
 
         self.field_type = None
         self.html_type = None
         self.format = None
-        self.options = []
+        self.options_container_x_path = None
+        self.options_xpath_pattern = None
 
-    def _identify_x_path(self, retry=False, prev_x_path=None):
-        global driver
+    @retry(times=2, delay=5, exceptions=InvalidSelectorException)
+    def _identify_x_path(self, retry=False, prev_x_path=None, retry_with_complex=False):
+        """
+        Identify the XPath of an interactive form field on job application pages.
 
+        This method orchestrates the XPath identification process:
+        1. Extract HTML context from the page
+        2. Build a prompt for the LLM
+        3. Call LLM to identify field XPath and metadata
+        4. Validate and correct the XPath
+        5. Set field properties
+
+        Args:
+            retry: Whether this is a retry attempt after LLM failure
+            prev_x_path: Previous XPath that failed (for retry context)
+            retry_with_complex: Whether to use complex model for better accuracy
+
+        Returns:
+            None (sets self.x_path and other properties as side effects)
+        """
         logger.info(
             f"Identifying x_path for application field {self.title} & {self.category}..."
         )
 
+        # 1. Get HTML context
+        minified_html, user_input_element = self._get_html_context_for_field()
+
+        # 2. Build prompt
+        user_prompt = self._build_xpath_identification_prompt(
+            minified_html, retry, prev_x_path
+        )
+
+        # 3. Get response model class (conditional based on user_input_element)
+        ResponseModel = self._get_field_info_model(has_user_input_element=(user_input_element is not None))
+
+        # 4. Call LLM
+        model = "complex" if retry_with_complex else "intermediate"
+        application_field_found, application_field = _llm_service.chat(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=ResponseModel,
+            model=model,
+            timeout=60 if model == "intermediate" else None,
+        )
+
+        # 5. Handle LLM failure
+        if not application_field_found:
+            if not retry:
+                return self._identify_x_path(retry=True)
+            else:
+                raise Exception(
+                    f"Couldn't extract following application field {self.category} for "
+                    f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+                )
+
+        # 6. Handle low confidence - retry with complex model
+        if not application_field.is_field_match_confident:
+            if not retry_with_complex:
+                logger.info(
+                    f"Field match is not confident for {self.title} & {self.category} in "
+                    f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}. "
+                    f"Retrying with complex model..."
+                )
+                return self._identify_x_path(
+                    retry=retry,
+                    prev_x_path=prev_x_path,
+                    retry_with_complex=True,
+                )
+            else:
+                logger.warn(
+                    f"Field match is not confident for {self.title} & {self.category} in "
+                    f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url} "
+                    f"even after retrying with complex model."
+                )
+                return None
+
+        # 7. Validate and correct XPath
+        corrected_xpath = self._validate_and_correct_xpath(application_field, minified_html)
+        if corrected_xpath is None:
+            return None
+
+        # 8. Check for duplicate component
+        if self.parent_application_page.component_x_path_exists(corrected_xpath):
+            logger.warn(
+                f"Page component with following x_path already exists - {corrected_xpath}"
+            )
+            return None
+
+        # 9. Set field properties
+        self._set_field_properties(application_field, corrected_xpath, user_input_element)
+
+        # 10. Handle MCQ options if applicable
+        self._finalize_mcq_options(application_field)
+
+        return None
+
+    def _get_html_context_for_field(self):
+        """
+        Extract HTML context for field identification.
+
+        Tries to find the input block for the field title and extracts
+        the most relevant HTML snippet for LLM analysis.
+
+        Returns:
+            tuple: (minified_html, user_input_element)
+                - minified_html: Minified HTML string for LLM prompt
+                - user_input_element: WebElement if found, None otherwise
+
+        Side Effects:
+            Sets self.container_x_path if computed from find_input_block_for_title
+        """
+        global driver
+
         user_input_element = None
+        computed_container_xpath = None
+
         try:
-            element_identified, user_input_element = find_input_block_for_title(
-                self.title
+            element_identified, user_input_element, computed_container_xpath = (
+                find_input_block_for_title(
+                    self.title, container_xpath=self.container_x_path
+                )
             )
             if not element_identified:
                 logger.warn(
@@ -115,9 +249,34 @@ class ApplicationField:
             minified_html = minify_html_for_gpt_prompt(
                 user_input_element.get_attribute("outerHTML")
             )
+            if (not self.container_x_path) and computed_container_xpath:
+                self.container_x_path = computed_container_xpath
+        elif self.container_x_path and element_exists(self.container_x_path):
+            logger.info(
+                f"User input element not found so using container_x_path for HTML extraction for "
+                f"field {self.title} & {self.category}..."
+            )
+            container_element = driver.find_element(By.XPATH, self.container_x_path)
+            minified_html = minify_html_for_gpt_prompt(
+                container_element.get_attribute("outerHTML")
+            )
         else:
             minified_html = minify_html_for_gpt_prompt(driver.page_source)
 
+        return minified_html, user_input_element
+
+    def _build_xpath_identification_prompt(self, minified_html, retry=False, prev_x_path=None):
+        """
+        Build the LLM prompt for XPath identification.
+
+        Args:
+            minified_html: Minified HTML content for analysis
+            retry: Whether this is a retry attempt
+            prev_x_path: Previous XPath that failed (for retry context)
+
+        Returns:
+            str: Complete prompt for LLM
+        """
         user_prompt = (
             f"Following HTML is of job application webpage for {self.parent_application_page.parent_job.title}."
             f"HTML: {minified_html}\n"
@@ -134,8 +293,18 @@ class ApplicationField:
             f"3. XPath should be of one interactive element only. Don't get XPath for element which has multiple "
             f"interactive elements in it (except for checkboxes and radio buttons) and the element is not interactive "
             f"itself.\n"
+            f"4. When identifying html_type, carefully analyze the element's behavior and HTML structure. If you see a "
+            f"button element that displays a selected value and opens a menu/list of options when clicked (indicated by "
+            f"attributes like aria-haspopup, aria-expanded, or presence of dropdown icons), classify it as 'dropdownButton'. "
+            f"Only use 'button' for elements that perform actions (submit, cancel, add entry) without opening selection menus.\n"
+            f"5. If the field_type is checkbox or radio button, extract options_container_x_path (XPath of the parent element "
+            f"containing all checkbox/radio options) and options_xpath_pattern (XPath pattern that matches all individual "
+            f"option elements). The options_xpath_pattern will be used relative to the container element (i.e., "
+            f"container_element.find_elements(By.XPATH, pattern)), so it should be a relative XPath pattern. "
+            f"Both XPaths should avoid alphanumeric strings that may change on page reload.\n"
         )
 
+        # Add phone field special instructions
         if self.category in ["phone_country_code", "phone_number_without_country_code"]:
             user_prompt += (
                 f"\nAdditionally Put extra effort to understand HTML hierarchy and don't confuse yourself between country code "
@@ -145,6 +314,7 @@ class ApplicationField:
                 f"to identify & distinguish correctly."
             )
 
+        # Add retry context
         if retry and prev_x_path:
             user_prompt += (
                 f"\n\nIn previous try you gave following x_path and the element couldn't be found using that. So, find "
@@ -152,11 +322,28 @@ class ApplicationField:
                 f"Previous x_path - {prev_x_path}\n"
             )
 
+        return user_prompt
+
+    def _get_field_info_model(self, has_user_input_element):
+        """
+        Get the appropriate Pydantic model for LLM response.
+
+        The model differs based on whether user_input_element was found:
+        - With user_input_element: No exact_field_title field
+        - Without: Includes exact_field_title field
+
+        Args:
+            has_user_input_element: Whether user_input_element was found
+
+        Returns:
+            Type[BaseModel]: The appropriate ApplicationFieldInfo class
+        """
         class FieldHtmlType(Enum):
             textBox = "text_box"
             checkBox = "check_box"
             radioButton = "radio_button"
             dropdown = "dropdown"
+            dropdownButton = "dropdown_button"
             button = "button"
 
         class FieldType(Enum):
@@ -169,26 +356,25 @@ class ApplicationField:
             multiple_choice = "multiple_choice"
             other = "other"
 
-        class Option(BaseModel):
-            text: str = Field(
+        class XPathInfo(BaseModel):
+            x_path: Optional[str] = Field(
                 ...,
-                description="Exact text of the checkbox / radio button / normal option",
+                description="XPath of the application field which can be used in selenium chrome driver to search the "
+                "application field. Don't use HTML hierarchy to construct XPath. XPath of the first field "
+                "if there are many.",
             )
-            x_path: str = Field(
+            uses_alphanumeric: bool = Field(
                 ...,
-                description="XPath of the clickable checkbox / radio button which can be used in selenium "
-                "chrome driver to search & click the checkbox / radio button. If checkbox / radio button is "
-                "different from option text then give xpath of the clickable checkbox / radio button element",
+                description="Whether this XPath uses alphanumeric strings (like 'id-123abc', 'element-456xyz', "
+                "or any attribute values containing random alphanumeric characters) that may change when the page reloads. "
+                "Set to True if the XPath contains such patterns, False otherwise.",
             )
 
-        if user_input_element:
-
+        if has_user_input_element:
             class ApplicationFieldInfo(BaseModel):
-                x_path: Optional[str] = Field(
+                x_path_info: XPathInfo = Field(
                     ...,
-                    description="XPath of the application field which can be used in selenium chrome driver to search the "
-                    "application field. Don't use HTML hierarchy to construct XPath. XPath of the first field "
-                    "if there are many.",
+                    description="XPath information of the application field, including the xpath string and whether it uses alphanumeric IDs.",
                 )
                 is_field_match_confident: bool = Field(
                     ...,
@@ -202,26 +388,26 @@ class ApplicationField:
                 )
                 html_type: FieldHtmlType = Field(
                     ...,
-                    description="Application field html type like textbox, checkbox, dropdown etc.",
+                    description="Application field html type like textbox, checkbox, dropdown, dropdownButton etc.",
                 )
-                options: Optional[List[Option]] = Field(
-                    ...,
-                    description="Clickable options to select from if the field_type is either checkbox or radio button",
+                options_container_x_path: Optional[str] = Field(
+                    default=None,
+                    description="XPath of the container element containing all checkbox/radio options. Should be provided only if html_type is check_box or radio_button.",
+                )
+                options_xpath_pattern: Optional[str] = Field(
+                    default=None,
+                    description="XPath pattern that matches all individual checkbox/radio option elements. This pattern will be used relative to the container element (i.e., container_element.find_elements(By.XPATH, pattern)), so it should be a relative XPath pattern. Should be provided only if html_type is check_box or radio_button.",
                 )
                 format: Optional[str] = Field(
                     ...,
                     description="Format of field answer if the field requires its answer to be in some specific format. "
                     "e.g. date format etc.",
                 )
-
         else:
-
             class ApplicationFieldInfo(BaseModel):
-                x_path: Optional[str] = Field(
+                x_path_info: XPathInfo = Field(
                     ...,
-                    description="XPath of the application field which can be used in selenium chrome driver to search the "
-                    "application field. Don't use HTML hierarchy to construct XPath. XPath of the first field "
-                    "if there are many.",
+                    description="XPath information of the application field, including the xpath string and whether it uses alphanumeric IDs.",
                 )
                 is_field_match_confident: bool = Field(
                     ...,
@@ -235,11 +421,19 @@ class ApplicationField:
                 )
                 html_type: FieldHtmlType = Field(
                     ...,
-                    description="Application field html type like textbox, checkbox, dropdown etc.",
+                    description="Application field html type like textbox, checkbox, dropdown, dropdownButton etc.",
                 )
-                options: Optional[List[Option]] = Field(
-                    ...,
-                    description="Clickable options to select from if the field_type is either checkbox or radio button",
+                options_container_x_path: Optional[str] = Field(
+                    default=None,
+                    description="XPath of the container element containing all checkbox/radio options. Should be "
+                    "provided only if html_type is check_box or radio_button.",
+                )
+                options_xpath_pattern: Optional[str] = Field(
+                    default=None,
+                    description="XPath pattern that matches all individual checkbox/radio option elements. This pattern"
+                    " will be used relative to the container element "
+                    "(i.e., container_element.find_elements(By.XPATH, pattern)), so it should be a relative"
+                    " XPath pattern. Should be provided only if html_type is check_box or radio_button.",
                 )
                 format: Optional[str] = Field(
                     ...,
@@ -252,161 +446,502 @@ class ApplicationField:
                     "title is too long.",
                 )
 
-        application_field_found, application_field = get_gpt_response(
-            constants.gpt["system_prompts"]["application_step_identification"],
-            user_prompt,
-            response_format=ApplicationFieldInfo,
+        return ApplicationFieldInfo
+
+    def _validate_and_correct_xpath(self, application_field, minified_html):
+        """
+        Validate and correct the XPath from LLM response.
+
+        Performs multiple validation and correction steps:
+        1. Fix single-slash XPath format
+        2. Fix contains(text(), ...) pattern
+        3. Try forming XPath from container
+        4. Validate element exists
+        5. Validate XPath uniqueness
+
+        Args:
+            application_field: LLM response with field info
+            minified_html: HTML content for correction prompts
+
+        Returns:
+            str | None: Corrected XPath or None if unrecoverable
+        """
+        xpath = application_field.x_path_info.x_path
+        uses_alphanumeric = application_field.x_path_info.uses_alphanumeric
+
+        # Step 1: Fix single-slash XPath format
+        if (
+            xpath
+            and xpath.startswith("/")
+            and not xpath.startswith("//")
+            and not element_exists(xpath)
+        ):
+            xpath = "/" + xpath
+
+        # Step 2: Fix contains(text(), ...) pattern
+        xpath = self._fix_contains_text_xpath(xpath)
+
+        # Step 3: Try forming XPath from container if conditions are met
+        xpath, uses_alphanumeric = self._try_form_xpath_from_container(
+            xpath, uses_alphanumeric, application_field
         )
-        if application_field_found:
-            if not application_field.is_field_match_confident:
-                logger.warn(
-                    f"Field match is not confident for {self.title} & {self.category} in "
-                    f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
-                )
-                return None
 
-            if (
-                application_field.x_path.startswith("/")
-                and not application_field.x_path.startswith("//")
-                and not element_exists(application_field.x_path)
-            ):
-                application_field.x_path = "/" + application_field.x_path
+        # Step 4: Validate element exists and correct if needed
+        xpath = self._ensure_element_exists(xpath, application_field, minified_html)
+        if xpath is None:
+            return None
 
-            if (
-                (application_field.field_type.value != "date_field")
-                and not (
-                    application_field.html_type != "dropdown"
-                    and application_field.options
+        # Step 5: Validate XPath uniqueness and correct if needed
+        xpath = self._ensure_xpath_unique(xpath, application_field, minified_html)
+
+        return xpath
+
+    def _fix_contains_text_xpath(self, xpath):
+        """
+        Fix contains(text(), ...) pattern in XPath.
+
+        Replaces contains(text(), ...) with contains(., ...) when element
+        not found, as this helps with minified HTML where text nodes might be trimmed.
+
+        Args:
+            xpath: Current XPath string
+
+        Returns:
+            str: Fixed XPath (may be unchanged)
+        """
+        if not xpath or element_exists(xpath):
+            return xpath
+
+        contains_text_pattern = r"contains\(text\(\),\s*(['\"])([^'\"]+)\1\)"
+        match = re.search(contains_text_pattern, xpath)
+
+        if match:
+            quote_char = match.group(1)
+            text_content = match.group(2)
+            modified_xpath = re.sub(
+                contains_text_pattern,
+                f"contains(., {quote_char}{text_content}{quote_char})",
+                xpath,
+            )
+            if element_exists(modified_xpath):
+                logger.info(
+                    f"Element found after replacing contains(text(), ...) with contains(., ...) "
+                    f"for {self.title} & {self.category} in "
+                    f"{self.parent_application_page.parent_job.title}. "
+                    f"Original xpath: {xpath}, Modified xpath: {modified_xpath}"
                 )
-                and not element_exists(application_field.x_path)
-            ):
+                return modified_xpath
+
+        return xpath
+
+    def _try_form_xpath_from_container(self, xpath, uses_alphanumeric, application_field):
+        """
+        Try to form XPath from container if conditions are met.
+
+        Conditions:
+        - html_type is text_box, dropdown, or dropdown_button
+        - field_type is text_field or other
+        - XPath is empty, doesn't exist, or uses alphanumeric IDs
+        - container_x_path exists
+
+        Args:
+            xpath: Current XPath string
+            uses_alphanumeric: Whether current XPath uses alphanumeric IDs
+            application_field: LLM response with field info
+
+        Returns:
+            tuple: (xpath, uses_alphanumeric) - possibly updated values
+        """
+        should_try_container = (
+            application_field.html_type.value in ["text_box", "dropdown", "dropdown_button"]
+            and application_field.field_type.value in ["text_field", "other"]
+            and (
+                not xpath
+                or not element_exists(xpath)
+                or uses_alphanumeric
+            )
+            and self.container_x_path
+        )
+
+        if should_try_container:
+            formed_xpath = self._form_xpath_from_container(self.container_x_path)
+            if formed_xpath:
+                logger.info(
+                    f"Replacing xpath {'(has alphanumeric IDs)' if uses_alphanumeric else ''} "
+                    f"with container-based xpath for {self.title} & {self.category} in "
+                    f"{self.parent_application_page.parent_job.title}. "
+                    f"Original xpath: {xpath}, Container based xpath: {formed_xpath}"
+                )
+                return formed_xpath, False
+
+        return xpath, uses_alphanumeric
+
+    def _ensure_element_exists(self, xpath, application_field, minified_html):
+        """
+        Ensure element exists at XPath, attempt correction if not.
+
+        Args:
+            xpath: Current XPath string
+            application_field: LLM response with field info
+            minified_html: HTML content for correction prompt
+
+        Returns:
+            str | None: Corrected XPath or None if unrecoverable
+        """
+        # Skip validation for certain conditions
+        skip_validation = (
+            application_field.field_type.value == "date_field"
+            or (
+                application_field.html_type.value != "dropdown"
+                and (
+                    application_field.options_container_x_path
+                    or application_field.options_xpath_pattern
+                )
+            )
+            or not xpath
+            or element_exists(xpath)
+        )
+
+        if skip_validation:
+            return xpath
+
+        logger.warn(
+            f"Element with x_path {xpath} doesn't exist for "
+            f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+        )
+
+        prompt = (
+            f"The x_path that we are trying to extract is of following application field -\n"
+            f"Field title - {self.title}\n"
+            f"Field category - {self.category}\n"
+        )
+
+        correct_x_path = self.extract_correct_x_path(
+            prev_x_path=xpath,
+            prompt=prompt,
+            job_title=self.parent_application_page.parent_job.title,
+            job_url=self.parent_application_page.url,
+            html=minified_html,
+            container_x_path=self.container_x_path,
+        )
+
+        return correct_x_path if correct_x_path else None
+
+    def _ensure_xpath_unique(self, xpath, application_field, minified_html):
+        """
+        Ensure XPath is unique on the page, attempt correction if not.
+
+        Args:
+            xpath: Current XPath string
+            application_field: LLM response with field info
+            minified_html: HTML content for correction prompt
+
+        Returns:
+            str: Corrected XPath (may be unchanged)
+        """
+        global driver
+
+        # Check conditions for uniqueness validation
+        should_check_uniqueness = (
+            application_field.html_type.value in ["text_box", "dropdown", "dropdown_button"]
+            and application_field.field_type.value in ["text_field", "other"]
+            and self.container_x_path
+            and element_exists(self.container_x_path)
+            and xpath
+            and element_exists(xpath)
+        )
+
+        if not should_check_uniqueness:
+            return xpath
+
+        try:
+            elements = driver.find_elements(By.XPATH, xpath)
+            if len(elements) > 1:
                 logger.warn(
-                    f"Element with x_path {application_field.x_path} doesn't exist for "
-                    f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+                    f"Element with x_path {xpath} exists {len(elements)} times on the page "
+                    f"for {self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}. "
+                    f"Container exists, attempting to extract a more specific xpath..."
                 )
                 prompt = (
                     f"The x_path that we are trying to extract is of following application field -\n"
                     f"Field title - {self.title}\n"
                     f"Field category - {self.category}\n"
+                    f"CRITICAL: The current x_path exists {len(elements)} times on the page, which means it's not unique. "
+                    f"Since a container element exists with XPath: {self.container_x_path}, please extract a more specific "
+                    f"x_path that targets the element within this container. The x_path should be unique within the page "
+                    f"or be constructed relative to the container to ensure it targets the correct element."
                 )
                 correct_x_path = self.extract_correct_x_path(
-                    prev_x_path=application_field.x_path,
+                    prev_x_path=xpath,
                     prompt=prompt,
                     job_title=self.parent_application_page.parent_job.title,
                     job_url=self.parent_application_page.url,
                     html=minified_html,
+                    container_x_path=self.container_x_path,
                 )
-                if not correct_x_path:
-                    return None
-                else:
-                    application_field.x_path = correct_x_path
+                if correct_x_path:
+                    return correct_x_path
+        except Exception as e:
+            logger.warn(
+                f"Error checking uniqueness of x_path {xpath} for "
+                f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}. "
+                f"Error: {str(e)}"
+            )
 
-            if self.parent_application_page.component_x_path_exists(
-                application_field.x_path
-            ):
-                logger.warn(
-                    f"Page component with following x_path already exists - {application_field.x_path}"
+        return xpath
+
+    def _set_field_properties(self, application_field, corrected_xpath, user_input_element):
+        """
+        Set field properties from LLM response.
+
+        Args:
+            application_field: LLM response with field info
+            corrected_xpath: Validated and corrected XPath
+            user_input_element: WebElement if found, None otherwise
+        """
+        self.x_path = corrected_xpath
+        self.field_type = application_field.field_type.value
+        self.html_type = application_field.html_type.value
+        self.format = application_field.format
+
+        # Update title from LLM response if user_input_element was not found
+        if not user_input_element:
+            self.title = application_field.exact_field_title or self.title
+
+    def _finalize_mcq_options(self, application_field):
+        """
+        Finalize MCQ (checkbox/radio) options handling.
+
+        For checkbox/radio fields, validates and sets options container
+        and pattern. For other field types with options (edge case),
+        just sets the values without validation.
+
+        Args:
+            application_field: LLM response with field info
+        """
+        if application_field.html_type.value in ["check_box", "radio_button"]:
+            # For checkbox/radio, we need both container and pattern
+            self.options_container_x_path = application_field.options_container_x_path
+            self.options_xpath_pattern = application_field.options_xpath_pattern
+            # Always validate - _validate_mcq_options_pattern handles missing fields
+            self.options_container_x_path, self.options_xpath_pattern = (
+                self._validate_mcq_options_pattern(
+                    self.options_container_x_path, self.options_xpath_pattern
                 )
-                return
+            )
+        elif (
+            application_field.options_container_x_path
+            or application_field.options_xpath_pattern
+        ):
+            # Non-checkbox/radio but has options (edge case - shouldn't happen per spec)
+            self.options_container_x_path = application_field.options_container_x_path
+            self.options_xpath_pattern = application_field.options_xpath_pattern
 
-            self.x_path = application_field.x_path
-            self.field_type = application_field.field_type.value
-            self.html_type = application_field.html_type.value
-            self.format = application_field.format
+    def _validate_mcq_options_pattern(
+        self, options_container_x_path, options_xpath_pattern
+    ):
+        """Validate and fix options container XPath and pattern XPath if needed"""
+        global driver
 
-            if not user_input_element:
-                self.title = application_field.exact_field_title or self.title
+        # Both container and pattern are required
+        if not options_container_x_path or not options_xpath_pattern:
+            logger.warning(
+                f"Missing container or pattern XPath for {self.title}. "
+                f"Container: {options_container_x_path}, Pattern: {options_xpath_pattern}"
+            )
+            return self._extract_options_pattern_using_llm(
+                prev_options_container_x_path=options_container_x_path,
+                prev_options_xpath_pattern=options_xpath_pattern,
+                failed_part=(
+                    "both"
+                    if not options_container_x_path and not options_xpath_pattern
+                    else ("container" if not options_container_x_path else "pattern")
+                ),
+                question=self.question,
+            )
 
-            if application_field.options:
-                self.options = [
-                    {"text": option.text, "x_path": option.x_path}
-                    for option in application_field.options
-                ]
-                self.options = self._validate_options_xpaths(
-                    self.options, minified_html
+        # Validate container XPath exists
+        if not element_exists(options_container_x_path):
+            logger.warning(
+                f"Container XPath {options_container_x_path} not found for {self.title}. "
+                f"Attempting to extract correct pattern..."
+            )
+            # Try to extract pattern using LLM
+            return self._extract_options_pattern_using_llm(
+                prev_options_container_x_path=options_container_x_path,
+                prev_options_xpath_pattern=options_xpath_pattern,
+                failed_part="container",
+                question=self.question,
+            )
+
+        # Validate pattern matches at least one element (scoped to container)
+        container_element = driver.find_element(By.XPATH, options_container_x_path)
+        elements = container_element.find_elements(By.XPATH, options_xpath_pattern)
+        if not elements:
+            logger.warning(
+                f"Pattern {options_xpath_pattern} matches no elements within container {options_container_x_path} for {self.title}. "
+                f"Attempting to extract correct pattern..."
+            )
+            # Try to extract pattern using LLM
+            return self._extract_options_pattern_using_llm(
+                prev_options_container_x_path=options_container_x_path,
+                prev_options_xpath_pattern=options_xpath_pattern,
+                failed_part="pattern",
+                question=self.question,
+            )
+
+        return options_container_x_path, options_xpath_pattern
+
+    def _form_xpath_from_container(self, container_xpath):
+        """
+        Form xpath relative to container xpath if there's exactly one interactive element.
+
+        Args:
+            container_xpath: XPath of the container element
+
+        Returns:
+            str or None: XPath relative to container (e.g., container_xpath//input) if exactly
+                        one interactive element found, None otherwise
+        """
+        global driver
+
+        try:
+            interactive_elements, tag_counts = get_interactive_elements_in_container(
+                container_xpath
+            )
+
+            # Only form xpath if there's exactly one interactive element
+            if len(interactive_elements) != 1:
+                logger.info(
+                    f"Container {container_xpath} has {len(interactive_elements)} interactive elements, "
+                    f"not forming xpath from container for field {self.title}"
                 )
-        elif not retry:
-            self._identify_x_path(retry=True)
+                return None
+
+            # Get the tag name of the single interactive element
+            tag_name = interactive_elements[0].tag_name.lower()
+
+            # Form xpath relative to container: container_xpath//tag_name
+            relative_xpath = f"{container_xpath}//{tag_name}"
+
+            logger.info(
+                f"Formed xpath from container for field {self.title}: {relative_xpath}"
+            )
+
+            return relative_xpath
+        except Exception as e:
+            logger.warning(
+                f"Error forming xpath from container {container_xpath} for field {self.title}: {e}"
+            )
+            return None
+
+    def _extract_options_pattern_using_llm(
+        self,
+        prev_options_container_x_path=None,
+        prev_options_xpath_pattern=None,
+        failed_part=None,
+        question=None,
+    ):
+        """Extract options container and pattern using LLM"""
+        global driver
+
+        if question:
+            question_prompt = (
+                f"There is a checkbox/radio button field on this page asking following question under the "
+                f"title {self.title}\nQuestion - {question}"
+            )
         else:
-            raise Exception(
-                f"Couldn't extract following application field {self.category} for "
-                f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+            question_prompt = f"There is a checkbox/radio button field on this page with title as following -\n{self.title}"
+
+        # Try to find input block for title
+        element_identified, user_input_element, computed_container_xpath = (
+            find_input_block_for_title(
+                self.title, container_xpath=self.container_x_path
             )
-
-        return None
-
-    def _validate_options_xpaths(self, options, html):
-        all_xpaths_valid = True
-        for option in options:
-            if not element_exists(option["x_path"]):
-                all_xpaths_valid = False
-                break
-
-        if all_xpaths_valid:
-            return options
-
-        xpath_prompt = (
-            f"The x_path that we are trying to find is of an option under following title - \n"
-            f"Field title - {self.title}\n"
-            f"The option is following - \n"
-            f"Option text - {option['text']}"
         )
+        if user_input_element:
+            container_html = user_input_element.get_attribute("outerHTML")
+        else:
+            container_html = minify_html_for_gpt_prompt(driver.page_source)
 
-        correct_xpath = ApplicationField.extract_correct_x_path(
-            prev_x_path=option["x_path"],
-            prompt=xpath_prompt,
-            job_title=self.parent_application_page.parent_job.title,
-            job_url=self.parent_application_page.url,
-            html=html,
-            xpath_count=20,
-        )
-        if not correct_xpath:
-            raise Exception(
-                f"Couldn't extract correct x_path for the option {option['text']} under title {option['x_path']} for "
-                f"url {self.parent_application_page.parent_job.url}."
-            )
-
-        options_prompt = "\n".join(f"- {option['text']}" for option in options)
         user_prompt = (
-            f"Following HTML is of job application webpage for {self.parent_application_page.parent_job.title}."
-            f"HTML: {html}\n"
-            f"The webpage has following application field for applying to the job -\n"
-            f"Field title - {self.title}\n"
-            f"Field category - {self.category}\n"
-            f"The field has following options - \n"
-            f"{options_prompt}\n"
-            f"For the option with text as {option['text']}, following is the correct xpath - {correct_xpath}\n"
-            f"Fetch the xpath for all above given options, in strictly same pattern as the above given xpath."
+            f"I have HTML of job application webpage for {self.parent_application_page.parent_job.title}."
+            f"{question_prompt}\n"
+            f"Following is the HTML containing the checkbox/radio button options:\n"
+            f"{minify_html_for_gpt_prompt(container_html)}\n"
         )
 
-        class Option(BaseModel):
-            text: str = Field(..., description="Exact text of the option")
-            x_path: str = Field(
+        if prev_options_container_x_path or prev_options_xpath_pattern:
+            user_prompt += f"\nIn previous attempt, I tried following XPaths but they didn't work:\n"
+            if prev_options_container_x_path:
+                user_prompt += f"Container XPath: {prev_options_container_x_path}\n"
+            if prev_options_xpath_pattern:
+                user_prompt += f"Pattern XPath: {prev_options_xpath_pattern}\n"
+
+            if failed_part:
+                if failed_part == "container":
+                    user_prompt += (
+                        f"The container XPath failed (element not found). Please provide a correct container XPath. "
+                        f"The pattern XPath may be correct, but verify it works with the new container.\n"
+                    )
+                elif failed_part == "pattern":
+                    user_prompt += (
+                        f"The pattern XPath failed (no elements found when used within the container). "
+                        f"The container XPath is correct. Please provide a correct pattern XPath that will find "
+                        f"option elements within the container.\n"
+                    )
+                elif failed_part == "both":
+                    user_prompt += f"Both container and pattern XPaths are missing or incorrect. Please provide correct XPaths.\n"
+            else:
+                user_prompt += f"Please provide correct XPaths that will work.\n"
+
+        user_prompt += (
+            f"Return the container XPath (parent element containing all options) and XPath pattern that will match ALL "
+            f"option elements. IMPORTANT: The options_xpath_pattern will be used relative to the container element "
+            f"(i.e., container_element.find_elements(By.XPATH, pattern)), so it must be a relative XPath pattern. "
+            f"The XPath pattern should:\n"
+            f"1. Be a relative XPath that works when used with container_element.find_elements(By.XPATH, pattern)\n"
+            f"2. Not rely on HTML hierarchy\n"
+            f"3. Use attributes like class, role, data-* attributes instead (avoid alphanumeric strings)\n"
+            f"4. Return ONLY the actual clickable elements that handle option selection\n"
+            f"5. For custom implementations, find the outermost clickable element that contains the option text\n"
+            f"6. Look for elements with click handlers\n"
+            f"7. The pattern should be relative to the container element, not an absolute XPath from the document root"
+        )
+
+        class OptionsPattern(BaseModel):
+            options_container_x_path: str = Field(
                 ...,
-                description=f"XPath of the option using following pattern - {correct_xpath}",
+                description="XPath of the container element containing all checkbox/radio options",
+            )
+            options_xpath_pattern: str = Field(
+                ...,
+                description="XPath pattern that matches all individual option elements. This pattern will be used relative to the container element (i.e., container_element.find_elements(By.XPATH, pattern)), so it should be a relative XPath pattern.",
             )
 
-        class Options(BaseModel):
-            options: List[Option] = Field(
-                ...,
-                description="Options with text and x_paths",
-            )
-
-        options_xpaths_found, options = get_gpt_response(
+        pattern_found, pattern_result = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
-            response_format=Options,
+            response_format=OptionsPattern,
         )
-        if options_xpaths_found:
-            return [
-                {"text": option.text, "x_path": option.x_path}
-                for option in options.options
-            ]
-        else:
-            raise Exception(
-                f"Couldn't extract correct x_paths for the options under title {self.title} for "
-                f"url {self.parent_application_page.parent_job.url}."
-            )
+
+        if pattern_found:
+            # Validate the extracted pattern (pattern must be scoped to container)
+            container_xpath = pattern_result.options_container_x_path
+            pattern_xpath = pattern_result.options_xpath_pattern
+            if element_exists(container_xpath):
+                container_element = driver.find_element(By.XPATH, container_xpath)
+                elements = container_element.find_elements(By.XPATH, pattern_xpath)
+                if elements:
+                    return (
+                        container_xpath,
+                        pattern_xpath,
+                    )
+
+        raise Exception(
+            f"Couldn't extract options pattern for {self.title} at "
+            f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+        )
 
     def get_field_component(self):
         if not self.x_path:
@@ -415,12 +950,14 @@ class ApplicationField:
         if self.field_type == "date_field":
             from jobs.page_components.date_field import DateField
 
-            return DateField(
+            component = DateField(
                 title=self.title,
                 question=self.question,
                 category=self.category,
                 parent_application_page=self.parent_application_page,
             )
+            component.container_x_path = self.container_x_path
+            return component
 
         if self.x_path:
             self.html_type, container_x_path = self.revalidate_component_type(
@@ -428,23 +965,26 @@ class ApplicationField:
                 html_type=self.html_type,
                 field_title=self.title,
                 job_title=self.parent_application_page.parent_job.title,
-                options=self.options,
+                options_container_x_path=self.options_container_x_path,
+                options_xpath_pattern=self.options_xpath_pattern,
             )
 
             if self.html_type == "text_box":
                 from jobs.page_components.text_input import TextInput
 
-                return TextInput(
+                component = TextInput(
                     x_path=self.x_path,
                     title=self.title,
                     question=self.question,
                     category=self.category,
                     parent_application_page=self.parent_application_page,
                 )
-            elif self.html_type == "dropdown":
+                component.container_x_path = self.container_x_path
+                return component
+            elif self.html_type == "dropdown" or self.html_type == "dropdown_button":
                 from jobs.page_components.drop_down import DropDown
 
-                return DropDown(
+                component = DropDown(
                     x_path=self.x_path,
                     title=self.title,
                     question=self.question,
@@ -452,38 +992,48 @@ class ApplicationField:
                     options_container_x_path=container_x_path,
                     parent_application_page=self.parent_application_page,
                 )
+                component.container_x_path = self.container_x_path
+                return component
             elif self.html_type == "search_field":
                 from jobs.page_components.search_field import SearchField
 
-                return SearchField(
+                component = SearchField(
                     x_path=self.x_path,
                     title=self.title,
                     question=self.question,
                     category=self.category,
                     parent_application_page=self.parent_application_page,
                 )
+                component.container_x_path = self.container_x_path
+                return component
             elif self.html_type == "radio_button":
                 from jobs.page_components.radio_button import RadioButton
 
-                return RadioButton(
+                component = RadioButton(
                     x_path=self.x_path,
                     title=self.title,
                     question=self.question,
                     category=self.category,
-                    options=self.options,
+                    options_container_x_path=self.options_container_x_path,
+                    options_xpath_pattern=self.options_xpath_pattern,
                     parent_application_page=self.parent_application_page,
                 )
+                component.container_x_path = self.container_x_path
+                return component
             elif self.html_type == "check_box":
                 from jobs.page_components.check_box import CheckBox
 
-                return CheckBox(
+                component = CheckBox(
                     x_path=self.x_path,
                     title=self.title,
                     question=self.question,
                     category=self.category,
-                    options=self.options,
+                    options_container_x_path=self.options_container_x_path,
+                    options_xpath_pattern=self.options_xpath_pattern,
                     parent_application_page=self.parent_application_page,
                 )
+                component.container_x_path = self.container_x_path
+                return component
             elif self.html_type == "date_field":
                 from jobs.page_components.date_field import DateField
 
@@ -502,7 +1052,13 @@ class ApplicationField:
             return None
 
     def revalidate_component_type(
-        self, x_path, html_type, field_title, job_title, options=[]
+        self,
+        x_path,
+        html_type,
+        field_title,
+        job_title,
+        options_container_x_path=None,
+        options_xpath_pattern=None,
     ):
         if html_type == "text_box":
             if self.category in [
@@ -518,25 +1074,36 @@ class ApplicationField:
 
             from jobs.page_components.search_field import SearchField
 
-            is_search_field = SearchField.validate_search_field(x_path, field_title)
+            is_search_field = SearchField.validate_search_field(
+                x_path, field_title, container_xpath=self.container_x_path
+            )
             if is_search_field:
                 return "search_field", None
 
             is_calendar_widget_present = self.validate_calendar_widget(
-                x_path, field_title, text_to_click=self.title_to_click
+                x_path,
+                field_title,
+                text_to_click=self.title_to_click,
+                container_xpath=self.container_x_path,
             )
             if is_calendar_widget_present:
                 return "date_field", None
 
             is_container_present, container_x_path = self.validate_options_container(
-                x_path, field_title, job_title, text_to_click=self.title_to_click
+                x_path,
+                field_title,
+                job_title,
+                text_to_click=self.title_to_click,
+                container_xpath=self.container_x_path,
             )
             if is_container_present and container_x_path:
                 return "dropdown", container_x_path
 
             # try once more if there is any button inside the text box element
-            element_identified, user_input_element = find_input_block_for_title(
-                field_title
+            element_identified, user_input_element, computed_container_xpath = (
+                find_input_block_for_title(
+                    field_title, container_xpath=self.container_x_path
+                )
             )
             if element_identified and user_input_element:
                 try:
@@ -549,6 +1116,7 @@ class ApplicationField:
                             field_title,
                             job_title,
                             text_to_click=self.title_to_click,
+                            container_xpath=self.container_x_path,
                         )
                     )
                     if is_container_present and container_x_path:
@@ -559,18 +1127,30 @@ class ApplicationField:
 
             return "text_box", None
 
-        elif (html_type == "check_box") or ((html_type == "button") and options):
+        elif (html_type == "check_box") or (
+            (html_type == "button")
+            and (options_container_x_path or options_xpath_pattern)
+        ):
             from jobs.page_components.check_box import CheckBox
 
-            multiple_correct = CheckBox.validate_checkbox(options, field_title)
+            multiple_correct = CheckBox.validate_checkbox(
+                options_container_x_path,
+                options_xpath_pattern,
+                field_title,
+                container_xpath=self.container_x_path,
+            )
             if not multiple_correct:
                 return "radio_button", None
             else:
                 return "check_box", None
 
-        elif html_type == "dropdown":
+        elif html_type == "dropdown" or html_type == "dropdown_button":
             is_container_present, container_x_path = self.validate_options_container(
-                x_path, field_title, job_title, text_to_click=self.title_to_click
+                x_path,
+                field_title,
+                job_title,
+                text_to_click=self.title_to_click,
+                container_xpath=self.container_x_path,
             )
             if is_container_present:
                 return "dropdown", container_x_path
@@ -579,16 +1159,20 @@ class ApplicationField:
 
     @classmethod
     def validate_options_container(
-        cls, x_path, field_title, job_title, text_to_click=None
+        cls, x_path, field_title, job_title, text_to_click=None, container_xpath=None
     ):
-        dropdown_element = get_unique_element_by_xpath(x_path, title=field_title)
+        dropdown_element = get_unique_element_by_xpath(
+            x_path, title=field_title, container_xpath=container_xpath
+        )
         dropdown_type = ApplicationField.identify_options_container_type(
             dropdown_element
         )
         if dropdown_type == "select-option":
             return True, None
 
-        simulate_empty_area_click(text_to_click=text_to_click or field_title)
+        simulate_empty_area_click(
+            text_to_click=text_to_click or field_title, container_xpath=container_xpath
+        )
 
         start_dom_mutation_observer()
 
@@ -601,6 +1185,7 @@ class ApplicationField:
                 title=field_title,
                 parent_application_page=None,
             )
+            element_button.container_x_path = container_xpath
             element_button.proceed()
         except (ElementClickInterceptedException, ElementNotInteractableException):
             element_button = Button(
@@ -609,6 +1194,7 @@ class ApplicationField:
                 title=field_title,
                 parent_application_page=None,
             )
+            element_button.container_x_path = container_xpath
             element_button.proceed()
 
         observed_elements = get_observed_elements()
@@ -622,7 +1208,10 @@ class ApplicationField:
                 html_type="dropdown",
             )
             if is_container_present:
-                simulate_empty_area_click(text_to_click=text_to_click or field_title)
+                simulate_empty_area_click(
+                    text_to_click=text_to_click or field_title,
+                    container_xpath=container_xpath,
+                )
                 if is_element_visible(container_x_path):
                     simulate_empty_area_click()
                 return True, container_x_path
@@ -648,18 +1237,25 @@ class ApplicationField:
                 )
                 if is_container_present:
                     simulate_empty_area_click(
-                        text_to_click=text_to_click or field_title
+                        text_to_click=text_to_click or field_title,
+                        container_xpath=container_xpath,
                     )
                     if is_element_visible(container_x_path):
                         simulate_empty_area_click()
                     return True, container_x_path
 
-        simulate_empty_area_click(text_to_click=text_to_click or field_title)
+        simulate_empty_area_click(
+            text_to_click=text_to_click or field_title, container_xpath=container_xpath
+        )
         return False, None
 
     @classmethod
-    def validate_calendar_widget(cls, x_path, field_title, text_to_click=None):
-        simulate_empty_area_click(text_to_click=text_to_click or field_title)
+    def validate_calendar_widget(
+        cls, x_path, field_title, text_to_click=None, container_xpath=None
+    ):
+        simulate_empty_area_click(
+            text_to_click=text_to_click or field_title, container_xpath=container_xpath
+        )
 
         start_dom_mutation_observer()
 
@@ -672,6 +1268,7 @@ class ApplicationField:
                 title=field_title,
                 parent_application_page=None,
             )
+            element_button.container_x_path = container_xpath
             element_button.proceed()
         except (ElementClickInterceptedException, ElementNotInteractableException):
             element_button = Button(
@@ -680,6 +1277,7 @@ class ApplicationField:
                 title=field_title,
                 parent_application_page=None,
             )
+            element_button.container_x_path = container_xpath
             element_button.proceed()
 
         observed_elements = get_observed_elements()
@@ -692,8 +1290,23 @@ class ApplicationField:
                 observed_elements
             )
 
-        simulate_empty_area_click(text_to_click=text_to_click or field_title)
+        simulate_empty_area_click(
+            text_to_click=text_to_click or field_title, container_xpath=container_xpath
+        )
         return is_calendar_widget_present
+
+    @staticmethod
+    def _format_list_field(list_field):
+        """Convert list/array to human-readable string format."""
+        if not list_field:
+            return None
+
+        if isinstance(list_field, list):
+            if len(list_field) == 0:
+                return None
+            return "\n".join(f"- {item}" for item in list_field if item)
+
+        return list_field
 
     @classmethod
     def get_field_value(cls, field_category, user):
@@ -761,13 +1374,15 @@ class ApplicationField:
             info = user.parsed_resume.get("work_experience", [])
             if entry_no < len(info):
                 info = info[entry_no - 1]
-                return info.get("responsibilities")
+                responsibilities = info.get("responsibilities")
+                return cls._format_list_field(responsibilities)
         elif "_achievements__" in field_category and re.search(r"\d$", field_category):
             entry_no = int(field_category.split("__")[-1])
             info = user.parsed_resume.get("work_experience", [])
             if entry_no < len(info):
                 info = info[entry_no - 1]
-                return info.get("achievements")
+                achievements = info.get("achievements")
+                return cls._format_list_field(achievements)
         elif "_experience_related_url__" in field_category and re.search(
             r"\d$", field_category
         ):
@@ -1009,7 +1624,7 @@ class ApplicationField:
                 f"Previous XPath - {prev_xpath}\n"
             )
 
-        validation_found, validation = get_gpt_response(
+        validation_found, validation = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=ContainerValidation,
@@ -1173,9 +1788,16 @@ class ApplicationField:
         else:
             user_prompt += f"Closest answer to the question is {closest_answer}.\n"
 
-        user_prompt += "Give me correct answer for the question."
+        user_prompt += f"""Following general information about the application - 
+        1. Job source - LinkedIn
+        2. If current user email is "{config['admin_email']}" and questions is if you are currently working or studying
+         here then always answer as "No". If end date is asked for the same work experience or education qualification 
+         then answer as per today's date i.e. {get_formatted_today_date()}.
+        
+        Now based on all above instructions, give me correct answer for the question.
+        """
 
-        field_answer_found, field_answer = get_gpt_response(
+        field_answer_found, field_answer = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=FieldAnswer,
@@ -1200,7 +1822,14 @@ class ApplicationField:
 
     @classmethod
     def extract_correct_x_path(
-        cls, prev_x_path, prompt, job_title, job_url, html=None, xpath_count=10
+        cls,
+        prev_x_path,
+        prompt,
+        job_title,
+        job_url,
+        html=None,
+        xpath_count=15,
+        container_x_path=None,
     ):
         global driver
 
@@ -1220,36 +1849,131 @@ class ApplicationField:
             f"x_path, try to assess yourself if the x_path is correct or not. If it is not correct then try again to "
             f"find the correct x_path.\n"
             f"Previous x_path - {prev_x_path}\n"
-            f"{prompt}\n"
         )
 
-        class CorrectXPath(BaseModel):
-            possible_x_paths: List[str] = Field(
+        if container_x_path:
+            user_prompt += (
+                f"CRITICAL: Ideally, the target element should exist within a container element with XPath: {container_x_path}. "
+                f"When searching for the correct x_path, prioritize finding the element within this container.\n"
+            )
+
+        user_prompt += f"{prompt}\n"
+
+        class XPathEntry(BaseModel):
+            x_path: str = Field(
                 ...,
-                description=f"{xpath_count} Possible correct XPaths of the element which can be used in selenium chrome driver to "
+                description=f"Possible correct XPath of the element which can be used in selenium chrome driver to "
                 "search the element. Try to give short & simple XPaths which point to desired element. Avoid long "
                 "ancestor chains, multiple contains(@class,…) filters, or deep nesting because long XPaths can be brittle.",
             )
+            uses_alphanumeric: bool = Field(
+                ...,
+                description="Whether this XPath uses alphanumeric strings (like 'id-123abc', 'element-456xyz', "
+                "or any attribute values containing random alphanumeric characters) that may change when the page reloads. "
+                "Set to True if the XPath contains such patterns, False otherwise.",
+            )
 
-        correct_x_path_found, correct_x_path = get_gpt_response(
+        class CorrectXPath(BaseModel):
+            possible_x_paths: List[XPathEntry] = Field(
+                ...,
+                min_items=xpath_count,
+                max_items=xpath_count,
+                description=f"{xpath_count} Possible correct XPaths of the element. For each XPath, provide the x_path string "
+                "and indicate whether it uses_alphanumeric patterns.",
+            )
+
+        correct_x_path_found, correct_x_path = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=CorrectXPath,
+            model="complex",
         )
         if correct_x_path_found:
+            # Helper function to check if element is inside container
+            def is_in_container(x_path_entry):
+                if not container_x_path:
+                    return False
+                try:
+                    if not element_exists(x_path_entry.x_path) or not element_exists(
+                        container_x_path
+                    ):
+                        return False
+                    element = driver.find_element(By.XPATH, x_path_entry.x_path)
+                    container_element = driver.find_element(By.XPATH, container_x_path)
+                    is_contained = driver.execute_script(
+                        "return arguments[0].contains(arguments[1]);",
+                        container_element,
+                        element,
+                    )
+                    return is_contained
+                except Exception:
+                    return False
+
+            # Helper function to check if xpath exists only once on the page
+            def is_unique_on_page(x_path_entry):
+                try:
+                    elements = driver.find_elements(By.XPATH, x_path_entry.x_path)
+                    return len(elements) == 1
+                except Exception:
+                    return False
+
+            # Sort: prioritize non-alphanumeric first, then prioritize in-container,
+            # then prioritize unique (exists only once) when in container
+            # Sort key: (uses_alphanumeric, not_in_container, in_container_and_not_unique)
+            # - False (non-alphanumeric) comes before True (alphanumeric)
+            # - False (in container) comes before True (not in container)
+            # - False (unique when in container) comes before True (not unique when in container)
+            if container_x_path:
+
+                def sort_key(x):
+                    in_container = is_in_container(x)
+                    unique = is_unique_on_page(x)
+                    # Only consider uniqueness when element is in container
+                    # in_container_and_not_unique = True means it's in container but not unique
+                    in_container_and_not_unique = in_container and not unique
+                    return (
+                        x.uses_alphanumeric,
+                        not in_container,
+                        in_container_and_not_unique,
+                    )
+
+                sorted_xpaths = sorted(correct_x_path.possible_x_paths, key=sort_key)
+            else:
+                sorted_xpaths = sorted(
+                    correct_x_path.possible_x_paths, key=lambda x: x.uses_alphanumeric
+                )
+
             x_paths = "\n".join(
-                f"{i + 1}. {x_path}"
-                for i, x_path in enumerate(correct_x_path.possible_x_paths)
+                f"{i + 1}. {entry.x_path} "
+                f"{'[uses alphanumeric]' if entry.uses_alphanumeric else '[no alphanumeric]'} "
+                f"{'[in container]' if container_x_path and is_in_container(entry) else ''}"
+                f"{' [unique on page]' if container_x_path and is_in_container(entry) and is_unique_on_page(entry) else ''}"
+                for i, entry in enumerate(sorted_xpaths)
             )
+            priority_note = "non-alphanumeric first"
+            if container_x_path:
+                priority_note += ", then prioritize in-container, then prioritize unique (exists only once) when in container"
             logger.info(
-                f"Found {len(correct_x_path.possible_x_paths)} possible correct XPaths for the element.\n"
-                f"Possible XPaths -\n{x_paths}"
+                f"Found {len(sorted_xpaths)} possible correct XPaths for the element.\n"
+                f"Possible XPaths (prioritized: {priority_note}) -\n{x_paths}"
             )
 
-            for x_path in correct_x_path.possible_x_paths:
-                if element_exists(x_path):
-                    logger.info(f"Found correct x_path - {x_path}")
-                    return x_path
+            # Check xpaths in priority order
+            for entry in sorted_xpaths:
+                if element_exists(entry.x_path):
+                    container_status = ""
+                    if container_x_path:
+                        in_container = is_in_container(entry)
+                        unique = is_unique_on_page(entry)
+                        container_status = f" {'(in container)' if in_container else '(not in container)'}"
+                        if in_container and unique:
+                            container_status += " (unique on page)"
+                    logger.info(
+                        f"Found correct x_path - {entry.x_path} "
+                        f"{'(uses alphanumeric)' if entry.uses_alphanumeric else '(no alphanumeric)'}"
+                        f"{container_status}"
+                    )
+                    return entry.x_path
 
         logger.error(
             f"Correct x_path couldn't be found for {job_title}. URL - {job_url}"

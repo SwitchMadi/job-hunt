@@ -12,7 +12,7 @@ from jobs.page_components import (
 )
 from jobs.page_components.upload import Upload
 from utilities import constants
-from utilities.gpt import get_gpt_response
+from utilities.llm import create_llm_service
 from utilities.selenium import (
     get_selenium_driver,
     element_exists,
@@ -20,6 +20,7 @@ from utilities.selenium import (
 )
 from utilities.aws.s3 import S3Bucket
 
+_llm_service = create_llm_service(provider="openai")
 
 driver = get_selenium_driver()
 driver.set_page_load_timeout(15)
@@ -91,7 +92,7 @@ class ResumeUpload(PageComponent):
                 "the upload button with the extracted x_path.",
             )
 
-        button_found, button = get_gpt_response(
+        button_found, button = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=UploadResumeButton,

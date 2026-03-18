@@ -1,13 +1,16 @@
+import time
+from urllib.parse import urlparse
 from pydantic import BaseModel, Field
 
 from jobs.page_components import (
     PageComponent,
     get_page_component_class_name,
     ApplicationField,
+    logger,
 )
 from jobs.page_components.button import Button
 from utilities import constants
-from utilities.gpt import get_gpt_response
+from utilities.llm import create_llm_service
 from utilities.selenium import (
     get_selenium_driver,
     minify_html_for_gpt_prompt,
@@ -15,6 +18,8 @@ from utilities.selenium import (
     disable_browser_alerts,
     switch_to_active_tab,
 )
+
+_llm_service = create_llm_service(provider="openai")
 
 driver = get_selenium_driver()
 driver.set_page_load_timeout(15)
@@ -31,11 +36,33 @@ class NextPage(PageComponent):
         self.prev = None
         self.is_component_functional = False
 
+    def _handle_domain_specific_wait(self):
+        """
+        ===== HARDCODED DOMAIN-SPECIFIC LOGIC - SEARCH FOR "HARDCODED DOMAIN" TO FIND ALL INSTANCES =====
+        Apply domain-specific wait workarounds after clicking next page button.
+        """
+        try:
+            current_url = driver.current_url
+            parsed_url = urlparse(current_url)
+            domain = parsed_url.netloc.lower()
+
+            # myworkdayjobs.com: Wait 10 seconds after clicking next page button
+            if "myworkdayjobs.com" in domain:
+                logger.info(
+                    f"myworkdayjobs.com detected. Waiting 10 seconds after clicking next page button. "
+                    f"Job URL: {self.parent_application_page.url}"
+                )
+                time.sleep(10)
+        except Exception as e:
+            logger.warning(f"Error in hardcoded domain-specific logic: {e}")
+        # ===== END HARDCODED DOMAIN-SPECIFIC LOGIC =====
+
     def proceed(self, retry=False):
         if not self.component_identified:
             return self._identify()
 
         self.field_component.proceed()
+        self._handle_domain_specific_wait()
 
         switch_to_active_tab()
         disable_browser_alerts()
@@ -56,7 +83,7 @@ class NextPage(PageComponent):
                 " button. Don't use HTML hierarchy to construct XPath.",
             )
 
-        next_page_button_found, next_page_button = get_gpt_response(
+        next_page_button_found, next_page_button = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=NextPageButton,
@@ -89,6 +116,8 @@ class NextPage(PageComponent):
             if self.field_component.is_component_functional:
                 self.is_component_functional = True
                 self.component_identified = True
+
+                self._handle_domain_specific_wait()
 
                 switch_to_active_tab()
                 disable_browser_alerts()

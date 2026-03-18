@@ -556,6 +556,59 @@ def element_exists(x_path):
         return False
 
 
+def is_element_in_popup(x_path):
+    """
+    Check if element at xpath is within a popup/modal by traversing DOM hierarchy.
+    Returns True if element is inside a popup, False otherwise.
+    """
+    global driver
+
+    try:
+        if not element_exists(x_path):
+            return False
+
+        element = driver.find_element(By.XPATH, x_path)
+
+        # Common modal/popup identifiers
+        modal_keywords = ["modal", "popup", "dialog", "overlay", "backdrop"]
+
+        # Traverse up the DOM tree
+        current = element
+        depth = 0
+        max_depth = 20
+
+        while current and depth < max_depth:
+            # Check role attributes
+            role = current.get_attribute("role")
+            if role == "dialog" or role == "alertdialog":
+                return True
+
+            # Check aria-modal
+            if current.get_attribute("aria-modal") == "true":
+                return True
+
+            # Check class names
+            class_attr = current.get_attribute("class") or ""
+            class_lower = class_attr.lower()
+            if any(keyword in class_lower for keyword in modal_keywords):
+                return True
+
+            # Move to parent
+            try:
+                parent = current.find_element(By.XPATH, "..")
+                if parent.tag_name == "body" or parent.tag_name == "html":
+                    break
+                current = parent
+            except:
+                break
+
+            depth += 1
+
+        return False
+    except Exception:
+        return False
+
+
 def is_element_visible(x_path=None, element=None):
     global driver
 
@@ -614,6 +667,104 @@ def element_has_area(x_path=None, element=None):
         return False
     except (InvalidSelectorException, NoSuchElementException):
         return False
+
+
+def extract_element_value(element):
+    """
+    Extract value from an HTML element using all reliable methods.
+    Tries multiple approaches to get the actual value without modifying the DOM.
+
+    Args:
+        element: Selenium WebElement to extract value from
+
+    Returns:
+        str: Extracted value or None if no value found
+    """
+    global driver
+
+    field_value = None
+
+    try:
+        # 1. value attribute (standard for input/textarea)
+        if not field_value or not field_value.strip():
+            field_value = element.get_attribute("value")
+
+        # 2. JavaScript value property (sometimes more accurate)
+        if not field_value or not field_value.strip():
+            field_value = driver.execute_script("return arguments[0].value;", element)
+
+        # 3. text property (Selenium) - for elements displaying value as text
+        if not field_value or not field_value.strip():
+            field_value = element.text
+
+        # 4. textContent via JavaScript
+        if not field_value or not field_value.strip():
+            field_value = driver.execute_script(
+                "return arguments[0].textContent;", element
+            )
+
+        # 5. innerText via JavaScript
+        if not field_value or not field_value.strip():
+            field_value = driver.execute_script(
+                "return arguments[0].innerText;", element
+            )
+
+        # 6. innerHTML (strip HTML tags to get text value)
+        if not field_value or not field_value.strip():
+            inner_html = driver.execute_script(
+                "return arguments[0].innerHTML;", element
+            )
+            if inner_html:
+                field_value = re.sub(r"<.*?>", "", inner_html)
+
+        # 7. data-value attribute (custom attribute that may hold actual value)
+        if not field_value or not field_value.strip():
+            field_value = element.get_attribute("data-value")
+
+        # 8. aria-valuenow attribute (for sliders, progress bars - actual numeric value)
+        if not field_value or not field_value.strip():
+            field_value = element.get_attribute("aria-valuenow")
+
+        # 9. aria-valuetext attribute (text representation of value)
+        if not field_value or not field_value.strip():
+            field_value = element.get_attribute("aria-valuetext")
+
+        # 10. For select elements, get selected option value
+        if not field_value or not field_value.strip():
+            tag_name = element.tag_name.lower()
+            if tag_name == "select":
+                try:
+                    # Try selected option
+                    selected_option = element.find_element(
+                        By.XPATH, ".//option[@selected]"
+                    )
+                    field_value = selected_option.text or selected_option.get_attribute(
+                        "value"
+                    )
+                except NoSuchElementException:
+                    # Try currently selected option via JavaScript
+                    try:
+                        field_value = driver.execute_script(
+                            "return arguments[0].options[arguments[0].selectedIndex].text || arguments[0].value;",
+                            element,
+                        )
+                    except:
+                        pass
+
+        # 11. For checkboxes/radio, get checked state value
+        if not field_value or not field_value.strip():
+            input_type = element.get_attribute("type")
+            if input_type in ["checkbox", "radio"]:
+                is_checked = driver.execute_script(
+                    "return arguments[0].checked;", element
+                )
+                if is_checked:
+                    field_value = element.get_attribute("value") or "checked"
+
+        return field_value.strip() if field_value and field_value.strip() else None
+
+    except Exception as e:
+        return None
 
 
 def start_dom_mutation_observer(timeout=100):
@@ -911,7 +1062,7 @@ def take_element_screenshot(x_path, padding=40):
     return absolute_path
 
 
-def get_xpath_by_text(text):
+def get_xpath_by_text(text, container_xpath=None):
     global driver
 
     js_script = """
@@ -936,19 +1087,42 @@ def get_xpath_by_text(text):
             .trim();  // Finally trim again in case special chars created new leading/trailing spaces
     }
 
-    function findSmallestElementByText(text) {
-        const cleanedInput = cleanTextEdges(text);
-        const allElements = Array.from(document.querySelectorAll('body *'));
+    function normalizeWhitespace(str) {
+        return str.replace(/\s+/g, ' ').trim();
+    }
+
+    function findSmallestElementByText(text, containerXpath) {
+        const cleanedInput = normalizeWhitespace(cleanTextEdges(text));
+        let root;
+        if (containerXpath) {
+            root = document.evaluate(
+                containerXpath,
+                document,
+                null,
+                XPathResult.FIRST_ORDERED_NODE_TYPE,
+                null
+            ).singleNodeValue;
+            if (!root) {
+                return null;
+            }
+        } else {
+            root = document.body;
+        }
+
+        // Search descendants
+        const allElements = (root === document.body)
+            ? Array.from(document.querySelectorAll('body *'))
+            : Array.from(root.querySelectorAll('*'));
         let matchingElements;
 
         if (cleanedInput.length > 70) {
             matchingElements = allElements.filter(el => {
-                const cleanedElText = cleanTextEdges(el.textContent);
+                const cleanedElText = normalizeWhitespace(cleanTextEdges(el.textContent));
                 return cleanedElText.includes(cleanedInput);
             });
         } else {
             matchingElements = allElements.filter(el => {
-                const cleanedElText = cleanTextEdges(el.textContent);
+                const cleanedElText = normalizeWhitespace(cleanTextEdges(el.textContent));
                 return cleanedElText === cleanedInput;
             });
         }
@@ -989,8 +1163,8 @@ def get_xpath_by_text(text):
                 return visibleB - visibleA;  // true > false, so visible comes first
             }
             
-            const lenA = cleanTextEdges(a.textContent).length;
-            const lenB = cleanTextEdges(b.textContent).length;
+            const lenA = normalizeWhitespace(cleanTextEdges(a.textContent)).length;
+            const lenB = normalizeWhitespace(cleanTextEdges(b.textContent)).length;
             if (lenA !== lenB) {
                 return lenA - lenB;  // shorter text first
             }
@@ -1001,14 +1175,14 @@ def get_xpath_by_text(text):
         return getElementXPath(matchingElements[0]);
     }
 
-    return findSmallestElementByText(arguments[0]);
+    return findSmallestElementByText(arguments[0], arguments[1]);
     """
 
-    xpath = driver.execute_script(js_script, text)
+    xpath = driver.execute_script(js_script, text, container_xpath)
     return xpath
 
 
-def simulate_empty_area_click(text_to_click=None):
+def simulate_empty_area_click(text_to_click=None, container_xpath=None):
     global driver
 
     # Step 1: Inject temporary element
@@ -1065,7 +1239,7 @@ def simulate_empty_area_click(text_to_click=None):
     if text_to_click:
         # If text is provided, click on the element with that text to bring back focus
         try:
-            xpath = get_xpath_by_text(text_to_click)
+            xpath = get_xpath_by_text(text_to_click, container_xpath=container_xpath)
             if type(xpath) is not str:
                 logging.warning(
                     f"XPath for text '{text_to_click}' is not a string: {xpath}"
@@ -1344,15 +1518,19 @@ def get_observed_network_calls():
     return js_captured_requests + driver_captured_requests
 
 
-def clear_text_field(x_path, title=None, skip_all_sections=False):
+def clear_text_field(x_path, title=None, skip_all_sections=False, container_xpath=None):
     """
     Clears the input field using keyboard shortcuts to ensure any custom handlers are triggered.
     """
 
     global driver
 
-    simulate_empty_area_click()
-    input_field = get_active_element_after_click(x_path, title=title)
+    # Only click empty area if element is not in a popup
+    if not is_element_in_popup(x_path):
+        simulate_empty_area_click()
+    input_field = get_active_element_after_click(
+        x_path, title=title, container_xpath=container_xpath
+    )
 
     value = input_field.get_attribute("value") or input_field.text or ""
     if not value:
@@ -1400,8 +1578,12 @@ def clear_text_field(x_path, title=None, skip_all_sections=False):
             pass
 
     if is_stale(input_field):
-        simulate_empty_area_click()
-        input_field = get_active_element_after_click(x_path, title=title)
+        # Only click empty area if element is not in a popup
+        if not is_element_in_popup(x_path):
+            simulate_empty_area_click()
+        input_field = get_active_element_after_click(
+            x_path, title=title, container_xpath=container_xpath
+        )
 
     # Directly set the value to empty and dispatch an input event
     driver.execute_script("arguments[0].value = '';", input_field)
@@ -1410,7 +1592,7 @@ def clear_text_field(x_path, title=None, skip_all_sections=False):
     return
 
 
-def get_active_element_after_click(x_path, title=None):
+def get_active_element_after_click(x_path, title=None, container_xpath=None):
     """
     Clicks on the element at the given XPath and returns the active element.
     This is useful for ensuring that the correct element is focused after a click.
@@ -1418,7 +1600,9 @@ def get_active_element_after_click(x_path, title=None):
 
     global driver
 
-    element = get_unique_element_by_xpath(x_path, title=title)
+    element = get_unique_element_by_xpath(
+        x_path, title=title, container_xpath=container_xpath
+    )
     driver.execute_script(
         """
         const element = arguments[0];
@@ -1689,6 +1873,7 @@ def minify_html_for_gpt_prompt(html_content):
         "tbody",
         "tfoot",
         "i",
+        "fieldset",
     ]
 
     # Remove all children from each SVG tag so that only the tag remains with its attributes
@@ -1808,10 +1993,40 @@ def is_stale(element):
         return True
 
 
-def generalize_xpath_attributes(xpath: str) -> str:
+def generalize_xpath_attributes(
+    xpath: str,
+    use_starts_with: bool = True,
+    use_contains: bool = True,
+    use_ends_with: bool = True,
+) -> str:
     """
     Converts XPath expressions to use starts-with(), contains(), and XPath 1.0-compatible ends-with().
+
+    Args:
+        xpath: The XPath expression to generalize.
+        use_starts_with: Whether to use starts-with() for the first text part.
+        use_contains: Whether to use contains() for middle text parts.
+        use_ends_with: Whether to use ends-with() for the last text part.
+
+    Returns:
+        The generalized XPath expression.
+
+    Examples:
+        # Default behavior (all matchers enabled):
+        generalize_xpath_attributes("//div[@id='btn-123-submit']")
+        # -> //div[starts-with(@id, 'btn-') and substring(@id, ...) = '-submit']
+
+        # Only starts-with (ends-with disabled, no middle parts):
+        generalize_xpath_attributes("//div[@id='btn-123-submit']", use_ends_with=False)
+        # -> //div[starts-with(@id, 'btn-')]
+
+        # Only ends-with:
+        generalize_xpath_attributes("//div[@id='btn-123-submit']", use_starts_with=False, use_contains=False)
+        # -> //div[substring(@id, ...) = '-submit']
     """
+    if not use_starts_with and not use_contains and not use_ends_with:
+        return xpath
+
     attr_value_pattern = re.compile(r'@([\w:-]+)\s*=\s*([\'"])(.*?)\2')
 
     def to_starts_with(attr, val):
@@ -1833,7 +2048,14 @@ def generalize_xpath_attributes(xpath: str) -> str:
 
         if len(text_parts) == 1 and len(parts) == 1:
             # entire string, no digits
-            return f"{to_starts_with(attr, value)} and {to_ends_with(attr, value)}"
+            matchers = []
+            if use_starts_with:
+                matchers.append(to_starts_with(attr, value))
+            if use_ends_with:
+                matchers.append(to_ends_with(attr, value))
+            if not matchers:
+                return f"@{attr}='{value}'"
+            return " and ".join(matchers)
 
         matchers = []
         for i, part in enumerate(parts):
@@ -1841,11 +2063,17 @@ def generalize_xpath_attributes(xpath: str) -> str:
                 continue
 
             if i == 0:
-                matchers.append(to_starts_with(attr, part))
+                if use_starts_with:
+                    matchers.append(to_starts_with(attr, part))
             elif i == len(parts) - 1:
-                matchers.append(to_ends_with(attr, part))
+                if use_ends_with:
+                    matchers.append(to_ends_with(attr, part))
             else:
-                matchers.append(to_contains(attr, part))
+                if use_contains:
+                    matchers.append(to_contains(attr, part))
+
+        if not matchers:
+            return f"@{attr}='{value}'"  # fallback if no matchers generated
 
         return " and ".join(matchers)
 
@@ -2054,6 +2282,42 @@ def is_interactive_element(el):
         return False
 
 
+def get_interactive_elements_in_container(container_xpath):
+    """
+    Get interactive elements and their count within a container element.
+
+    Args:
+        container_xpath: XPath of the container element
+
+    Returns:
+        tuple: (list of WebElements, dict with tag counts) - (interactive_elements, tag_counts)
+        - interactive_elements: List of all interactive WebElements found in the container
+        - tag_counts: Dictionary mapping tag names to their counts (e.g., {'input': 2, 'textarea': 1})
+    """
+    global driver
+
+    try:
+        container_element = driver.find_element(By.XPATH, container_xpath)
+        # Find all descendants that are interactive
+        all_descendants = container_element.find_elements(By.XPATH, ".//*")
+
+        interactive_elements = []
+        tag_counts = {}
+
+        for el in all_descendants:
+            if is_interactive_element(el):
+                interactive_elements.append(el)
+                tag_name = el.tag_name.lower()
+                tag_counts[tag_name] = tag_counts.get(tag_name, 0) + 1
+
+        return interactive_elements, tag_counts
+    except Exception as e:
+        logging.warning(
+            f"Error getting interactive elements in container {container_xpath}: {e}"
+        )
+        return [], {}
+
+
 def find_first_interactive_descendant_excluding(base_el, exclude_el):
     try:
         all_descendants = base_el.find_elements(By.XPATH, ".//*")
@@ -2068,54 +2332,133 @@ def find_first_interactive_descendant_excluding(base_el, exclude_el):
     return None
 
 
-def find_input_block_for_title(title, max_levels: int = 4):
+def find_input_block_for_title(title, max_levels: int = 7, container_xpath=None):
     """
     Traverse up the DOM from the title element (found by text) to find a parent
     that has an interactive input element either:
     - on the element itself
     - as a sibling
     - or in a common ancestor outside the title's own subtree
+
+    Returns:
+        tuple: (bool, WebElement, str|None) - (found, container_element, container_xpath)
+        - found: True if input block found, False otherwise
+        - container_element: The parent container WebElement, or None/current if not found
+        - container_xpath: The computed container xpath (only if container_xpath was not provided as input, else None)
     """
     global driver
 
-    title_xpath = get_xpath_by_text(title)
+    title_xpath = get_xpath_by_text(title, container_xpath=container_xpath)
     if not title_xpath:
-        return False, None
+        # Can't compute container_xpath if title not found
+        return False, None, None
 
     title_element = driver.find_element(By.XPATH, title_xpath)
+
+    # Only compute container_xpath if it wasn't provided as input
+    computed_container_xpath = None
+    text_xpath = None
+    if container_xpath is None:
+        # Generate text xpath based on quote type and verify it points to same element
+        # Pattern: //*[contains(normalize-space(string(.)), 'INPUT_TEXT')][not(.//*[contains(normalize-space(string(.)), 'INPUT_TEXT')])]
+        # For quotes, use concat() approach:
+        # - Single quote in title: use "'" in concat (double quotes around single quote)
+        # - Double quote in title: use '"' in concat (single quotes around double quote)
+        if "'" in title or '"' in title:
+            # Build concat() expression by splitting at quotes
+            parts = []
+            current_part = ""
+            for char in title:
+                if char == "'":
+                    if current_part:
+                        parts.append(f"'{current_part}'")
+                        current_part = ""
+                    parts.append(
+                        '"\'"'
+                    )  # Single quote: double quotes around single quote
+                elif char == '"':
+                    if current_part:
+                        parts.append(f"'{current_part}'")
+                        current_part = ""
+                    parts.append(
+                        "'\"'"
+                    )  # Double quote: single quotes around double quote
+                else:
+                    current_part += char
+            if current_part:
+                parts.append(f"'{current_part}'")
+
+            concat_expr = ", ".join(parts)
+            text_xpath = f"//*[contains(normalize-space(string(.)), concat({concat_expr}))][not(.//*[contains(normalize-space(string(.)), concat({concat_expr}))])]"
+        else:
+            # Text contains neither quote, use single quotes (default)
+            text_xpath = f"//*[contains(normalize-space(string(.)), '{title}')][not(.//*[contains(normalize-space(string(.)), '{title}')])]"
+
+        # Verify text_xpath points to the same element as title_element
+        try:
+            text_xpath_element = driver.find_element(By.XPATH, text_xpath)
+            # Compare if both elements refer to the same DOM node using JavaScript
+            # This works even if elements don't have id attributes
+            is_same_element = driver.execute_script(
+                "return arguments[0] === arguments[1];",
+                text_xpath_element,
+                title_element,
+            )
+            if not is_same_element:
+                text_xpath = None  # Don't use if it doesn't point to same element
+        except Exception:
+            text_xpath = None  # Don't use if xpath is invalid or element not found
+
+    ancestor_level = 0
 
     # 1. Check if the title element itself is interactive
     if is_interactive_element(title_element):
         parent = title_element.find_element(By.XPATH, "..")
-        return True, parent
+        ancestor_level = 1
+        if container_xpath is None and text_xpath:
+            computed_container_xpath = f"{text_xpath}/ancestor::*[1]"
+        return True, parent, computed_container_xpath
 
     # 2. Check if any siblings are interactive
     parent = title_element.find_element(By.XPATH, "..")
     siblings = parent.find_elements(By.XPATH, "./*")
     for sib in siblings:
         if sib.id != title_element.id and is_interactive_element(sib):
-            return True, parent
+            ancestor_level = 1
+            if container_xpath is None and text_xpath:
+                computed_container_xpath = f"{text_xpath}/ancestor::*[1]"
+            return True, parent, computed_container_xpath
 
     # 3. Traverse upwards and search other descendant interactive inputs
     current = title_element
-    for _ in range(max_levels):
+    for level in range(1, max_levels + 1):
         parent = current.find_element(By.XPATH, "..")
 
         interactive_input = find_first_interactive_descendant_excluding(
             parent, title_element
         )
         if interactive_input:
-            return True, parent
+            ancestor_level = level
+            if container_xpath is None and text_xpath:
+                computed_container_xpath = f"{text_xpath}/ancestor::*[{level}]"
+            return True, parent, computed_container_xpath
 
         current = parent
 
-    return False, current
+    # No input found, but return the last traversed element
+    if container_xpath is None and text_xpath:
+        computed_container_xpath = f"{text_xpath}/ancestor::*[{max_levels}]"
+    return False, current, computed_container_xpath
 
 
-def get_unique_element_by_xpath(xpath, title=None):
+def get_unique_element_by_xpath(
+    xpath, title=None, container_xpath=None, _generalization_state=None
+):
     """
     Returns a unique WebElement by its XPath.
     If multiple elements match, find the one that is at same level as given title.
+    If no elements are found, progressively generalizes the xpath using different
+    matcher combinations until at least one visible element is found.
     """
     global driver
 
@@ -2124,7 +2467,9 @@ def get_unique_element_by_xpath(xpath, title=None):
         return elements[0]
     elif len(elements) > 1:
         if title:
-            element_identified, user_input_element = find_input_block_for_title(title)
+            element_identified, user_input_element, _ = find_input_block_for_title(
+                title, container_xpath=container_xpath
+            )
             if element_identified:
                 elements = user_input_element.find_elements(By.XPATH, f".{xpath}")
                 if len(elements) == 1:
@@ -2205,7 +2550,72 @@ def get_unique_element_by_xpath(xpath, title=None):
             )
             return None
     else:
-        logging.warning(f"No elements found for XPath '{xpath}'.")
+        # No elements found - try progressive generalization
+        # Define generalization strategies to try in order
+        generalization_strategies = [
+            # (use_starts_with, use_contains, use_ends_with)
+            (True, True, True),  # Full generalization (default)
+            (True, True, False),  # starts-with + contains only
+            (True, False, True),  # starts-with + ends-with only
+            (False, True, True),  # contains + ends-with only
+            (True, False, False),  # starts-with only
+            (False, False, True),  # ends-with only
+            (False, True, False),  # contains only
+        ]
+
+        # Determine which strategy to try next
+        if _generalization_state is None:
+            _generalization_state = {"original_xpath": xpath, "strategy_index": 0}
+
+        strategy_index = _generalization_state["strategy_index"]
+        original_xpath = _generalization_state["original_xpath"]
+
+        # Try remaining strategies
+        while strategy_index < len(generalization_strategies):
+            use_starts_with, use_contains, use_ends_with = generalization_strategies[
+                strategy_index
+            ]
+
+            generalized_xpath = generalize_xpath_attributes(
+                original_xpath,
+                use_starts_with=use_starts_with,
+                use_contains=use_contains,
+                use_ends_with=use_ends_with,
+            )
+
+            # Skip if generalization didn't change the xpath
+            if generalized_xpath == original_xpath or generalized_xpath == xpath:
+                strategy_index += 1
+                continue
+
+            # Check if any visible elements exist with this generalized xpath
+            test_elements = driver.find_elements(By.XPATH, generalized_xpath)
+            visible_elements = [
+                el
+                for el in test_elements
+                if el.tag_name == "input" or is_element_visible(element=el)
+            ]
+
+            if visible_elements:
+                logging.info(
+                    f"Found {len(visible_elements)} visible element(s) with generalized XPath "
+                    f"(strategy: starts_with={use_starts_with}, contains={use_contains}, ends_with={use_ends_with}). "
+                    f"Original: '{original_xpath}' -> Generalized: '{generalized_xpath}'"
+                )
+                # Recursively call with the generalized xpath
+                _generalization_state["strategy_index"] = strategy_index + 1
+                return get_unique_element_by_xpath(
+                    generalized_xpath,
+                    title=title,
+                    container_xpath=container_xpath,
+                    _generalization_state=_generalization_state,
+                )
+
+            strategy_index += 1
+
+        logging.warning(
+            f"No elements found for XPath '{xpath}' even after trying all generalization strategies."
+        )
         return None
 
 

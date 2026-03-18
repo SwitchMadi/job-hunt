@@ -95,12 +95,11 @@ def lambda_handler(event, context):
                 "statusCode": 400,
                 "body": json.dumps(
                     {
-                        "error": result.error_message or "Failed to capture order",
+                        "error": "Failed to capture order",
                         "details": [
                             {
                                 "issue": "CAPTURE_FAILED",
-                                "description": result.error_message
-                                or "Order capture failed",
+                                "description": "Order capture failed",
                             }
                         ],
                     }

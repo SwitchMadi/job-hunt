@@ -9,6 +9,7 @@ from jobs.page_components import (
     ApplicationField,
 )
 from jobs.page_components.button import Button
+from jobs.page_components.check_box import CheckBox
 from utilities.selenium import (
     get_selenium_driver,
     start_dom_mutation_observer,
@@ -16,9 +17,12 @@ from utilities.selenium import (
     minify_html_for_gpt_prompt,
     is_stale,
     element_exists,
+    get_xpath_by_text,
 )
 from utilities import constants
-from utilities.gpt import get_gpt_response
+from utilities.llm import create_llm_service
+
+_llm_service = create_llm_service(provider="openai")
 
 
 driver = get_selenium_driver()
@@ -50,7 +54,7 @@ class WorkExperienceSection(PageComponent):
     def proceed(self, retry=False):
         if not self.is_component_functional:
             (
-                add_education_button_present,
+                add_work_ex_button_present,
                 is_comprehensive,
                 comprehensive_fields,
                 non_comprehensive_fields,
@@ -58,7 +62,7 @@ class WorkExperienceSection(PageComponent):
             if non_comprehensive_fields:
                 self._process_non_comprehensive_fields(non_comprehensive_fields)
 
-            if not add_education_button_present and not is_comprehensive:
+            if not add_work_ex_button_present and not is_comprehensive:
                 return None
 
         curr_node = self.head
@@ -75,7 +79,7 @@ class WorkExperienceSection(PageComponent):
             )
             return None
 
-        # TODO: in future, we can support multiple education sections
+        # TODO: in future, we can support multiple work ex sections
         user_work_experience = user_work_experience[
             :1
         ]  # limiting to only work experience section
@@ -136,6 +140,21 @@ class WorkExperienceSection(PageComponent):
         return count
 
     def _update_nodes(self, node):
+        # Check if node with same work_experience_no already exists to avoid duplicates
+        if isinstance(node, WorkExperience):
+            curr = self.head
+            while curr:
+                if (
+                    isinstance(curr, WorkExperience)
+                    and curr.work_experience_no == node.work_experience_no
+                ):
+                    logger.info(
+                        f"Skipping duplicate work experience node with work_experience_no={node.work_experience_no} "
+                        f"for job {self.parent_application_page.parent_job.title}"
+                    )
+                    return
+                curr = curr.next
+
         if self.head is None:
             self.head = node
             self.tail = node
@@ -148,7 +167,7 @@ class WorkExperienceSection(PageComponent):
             f"Updating new work experience fields in db for job - "
             f"{self.parent_application_page.parent_job.title}, url - {self.parent_application_page.url}"
         )
-        # TODO : Uncomment this when we support multiple education sections
+        # TODO : Uncomment this when we support multiple work ex sections
         # self.parent_application_page.update_steps(step=self, inplace=True)
 
         return
@@ -188,7 +207,7 @@ class WorkExperienceSection(PageComponent):
             elif hasattr(field, "field_title"):
                 field_title = field.field_title
 
-            field_category = "education"
+            field_category = "work_experience"
             if hasattr(field, "category"):
                 field_category = field.category
             elif hasattr(field, "field_category"):
@@ -288,6 +307,12 @@ class WorkExperienceSection(PageComponent):
                     description="Number of the observed element which is strictly having interactive work "
                     "experience fields.",
                 )
+                work_experience_container_x_path: str = Field(
+                    ...,
+                    description="XPath of the outer-most container element that contains ONLY the interactive "
+                    "work experience fields for the current work experience section number mentioned in the prompt. "
+                    "This should be stable and usable with selenium to scope subsequent field lookups.",
+                )
                 work_experience_fields: List[WorkExperienceFieldInfo] = Field(
                     ...,
                     description="Fields to start adding work experience details like company, job title, responsibilities etc.",
@@ -314,6 +339,12 @@ class WorkExperienceSection(PageComponent):
         else:
 
             class WorkExperienceSectionFields(BaseModel):
+                work_experience_container_x_path: str = Field(
+                    ...,
+                    description="XPath of the outer-most container element that contains ONLY the interactive "
+                    "work experience fields for the current work experience section number mentioned in the prompt. "
+                    "This should be stable and usable with selenium to scope subsequent field lookups.",
+                )
                 work_experience_fields: List[WorkExperienceFieldInfo] = Field(
                     ...,
                     description="Fields to start adding work experience details like company, job title, responsibilities etc.",
@@ -337,16 +368,21 @@ class WorkExperienceSection(PageComponent):
                     "It may or may not be present.",
                 )
 
-        fields_found, fields = get_gpt_response(
+        fields_found, fields = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=WorkExperienceSectionFields,
+            model="intermediate",
         )
         if fields_found:
             curr_node = None
 
             if fields.work_experience_fields:
                 invalid_x_paths = {}
+                if not element_exists(fields.work_experience_container_x_path):
+                    invalid_x_paths["work_experience_container_x_path"] = (
+                        fields.work_experience_container_x_path
+                    )
                 if fields.mark_complete_button_x_path and not element_exists(
                     fields.mark_complete_button_x_path
                 ):
@@ -381,6 +417,7 @@ class WorkExperienceSection(PageComponent):
                 curr_node = WorkExperience(
                     work_experience_fields=work_experience_fields,
                     save_button=mark_complete_work_experience_button,
+                    container_x_path=fields.work_experience_container_x_path,
                     work_experience_no=self.identified_work_experiences_count + 1,
                     parent_application_page=self.parent_application_page,
                     refetch_fields=True,
@@ -419,10 +456,11 @@ class WorkExperienceSection(PageComponent):
                 description="XPath of button to add new / another work experience.",
             )
 
-        fields_found, fields = get_gpt_response(
+        fields_found, fields = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=AddWorkExperienceButton,
+            model="intermediate",
         )
         if fields_found:
             if fields.add_new_work_experience_x_path:
@@ -514,6 +552,7 @@ class WorkExperienceSection(PageComponent):
                 experience_related_url = "experience_related_url"
                 industry = "industry"
                 employment_type = "employment_type"
+                currently_working_here = "currently_working_here"
                 other = "other"
 
             class WorkExperienceFieldInfo(BaseModel):
@@ -522,10 +561,9 @@ class WorkExperienceSection(PageComponent):
                     description="Work experience field's exact title / question mentioned on the webpage, without any "
                     "modification.",
                 )
-                field_question: Optional[str] = Field(
+                field_question: str = Field(
                     ...,
-                    description="If field title on its own is not self explanatory then modify it so that it makes sense as"
-                    " a question.",
+                    description="What is grammatically correct question, answering which will help process the field?",
                 )
                 field_category: FieldCategory = Field(
                     ...,
@@ -539,6 +577,12 @@ class WorkExperienceSection(PageComponent):
                         ...,
                         description="Number of the observed element which is strictly having interactive work "
                         "experience fields.",
+                    )
+                    work_experience_container_x_path: str = Field(
+                        ...,
+                        description="XPath of the outer-most container element that contains ONLY the interactive "
+                        "work experience fields. This should be stable and usable with selenium to scope subsequent "
+                        "field lookups.",
                     )
                     work_experience_fields: Optional[List[WorkExperienceFieldInfo]] = (
                         Field(
@@ -571,6 +615,12 @@ class WorkExperienceSection(PageComponent):
             else:
 
                 class WorkExperienceSectionFields(BaseModel):
+                    work_experience_container_x_path: str = Field(
+                        ...,
+                        description="XPath of the outer-most container element that contains ONLY the interactive "
+                        "work experience fields. This should be stable and usable with selenium to scope subsequent "
+                        "field lookups.",
+                    )
                     work_experience_fields: Optional[List[WorkExperienceFieldInfo]] = (
                         Field(
                             ...,
@@ -599,10 +649,11 @@ class WorkExperienceSection(PageComponent):
                         "job application itself.",
                     )
 
-            fields_found, fields = get_gpt_response(
+            fields_found, fields = _llm_service.chat(
                 constants.gpt["system_prompts"]["application_step_identification"],
                 user_prompt,
                 response_format=WorkExperienceSectionFields,
+                model="intermediate",
             )
             if fields_found:
                 curr_node = None
@@ -615,17 +666,42 @@ class WorkExperienceSection(PageComponent):
                             "The x_path that we are trying to extract is of mark complete button which is used to mark"
                             " current work experience as complete."
                         )
+                        container_x_path = (
+                            fields.work_experience_container_x_path
+                            if fields.work_experience_container_x_path
+                            and element_exists(fields.work_experience_container_x_path)
+                            else None
+                        )
                         fields.mark_complete_button_x_path = (
                             ApplicationField.extract_correct_x_path(
                                 prev_x_path=fields.mark_complete_button_x_path,
                                 prompt=prompt,
                                 job_title=self.parent_application_page.parent_job.title,
                                 job_url=self.parent_application_page.url,
+                                container_x_path=container_x_path,
                             )
                         )
                         if not fields.mark_complete_button_x_path:
                             raise Exception(
                                 "Couldn't extract valid x_path for mark complete button."
+                            )
+                    if not element_exists(fields.work_experience_container_x_path):
+                        # Best-effort correction of container x_path
+                        prompt = (
+                            "The x_path that we are trying to extract is of the container element that wraps the "
+                            "interactive work experience fields on the page."
+                        )
+                        fields.work_experience_container_x_path = (
+                            ApplicationField.extract_correct_x_path(
+                                prev_x_path=fields.work_experience_container_x_path,
+                                prompt=prompt,
+                                job_title=self.parent_application_page.parent_job.title,
+                                job_url=self.parent_application_page.url,
+                            )
+                        )
+                        if not fields.work_experience_container_x_path:
+                            raise Exception(
+                                "Couldn't extract valid x_path for work experience container."
                             )
 
                     work_experience_fields = []
@@ -640,12 +716,16 @@ class WorkExperienceSection(PageComponent):
                                 parent_application_page=self.parent_application_page,
                                 persist_context_fields=False,
                             )
+                            application_field_component.container_x_path = (
+                                fields.work_experience_container_x_path
+                            )
                         else:
                             application_field = ApplicationField(
                                 parent_application_page=self.parent_application_page,
                                 title=field.field_title,
                                 question=field.field_question,
                                 category=field.field_category.value,
+                                container_x_path=fields.work_experience_container_x_path,
                             )
                             application_field_component = (
                                 application_field.get_field_component()
@@ -653,6 +733,12 @@ class WorkExperienceSection(PageComponent):
 
                         if application_field_component:
                             work_experience_fields.append(application_field_component)
+
+                    # Reorder fields to put currently_working_here fields at the start
+                    work_experience_fields = sorted(
+                        work_experience_fields,
+                        key=lambda f: f.category != "currently_working_here",
+                    )
 
                     if (
                         work_experience_fields
@@ -671,6 +757,7 @@ class WorkExperienceSection(PageComponent):
                         curr_node = WorkExperience(
                             work_experience_fields=work_experience_fields,
                             save_button=mark_complete_work_experience_button,
+                            container_x_path=fields.work_experience_container_x_path,
                             work_experience_no=self.identified_work_experiences_count
                             + 1,
                             parent_application_page=self.parent_application_page,
@@ -712,10 +799,11 @@ class WorkExperienceSection(PageComponent):
                 "not on page instructions or labels.",
             )
 
-        info_found, info = get_gpt_response(
+        info_found, info = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=WorkExperienceSectionInfo,
+            model="intermediate",
         )
         if info_found:
             return info.interactive_work_experience_fields_visible
@@ -774,10 +862,11 @@ class WorkExperienceSection(PageComponent):
                 ..., description="List of all buttons found on the page."
             )
 
-        analysis_found, analysis = get_gpt_response(
+        analysis_found, analysis = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=PageElements,
+            model="intermediate",
         )
 
         if analysis_found:
@@ -835,13 +924,26 @@ class WorkExperienceSection(PageComponent):
             f"specific work experience details in a thorough manner\n"
             f"2. For each individual field, whether it is genuinely intended to collect comprehensive "
             f"work experience information or seems like a random/standalone question\n\n"
-            f"Consider comprehensive work experience fields to typically include things like:\n"
-            f"- Company name, job title, employment dates, location\n"
-            f"- Job responsibilities, achievements, skills used\n"
-            f"- Employment type, industry, etc.\n\n"
-            f"Fields that seem random or not intended for comprehensive work experience gathering might be:\n"
-            f"- Single generic questions about work\n"
-            f"- Isolated questions without context of building a complete work history"
+            f"IMPORTANT GUIDELINES FOR COMPREHENSIVENESS:\n"
+            f"- Fields are considered COLLECTIVELY comprehensive if they together capture the core components "
+            f"of a work experience: (1) company/organization name, (2) job title/role, and (3) time period "
+            f"(start/end dates, employment duration, or similar temporal information). Additional fields that provide "
+            f"supplementary details (responsibilities, achievements, skills, location, employment type, industry, etc.) "
+            f"are bonuses but not required for comprehensiveness.\n"
+            f"- For individual fields: A field is comprehensive if it's part of a structured work experience form that "
+            f"collects multiple related pieces of information to build a complete work history record, rather than a "
+            f"standalone generic question that doesn't require detailed information.\n"
+            f"- Time period fields can be represented in various formats (separate start/end dates, first/last year, "
+            f"employment duration, etc.) - all are valid representations.\n"
+            f"- When evaluating collective comprehensiveness, be GENEROUS - if the fields together allow building "
+            f"a complete work experience entry with the three core components mentioned above, they should be considered "
+            f"comprehensive even if some optional supplementary fields are missing.\n\n"
+            f"Examples for reference (these are just illustrative examples, not an exhaustive list):\n"
+            f"- COMPREHENSIVE: Multiple fields that together capture company, job title, and time period "
+            f"(e.g., fields asking for company name, position title, and dates/duration together form a comprehensive set).\n"
+            f"- NON-COMPREHENSIVE: Standalone questions that don't require detailed information (e.g., yes/no questions "
+            f"about having work experience, single dropdowns asking only for years of experience without details, "
+            f"questions that don't allow building a complete work history record)."
         )
 
         class FieldComprehensiveness(BaseModel):
@@ -851,8 +953,10 @@ class WorkExperienceSection(PageComponent):
             )
             is_comprehensive_work_experience_field: bool = Field(
                 ...,
-                description="Boolean flag indicating whether this specific field is genuinely intended "
-                "to collect comprehensive work experience information, not just a random work-related question.",
+                description="Boolean flag indicating whether this specific field is part of a structured "
+                "work experience form that collects multiple related pieces of information to build a "
+                "complete work history record, rather than a standalone generic question. Fields that are part of "
+                "a comprehensive form should be marked as True, even if they don't capture complete information by themselves.",
             )
             reason_for_comprehensiveness: str = Field(
                 ...,
@@ -860,21 +964,30 @@ class WorkExperienceSection(PageComponent):
             )
 
         class WorkExperienceFieldsAnalysis(BaseModel):
-            are_fields_collectively_comprehensive: bool = Field(
-                ...,
-                description="Boolean indicating whether all the fields together are comprehensive enough "
-                "to gather a candidate's specific work experience details thoroughly.",
-            )
             individual_field_analysis: List[FieldComprehensiveness] = Field(
                 ...,
                 description="Analysis of each individual field's comprehensiveness for work experience collection. "
                 "Return only the field numbers (1-based index) and boolean flags, not the full field titles.",
             )
+            are_fields_collectively_comprehensive: bool = Field(
+                ...,
+                description="Boolean indicating whether all the fields together are comprehensive enough "
+                "to gather a candidate's specific work experience details. Return True if the fields "
+                "collectively capture the core components: (1) company/organization name, "
+                "(2) job title/role, and (3) time period (start/end dates, employment duration, or similar "
+                "temporal information). Be generous - if these core components are present, return True even if "
+                "optional supplementary fields are missing.",
+            )
+            reason_for_collective_comprehensiveness: str = Field(
+                ...,
+                description="Reasoning for why the fields are collectively considered comprehensive or not.",
+            )
 
-        analysis_found, analysis = get_gpt_response(
+        analysis_found, analysis = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=WorkExperienceFieldsAnalysis,
+            model="intermediate",
         )
 
         if analysis_found:
@@ -914,7 +1027,7 @@ class WorkExperienceSection(PageComponent):
 
         fields, buttons = self._extract_page_elements()
 
-        add_education_button_present = (
+        add_work_ex_button_present = (
             True
             if [button for button in buttons if button["is_add_work_experience_button"]]
             else False
@@ -945,7 +1058,7 @@ class WorkExperienceSection(PageComponent):
             ]
 
         return (
-            add_education_button_present,
+            add_work_ex_button_present,
             is_comprehensive,
             comprehensive_fields,
             non_comprehensive_fields,
@@ -1003,12 +1116,16 @@ class WorkExperience(PageComponent):
         self,
         work_experience_fields,
         save_button,
+        container_x_path,
         work_experience_no,
         parent_application_page,
         refetch_fields=False,
     ):
         self.work_experience_fields = work_experience_fields
         self.save_button = save_button
+        if not container_x_path:
+            raise ValueError("WorkExperience.container_x_path is required")
+        self.container_x_path = container_x_path
         self.work_experience_no = work_experience_no
         self.parent_application_page = parent_application_page
         self.refetch_fields = refetch_fields
@@ -1019,6 +1136,13 @@ class WorkExperience(PageComponent):
         self.prev = None
 
     def proceed(self, retry=False):
+        # Fail fast if container is missing/stale
+        if not element_exists(self.container_x_path):
+            raise ValueError(
+                f"WorkExperience container_x_path is missing or stale: {self.container_x_path} "
+                f"for job {self.parent_application_page.parent_job.title} at url {self.parent_application_page.url}"
+            )
+
         for field in self.work_experience_fields:
             self._process_field(field)
 
@@ -1030,15 +1154,25 @@ class WorkExperience(PageComponent):
                     f"section {self.work_experience_no} for job {self.parent_application_page.parent_job.title} "
                     f"at url {self.parent_application_page.url}."
                 )
-                self.work_experience_fields.append(additional_fields)
+                self.work_experience_fields.extend(additional_fields)
 
                 for field in additional_fields:
                     self._process_field(field)
 
         if self.save_button:
+            self.save_button.container_x_path = self.container_x_path
             self.save_button.proceed()
 
     def _process_field(self, field):
+        # Skip end_date field if currently_working_here checkbox is checked and end_date element doesn't exist
+        if field.category == "end_date":
+            if self._should_skip_end_date_field(field):
+                logger.info(
+                    f"Skipping end_date field '{field.title}' because currently_working_here is checked "
+                    f"and end_date element doesn't exist in DOM for job {self.parent_application_page.parent_job.title}"
+                )
+                return
+
         question_backup = field.question
         field.question = (
             f"{question_backup}\n"
@@ -1055,6 +1189,47 @@ class WorkExperience(PageComponent):
 
         field.question = question_backup
         field.category = category_backup
+
+    def _should_skip_end_date_field(self, end_date_field):
+        """
+        Check if end_date field should be skipped based on currently_working_here checkbox state.
+
+        Returns True if:
+        1. A currently_working_here field exists
+        2. It's a CheckBox type
+        3. It's a boolean checkbox
+        4. It's currently checked
+        5. The end_date field element doesn't exist in DOM
+        """
+        # Find currently_working_here field
+        currently_working_field = None
+        for f in self.work_experience_fields:
+            if f.category == "currently_working_here":
+                currently_working_field = f
+                break
+
+        if not currently_working_field:
+            return False
+
+        # Check if it's a CheckBox
+        if not isinstance(currently_working_field, CheckBox):
+            return False
+
+        # Check if it's boolean type and is checked
+        if not currently_working_field.is_boolean:
+            return False
+
+        if not currently_working_field.is_checked:
+            return False
+
+        # Check if end_date field element doesn't exist in DOM using its title
+        if hasattr(end_date_field, "title") and end_date_field.title:
+            if not get_xpath_by_text(
+                end_date_field.title, container_xpath=self.container_x_path
+            ):
+                return True
+
+        return False
 
     def _refetch_fields(self):
         """Fetch additional work experience fields that are not already present in existing work_experience_fields"""
@@ -1089,6 +1264,7 @@ class WorkExperience(PageComponent):
             experience_related_url = "experience_related_url"
             industry = "industry"
             employment_type = "employment_type"
+            currently_working_here = "currently_working_here"
             other = "other"
 
         class WorkExperienceFieldInfo(BaseModel):
@@ -1097,10 +1273,9 @@ class WorkExperience(PageComponent):
                 description="Work experience field's exact title / question mentioned on the webpage, without any "
                 "modification.",
             )
-            field_question: Optional[str] = Field(
+            field_question: str = Field(
                 ...,
-                description="If field title on its own is not self explanatory then modify it so that it makes sense as"
-                " a question.",
+                description="What is grammatically correct question, answering which will help process the field?",
             )
             field_category: FieldCategory = Field(
                 ...,
@@ -1114,10 +1289,11 @@ class WorkExperience(PageComponent):
                 "details like company, job title, responsibilities etc.",
             )
 
-        fields_found, fields = get_gpt_response(
+        fields_found, fields = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=WorkExperienceFields,
+            model="intermediate",
         )
 
         additional_fields = []
@@ -1142,12 +1318,14 @@ class WorkExperience(PageComponent):
                         parent_application_page=self.parent_application_page,
                         persist_context_fields=False,
                     )
+                    application_field_component.container_x_path = self.container_x_path
                 else:
                     application_field = ApplicationField(
                         parent_application_page=self.parent_application_page,
                         title=field.field_title,
                         question=field.field_question,
                         category=field.field_category.value,
+                        container_x_path=self.container_x_path,
                     )
                     application_field_component = (
                         application_field.get_field_component()
@@ -1155,6 +1333,12 @@ class WorkExperience(PageComponent):
 
                 if application_field_component:
                     additional_fields.append(application_field_component)
+
+        # Reorder fields to put currently_working_here fields at the start
+        additional_fields = sorted(
+            additional_fields,
+            key=lambda f: f.category != "currently_working_here",
+        )
 
         return additional_fields
 
@@ -1165,12 +1349,19 @@ class WorkExperience(PageComponent):
                 field.to_dict() for field in self.work_experience_fields
             ],
             "save_button": self.save_button.to_dict() if self.save_button else None,
+            "container_x_path": self.container_x_path,
             "work_experience_no": self.work_experience_no,
             "next": self.next.to_dict() if self.next else None,
         }
 
     @classmethod
     def from_dict(cls, input_dict, parent_application_page):
+        if not input_dict.get("container_x_path"):
+            raise ValueError(
+                "WorkExperience.from_dict: missing required 'container_x_path'"
+            )
+        container_x_path = input_dict.get("container_x_path")
+
         fields = []
         for field_input_dict in input_dict["work_experience_fields"]:
             field_class = get_page_component_class_name(
@@ -1191,6 +1382,7 @@ class WorkExperience(PageComponent):
         instance = cls(
             work_experience_fields=fields,
             save_button=save_button,
+            container_x_path=container_x_path,
             work_experience_no=input_dict["work_experience_no"],
             parent_application_page=parent_application_page,
         )

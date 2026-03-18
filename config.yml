@@ -20,7 +20,26 @@ scraping:
       - https://www.linkedin.com/jobs/search/?f_E=3%2C4%2C5%2C6&f_F=it%2Ceng&f_JT=F&f_TPR=r86400&f_WT=2&geoId=92000000&keywords=principal%20engineer&origin=JOB_SEARCH_PAGE_JOB_FILTER&refresh=true&sortBy=R
       - https://www.linkedin.com/jobs/search/?f_E=3%2C4%2C5%2C6&f_F=it%2Ceng&f_JT=F&f_TPR=r86400&f_WT=2&geoId=92000000&keywords=senior%20software%20engineer&origin=JOB_SEARCH_PAGE_JOB_FILTER&refresh=true&sortBy=R
 startup_input: C:\Users\JobHunt\Desktop\startup_input.yml
-openai_model: gpt-4o-mini-2024-07-18
+llm_providers:
+  default: openai
+  # Expected env var: OPENAI_API_KEY or OPENAI_KEY
+  openai:
+    models:
+      default: gpt-4o-mini
+      intermediate: gpt-5-nano
+      complex: gpt-5-mini
+  # Expected env var: ANTHROPIC_API_KEY
+  anthropic:
+    models:
+      default: claude-3-5-sonnet-latest
+      intermediate: claude-3-5-haiku-latest
+      complex: claude-sonnet-4-20250514
+  # Expected env var: GOOGLE_API_KEY or GEMINI_API_KEY
+  gemini:
+    models:
+      default: gemini-2.0-flash
+      intermediate: gemini-2.0-flash
+      complex: gemini-2.5-pro-preview-06-05
 user_email: yzalthree@gmail.com
 admin_email: yzalthree@gmail.com
 websocket:

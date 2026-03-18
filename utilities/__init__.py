@@ -251,6 +251,55 @@ def retry(times=3, delay=1, exceptions=(Exception,), raise_exception=True):
     return decorator
 
 
+def timeout(seconds, raise_exception=True, default=None):
+    """
+    Decorator that raises TimeoutError if the function takes longer than specified seconds.
+
+    Args:
+        seconds: Maximum time allowed for the function to execute
+        raise_exception: If True, raises TimeoutError on timeout. If False, returns default value.
+        default: Value to return if timeout occurs and raise_exception is False
+
+    Usage:
+        @timeout(10)
+        def slow_function():
+            ...
+
+        @timeout(5, raise_exception=False, default="timed out")
+        def maybe_slow():
+            ...
+    """
+    from concurrent.futures import (
+        ThreadPoolExecutor,
+        TimeoutError as FuturesTimeoutError,
+    )
+    from utilities.logging import get_logger
+
+    logger = get_logger("utilities")
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(func, *args, **kwargs)
+                try:
+                    return future.result(timeout=seconds)
+                except FuturesTimeoutError:
+                    logger.warning(
+                        f"[{func.__name__}] Timed out after {seconds} seconds"
+                    )
+                    if raise_exception:
+                        raise TimeoutError(
+                            f"Function '{func.__name__}' timed out after {seconds} seconds"
+                        )
+                    else:
+                        return default
+
+        return wrapper
+
+    return decorator
+
+
 def clean_text_edges(text: str) -> str:
     """
     Strip leading/trailing whitespace and any non-alphanumeric
@@ -321,3 +370,19 @@ def get_call_trace():
         )
 
     return trace
+
+
+def get_formatted_today_date():
+    """Returns today's date in format: 'day(st/nd/rd/th), month year' (e.g., '15th January 2025')"""
+    today = datetime.datetime.now()
+    day = today.day
+    month = today.strftime("%B")
+    year = today.year
+
+    # Add ordinal suffix
+    if 10 <= day % 100 <= 20:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
+
+    return f"{day}{suffix} {month} {year}"

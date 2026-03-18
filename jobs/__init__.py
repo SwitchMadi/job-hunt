@@ -17,7 +17,7 @@ from utilities.selenium import (
     close_selenium_driver,
     revoke_optional_permissions,
 )
-from utilities.gpt import get_gpt_response
+from utilities.llm import create_llm_service
 from utilities.logging import get_logger
 from utilities.sql import get_sql_query_output, execute_sql_query
 from utilities.aws.s3 import S3Bucket
@@ -44,6 +44,7 @@ from jobs.page_components.radio_button import RadioButton
 from jobs.page_components.search_field import SearchField
 from jobs.page_components.popup import Popup
 
+_llm_service = create_llm_service(provider="openai")
 
 config = yaml.safe_load(open("config.yml"))
 logger = get_logger(name="job")
@@ -105,6 +106,20 @@ class Job:
             return job[0]
         else:
             return None
+
+    @staticmethod
+    def is_job_active(job_id):
+        query = f"SELECT is_active FROM jobs.jobs WHERE id = {job_id} LIMIT 1"
+        try:
+            result = get_sql_query_output(query)
+        except Exception as exc:
+            logger.exception(f"Failed to verify active status for job {job_id}: {exc}")
+            return False
+
+        if not result:
+            return False
+
+        return bool(result[0].get("is_active"))
 
     def save_to_db(self):
         job_create_query = f"""
@@ -358,7 +373,7 @@ class ApplicationPage:
             {self.parent_job.title}. Answer should strictly be just the relevant key's name or "Cannot determine" -
             {html_prompt}"""
 
-        job_application_page_key = get_gpt_response(
+        job_application_page_key = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
         )
@@ -573,6 +588,8 @@ class ApplicationPage:
 
                 stream_data = {
                     "event": "application_started",
+                    "job_hash_id": self.parent_job.hash_id,
+                    "job_id": self.parent_job.id,
                     "job_title": self.parent_job.title,
                     "company": self.parent_job.company,
                     "job_url": self.parent_job.url,
@@ -635,6 +652,15 @@ class ApplicationPage:
                     )
                     return
             else:
+                job_exists, unavailability_reason = self._is_job_still_available()
+                if not job_exists:
+                    failure_reason = unavailability_reason or "Job not available"
+                    self._notify_job_unavailable(failure_reason)
+                    self._update_application_status(
+                        self.application_id, "failed", failure_reason
+                    )
+                    return
+
                 self.run_steps()
 
             # Verify submission status and update application
@@ -716,13 +742,15 @@ class ApplicationPage:
         execute_sql_query(query)
 
         # Stream application completion message if this is a status update for a completed application
-        if status in ["submitted", "failed"] and self._should_stream:
+        if False and status in ["submitted", "failed"] and self._should_stream:
             try:
                 # Create responses URL using parent_job attributes
-                responses_url = f"https://switchmadi.com/jobs/{self.parent_job.job_hash_id}/responses"
+                responses_url = f"https://switchmadi.com/application-responses/{self.parent_job.hash_id}"
 
                 stream_data = {
                     "event": "application_completed",
+                    "job_hash_id": self.parent_job.hash_id,
+                    "job_id": self.parent_job.id,
                     "job_title": self.parent_job.title,
                     "company": self.parent_job.company,
                     "success": status == "submitted",
@@ -778,6 +806,8 @@ class ApplicationPage:
 
                 stream_data = {
                     "event": "question_answered",
+                    "job_hash_id": self.parent_job.hash_id,
+                    "job_id": self.parent_job.id,
                     "job_title": self.parent_job.title,
                     "company": self.parent_job.company,
                     "question": question,
@@ -857,7 +887,7 @@ class ApplicationPage:
                 "decision",
             )
 
-        submission_found, submission = get_gpt_response(
+        submission_found, submission = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=ApplicationSubmission,
@@ -937,6 +967,121 @@ class ApplicationPage:
 
         return False, "No conclusion after multiple attempts"
 
+    def _is_job_still_available(self):
+        """Check if the job posting still exists on the page."""
+        global driver
+
+        try:
+            revoke_optional_permissions(self.url)
+            driver.get(self.url)
+            disable_browser_alerts()
+
+            WebDriverWait(driver, 10).until(
+                lambda d: d.execute_script("return document.readyState") == "complete"
+            )
+            time.sleep(5)
+
+            job_available, unavailability_reason = self._assess_job_availability(
+                driver.page_source
+            )
+
+            if job_available is False:
+                reason = unavailability_reason or "Job not available anymore"
+                logger.warn(
+                    f"Job {self.parent_job.id} - {self.parent_job.title} is not available anymore."
+                )
+                self._mark_job_as_inactive()
+                self._notify_job_unavailable(reason)
+                return False, reason
+
+            if job_available is None:
+                return True, None
+
+            return True, None
+        except Exception as exc:
+            logger.exception(
+                f"Failed to verify job availability for job {self.parent_job.id} - {self.parent_job.title}: {exc}"
+            )
+            return True, None
+
+    def _assess_job_availability(self, page_source):
+        class JobAvailability(Enum):
+            true = True
+            false = False
+
+        class JobAvailabilityAssessment(BaseModel):
+            job_not_available: JobAvailability = Field(
+                ...,
+                description="Whether the page explicitly states that the job is unavailable, closed, filled, or similar.",
+            )
+            evidence: Optional[str] = Field(
+                None,
+                description="Exact message or a concise summary of the text indicating unavailability, if any.",
+            )
+
+        user_prompt = (
+            f"Following HTML page is job application webpage for {self.parent_job.title}."
+            f"HTML: {minify_html_for_gpt_prompt(page_source)}\n"
+            "Identify if there is any explicit message indicating that the job is unavailable, closed, filled, expired, or otherwise not accepting applications."
+            "Return true only if such a message is clearly present. If the page is ambiguous or does not mention unavailability, return false."
+            "If a message is present, include the exact text or a short summary in evidence."
+        )
+
+        availability_found, availability = _llm_service.chat(
+            constants.gpt["system_prompts"]["application_step_identification"],
+            user_prompt,
+            response_format=JobAvailabilityAssessment,
+        )
+
+        if not availability_found:
+            logger.error(
+                f"Couldn't determine job availability for {self.parent_job.title}. URL - {self.url}"
+            )
+            return None, None
+
+        return not availability.job_not_available.value, availability.evidence
+
+    def _mark_job_as_inactive(self):
+        if self.parent_job.is_active is False:
+            return
+
+        self.parent_job.is_active = False
+
+        update_query = f"""
+            update jobs.jobs
+            set is_active = false
+            where id = {self.parent_job.id};
+        """
+
+        try:
+            execute_sql_query(update_query)
+        except Exception as exc:
+            logger.exception(
+                f"Failed to mark job {self.parent_job.id} - {self.parent_job.title} inactive: {exc}"
+            )
+
+    def _notify_job_unavailable(self, reason=None):
+        if not self._should_stream:
+            return
+
+        message = {
+            "event": "job_unavailable",
+            "job_hash_id": self.parent_job.hash_id,
+            "job_id": self.parent_job.id,
+            "job_title": self.parent_job.title,
+            "company": self.parent_job.company,
+            "job_url": self.parent_job.url,
+            "reason": reason,
+            "timestamp": datetime.now().isoformat() + "Z",
+        }
+
+        try:
+            self._send_stream_message("application_progress", message)
+        except Exception as exc:
+            logger.exception(
+                f"Failed to send job unavailable notification for {self.parent_job.id}: {exc}"
+            )
+
     def _identify_current_page_elements(self):
         global driver
         user_prompt = (
@@ -978,7 +1123,12 @@ class ApplicationPage:
             )
             select_application_data_source: IsElementPresent = Field(
                 ...,
-                description="Select application data source like Linkedin, Indeed, upload resume etc.",
+                description="There exists a UI element or section on the page that allows selecting how to IMPORT "
+                "candidate data into the application form. This includes options like importing from LinkedIn, "
+                "Indeed, uploading a resume file, or manually inputting data. This is specifically about HOW to "
+                "populate/import the candidate's application data, NOT about referral sources or 'how did you hear "
+                "about this job' questions. Return true only if there is a clear UI element/section for selecting "
+                "the data import method (e.g., 'Apply with LinkedIn', 'Upload Resume', 'Fill manually', etc.).",
             )
             already_applied_alert: IsElementPresent = Field(
                 ...,
@@ -1006,10 +1156,11 @@ class ApplicationPage:
                 description="Webpage has some prompt visible regarding cookies consent",
             )
 
-        elements_found, elements = get_gpt_response(
+        elements_found, elements = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=WebPageElements,
+            model="complex",
         )
         if elements_found:
             return elements
@@ -1027,22 +1178,10 @@ class ApplicationPage:
 
         if elements.job_not_available_alert.value:
             logger.warn(f"Job is not available anymore.")
-            self.parent_job.is_active = False
-
-            update_query = f"""
-                update jobs.jobs
-                set is_active = false
-                where id = {self.parent_job.id};
-            """
-            execute_sql_query(update_query)
+            self._mark_job_as_inactive()
+            self._notify_job_unavailable("Job not available")
 
             return False, "Job not available"
-
-        # if elements.mandatory_account_login_signup.value:
-        #     return False, "Login required"
-        #
-        # if elements.account_verification.value:
-        #     return False, "Account verification required"
 
         # Feasible sections
         if elements.captcha.value:
@@ -1128,7 +1267,7 @@ class ApplicationPage:
 
                 curr_node = self.head_step
                 while curr_node:
-                    if hasattr(curr_node, "title"):
+                    if hasattr(curr_node, "title") and curr_node.title:
                         existing_titles.add(clean_text_edges(curr_node.title).lower())
                     curr_node = curr_node.next
 
@@ -1191,13 +1330,26 @@ class ApplicationPage:
                 "errors on the page / around job fields. Analyse the whole HTML very carefully for extracting all the "
                 "errors & their fields. Strictly ignore the fields where there is no error. Very carefully note that "
                 "if a field is required, that doesn't mean that it has an error. It should have some error message to "
-                "be considered as error."
+                "be considered as error. Only extract fields that are interactive and can be filled, clicked, or selected. "
+                "Assess interactivity by examining HTML element types and attributes - for example, elements like input, "
+                "button, select, textarea, checkbox, radio, or other form controls that allow user interaction. Ensure fields "
+                "are not disabled, readonly (unless appropriate for the field type), or hidden. Ignore static text, labels "
+                "without associated inputs, or non-interactive elements. Strictly ignore page navigation buttons such as "
+                "'Next', 'Previous', 'Back', 'Submit', 'Continue', 'Go to next step', 'Return to previous screen', or any "
+                "other buttons used for page navigation or form submission. These are not application data fields."
             )
         else:
             prompt_part = (
                 "The webpage has job application related fields. Analyse the whole HTML very carefully for "
-                "extracting all the application fields. While extracting field titles, strictly extract exact field "
-                "titles as they are mentioned on the webpage, without any modification whatsoever."
+                "extracting all the application fields. Only extract fields that are interactive and can be filled, clicked, "
+                "or selected. Assess interactivity by examining HTML element types and attributes - for example, elements "
+                "like input, button, select, textarea, checkbox, radio, or other form controls that allow user interaction. "
+                "Ensure fields are not disabled, readonly (unless appropriate for the field type), or hidden. Ignore static "
+                "text, labels without associated inputs, or non-interactive elements. Strictly ignore page navigation buttons "
+                "such as 'Next', 'Previous', 'Back', 'Submit', 'Continue', 'Go to next step', 'Return to previous screen', or "
+                "any other buttons used for page navigation or form submission. These are not application data fields. "
+                "While extracting field titles, strictly extract exact field titles as they are mentioned on the webpage, "
+                "without any modification whatsoever."
             )
 
         class FieldCategory(Enum):
@@ -1227,8 +1379,7 @@ class ApplicationPage:
                 )
                 field_question: str = Field(
                     ...,
-                    description="If field title on its own is not self explanatory so modify it, so that it "
-                    "makes sense as a question. Otherwise respond same as field title.",
+                    description="What is grammatically correct question, answering which will help process the field?",
                 )
                 field_category: FieldCategory = Field(
                     ...,
@@ -1262,7 +1413,17 @@ class ApplicationPage:
                 )
 
         class JobFields(BaseModel):
-            job_fields: list[ApplicationFieldInfo]
+            job_fields: list[ApplicationFieldInfo] = Field(
+                ...,
+                description="List of interactive job application fields. Only include fields that are interactive and can "
+                "be filled, clicked, or selected. Assess interactivity by examining HTML element types and attributes - "
+                "for example, elements like input, button, select, textarea, checkbox, radio, or other form controls that "
+                "allow user interaction. Ensure fields are not disabled, readonly (unless appropriate for the field type), "
+                "or hidden. Ignore static text, labels without associated inputs, or non-interactive elements. Strictly ignore "
+                "page navigation buttons such as 'Next', 'Previous', 'Back', 'Submit', 'Continue', 'Go to next step', "
+                "'Return to previous screen', or any other buttons used for page navigation or form submission. These are "
+                "not application data fields.",
+            )
 
         # Helper function to get fields using GPT with consistent prompt structure
         def _get_fields_from_gpt(prompt_part_text):
@@ -1273,10 +1434,11 @@ class ApplicationPage:
                 f"{prompt_part_text}\n"
             )
 
-            job_fields_found, job_fields = get_gpt_response(
+            job_fields_found, job_fields = _llm_service.chat(
                 constants.gpt["system_prompts"]["application_step_identification"],
                 user_prompt_text,
                 response_format=JobFields,
+                model="complex",
             )
             if job_fields_found:
                 return job_fields.job_fields
@@ -1294,32 +1456,54 @@ class ApplicationPage:
 
         return initial_fields
 
-    def _act_on_job_fields(self, job_fields):
+    def _act_on_job_fields(self, job_fields, only_error_fields=False):
         for job_field in job_fields:
             # Handle phone number/code fields together
             if job_field.field_category.value in [
                 "phone_country_code",
                 "phone_number_without_country_code",
             ]:
-                if not self.phone_info_identified:
-                    self._identify_phone_fields(job_field.field_title)
+                if self.phone_info_identified and not only_error_fields:
+                    continue
+
+                self._identify_phone_fields(job_field.field_title)
             elif job_field.field_category.value == "tnc":
                 self._identify_tnc_field()
             elif job_field.field_category.value == "work_experience":
-                if self.work_experience_section_identified:
+                if self.work_experience_section_identified and not only_error_fields:
+                    # Check if job_field title exists in any work experience field titles
+                    work_experience_section = None
+                    cur_application_step = self.head_step
+                    while cur_application_step:
+                        if isinstance(cur_application_step, WorkExperienceSection):
+                            work_experience_section = cur_application_step
+                            break
+                        cur_application_step = cur_application_step.next
+
+                    if work_experience_section:
+                        work_experience_field_titles = [
+                            field.title
+                            for field in work_experience_section.work_experience_fields
+                            if hasattr(field, "title") and field.title
+                        ]
+                        if job_field.field_title not in work_experience_field_titles:
+                            self._complete_application_field_identification(job_field)
+                            continue
+
                     continue
 
                 self._identify_work_experience_section()
             elif job_field.field_category.value == "education":
-                if self.education_section_identified:
+                if self.education_section_identified and not only_error_fields:
                     continue
 
                 self._identify_education_section()
             elif job_field.field_category.value == "cover_letter":
                 pass
             elif job_field.field_category.value == "resume_upload":
-                if self.resume_upload_identified:
+                if self.resume_upload_identified and not only_error_fields:
                     continue
+
                 self._identify_resume_upload_field(job_field.field_title)
             else:
                 self._complete_application_field_identification(job_field)
@@ -1443,7 +1627,7 @@ class ApplicationPage:
                 logger.warn(
                     f"Errors in job application fields for {self.parent_job.title}. URL - {self.url}"
                 )
-                self._act_on_job_fields(error_fields)
+                self._act_on_job_fields(error_fields, only_error_fields=True)
 
                 submit_application_button.proceed()
 

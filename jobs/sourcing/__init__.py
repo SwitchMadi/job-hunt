@@ -1,7 +1,9 @@
 import re
 
 from utilities.logging import get_logger
-from utilities.gpt import get_gpt_response
+from utilities.llm import create_llm_service
+
+_llm_service = create_llm_service(provider="openai")
 
 logger = get_logger(name="job_info_extraction")
 
@@ -109,7 +111,7 @@ def extract_job_info(job_description, source):
         Answer format should strictly be - "Question number: Answer"
         """
 
-        gpt_resp += f"{get_gpt_response(system_prompt, user_prompt)}\n"
+        gpt_resp += f"{_llm_service.chat(system_prompt, user_prompt)}\n"
         group_questions_prompt = ""
 
     job_info = {}

@@ -11,13 +11,15 @@ from jobs.page_components import (
 from jobs.page_components.button import Button
 from jobs.page_components.resume_upload import ResumeUpload
 from utilities import constants
-from utilities.gpt import get_gpt_response
+from utilities.llm import create_llm_service
 from utilities.selenium import (
     get_selenium_driver,
     minify_html_for_gpt_prompt,
     is_element_visible,
     switch_to_active_tab,
 )
+
+_llm_service = create_llm_service(provider="openai")
 
 driver = get_selenium_driver()
 driver.set_page_load_timeout(15)
@@ -64,7 +66,7 @@ class SubmitApplication(PageComponent):
                 "search the button. Don't use HTML hierarchy to construct XPath.",
             )
 
-        button_found, button = get_gpt_response(
+        button_found, button = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=SubmitApplicationButton,

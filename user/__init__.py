@@ -13,11 +13,12 @@ from utilities.sql import get_sql_query_output, execute_sql_query, get_sql_conne
 from utilities.google_services.drive import DriveResource
 from utilities.logging import get_logger
 from utilities import generate_password, encrypt_string, decrypt_string, constants
-from utilities.gpt.file_assistant import query_file
-from utilities.gpt import get_gpt_response
+from utilities.llm import create_llm_service
 from utilities.aws.s3 import S3Bucket
 from user.resume import Resume
 from plan import Plan
+
+_llm_service = create_llm_service(provider="openai")
 
 
 logger = get_logger(name="user")
@@ -30,6 +31,7 @@ class User:
     def __init__(self, email=None, name=None):
         self.email = email
 
+        is_new_user = False
         user = User.find_user_by_email(email)
         if user is None:
             self.hash_id = uuid.uuid4()
@@ -37,12 +39,14 @@ class User:
             self.password = encrypt_string(generate_password())
             self.save_to_db()
             user = User.find_user_by_email(email)
+            is_new_user = True
 
         self.id = user["id"]
         self.hash_id = user["user_hash_id"]
         self.name = user["name"]
         self.resume = user["resume"]
         self.parsed_resume = user["modified_resume"] or user["parsed_resume"] or {}
+        self.is_parsed_resume_enriched = bool(user["modified_resume"])
         self.password = decrypt_string(user["password"])
 
         self._drive_folder = None
@@ -50,6 +54,12 @@ class User:
         self._job_filters = None
         self._google_oauth_credentials = None
         self._subscription = None
+        self._lifetime_applications_count = None
+        self._lifetime_shares_count = None
+
+        # After creating the user, assign a trial subscription
+        if is_new_user:
+            self.assign_trial_subscription()
 
     @staticmethod
     def find_user_by_email(email):
@@ -71,14 +81,6 @@ class User:
             values ('{self.hash_id}', '{self.email}', '{self.name}', '{self.password}')
         """
         result = execute_sql_query(user_create_query)
-
-        # After creating the user, assign a trial subscription
-        if result:
-            # Get the newly created user to get the ID
-            user = User.find_user_by_email(self.email)
-            if user:
-                user.assign_trial_subscription()
-
         return result
 
     def assign_trial_subscription(self):
@@ -503,6 +505,82 @@ class User:
         return self._drive_folder
 
     @property
+    def drive_folder_link(self):
+        """Get the Google Drive folder link for the user's drive folder"""
+        if not self.drive_folder:
+            return None
+        return f"https://drive.google.com/drive/folders/{self.drive_folder.id}"
+
+    @property
+    def resume_signed_url(self):
+        """
+        Get a signed URL for the user's resume stored in S3 (valid for 1 hour)
+
+        Returns:
+            str: Signed URL or None if no resume or error
+        """
+        if not self.resume:
+            return None
+
+        try:
+            s3 = S3Bucket(bucket_name=config["s3_bucket"])
+
+            # Generate presigned URL (valid for 1 hour = 3600 seconds)
+            signed_url = s3.generate_presigned_url(self.resume, expiration=3600)
+
+            if not signed_url:
+                logger.error(f"Failed to generate signed URL for resume: {self.resume}")
+                return None
+
+            return signed_url
+
+        except Exception as e:
+            logger.exception(
+                f"Error generating resume signed URL for user {self.id}: {e}"
+            )
+            return None
+
+    @property
+    def resume_info(self):
+        """
+        Get complete information for the user's resume stored in S3 including signed URL
+
+        Returns:
+            dict: Contains resume metadata and signed URL or None if no resume or error
+        """
+        if not self.resume:
+            return None
+
+        try:
+            s3 = S3Bucket(bucket_name=config["s3_bucket"])
+
+            # Generate presigned URL (valid for 1 hour = 3600 seconds)
+            signed_url = s3.generate_presigned_url(self.resume, expiration=3600)
+
+            if not signed_url:
+                logger.error(f"Failed to generate signed URL for resume: {self.resume}")
+                return None
+
+            # Get object metadata including last modified timestamp
+            metadata = s3.get_object_metadata(self.resume)
+
+            if not metadata:
+                logger.error(f"Failed to get metadata for resume: {self.resume}")
+                return None
+
+            return {
+                "url": signed_url,
+                "last_modified": metadata["last_modified"].timestamp(),
+                "content_length": metadata["content_length"],
+                "content_type": metadata["content_type"],
+                "is_parsed_resume_enriched": self.is_parsed_resume_enriched,
+            }
+
+        except Exception as e:
+            logger.exception(f"Error getting resume info for user {self.id}: {e}")
+            return None
+
+    @property
     def jobs_sheet(self):
         if self._jobs_sheet:
             return self._jobs_sheet
@@ -545,20 +623,45 @@ class User:
             and t1.is_active
             and t1.job_filter_id = {job_filter_id}
         """
-        df_user_preferences = get_sql_query_output(
-            query=user_preferences_query, output_as_dataframe=True
-        )
-        df_user_preferences["value"] = df_user_preferences["value"].apply(
-            lambda x: x.replace("'", "''")
-        )
-        grouped_preferences = (
-            df_user_preferences.groupby(["job_field", "is_preferred"])["value"]
-            .agg(list)
-            .unstack()
-        )
-        field_preferences = grouped_preferences.apply(
-            lambda x: x.dropna().to_dict(), axis=1
-        ).to_dict()
+        user_preferences_data = get_sql_query_output(query=user_preferences_query)
+
+        # Process the data without pandas
+        field_preferences = {}
+
+        for row in user_preferences_data:
+            job_field = row["job_field"]
+            value = row["value"]
+            is_preferred = row["is_preferred"]
+
+            # Skip null/empty values (equivalent to pandas dropna())
+            if value is None or value == "":
+                continue
+
+            # Skip "United States" for location field
+            if job_field in ["location"] and value.lower() == "united states":
+                continue
+
+            # Escape single quotes
+            value = value.replace("'", "''")
+
+            # Initialize job_field if not exists
+            if job_field not in field_preferences:
+                field_preferences[job_field] = {}
+
+            # Initialize is_preferred key if not exists
+            if is_preferred not in field_preferences[job_field]:
+                field_preferences[job_field][is_preferred] = []
+
+            # Add value to the list (deduplication handled by using set)
+            field_preferences[job_field][is_preferred].append(value)
+
+        # Remove duplicates from each list (equivalent to pandas deduplication)
+        for job_field in field_preferences:
+            for is_preferred in field_preferences[job_field]:
+                # Convert to set to remove duplicates, then back to list
+                field_preferences[job_field][is_preferred] = list(
+                    set(field_preferences[job_field][is_preferred])
+                )
 
         return field_preferences
 
@@ -702,7 +805,14 @@ class User:
                     where user_id = {self.id}
                     and job_filter_id = {job_filter_id}
                 )
+            and id not in (
+                    select job_id
+                    from users.job_applications
+                    where user_id = {self.id}
+                    and application_status = 'submitted'
+                )
             and is_active
+            and employment_type not ilike '%intern%'
             and {self._preferred_jobs_query_filters(job_filter_id)}
             order by coalesce(job_posted_at, created_at) desc
         """
@@ -742,6 +852,27 @@ class User:
                 "repost_url",
                 "description_language",
             ]
+
+            # Define list of privileged emails that get access to all columns
+            privileged_emails = [
+                # Add specific email addresses here that should have access to all columns
+                "bhaskar2choudhary@gmail.com"
+            ]
+
+            # If user email is not in privileged list, skip additional columns
+            if self.email not in privileged_emails:
+                additional_skip_columns = [
+                    # Add additional columns to skip for non-privileged users
+                    "employment_type",
+                    "other_skills",
+                    "employees_count",
+                    "job_domain",
+                    "experience_level",
+                    "linkedin_easy_apply",
+                    "is_non_automatable",
+                    "job_posted_at_ist",
+                ]
+                skip_columns.extend(additional_skip_columns)
             keep_columns = [
                 col for col in df_unshared_jobs.columns if col not in skip_columns
             ]
@@ -889,7 +1020,7 @@ class User:
                 s3.fetch_data(file_s3_path=self.resume, file_local_path=file_local_path)
 
             logger.info(f"Parsing resume for user_id - {self.id}...")
-            resume_summary = query_file(
+            resume_summary = _llm_service.query_file(
                 query="Extract resume content in structured manner. Do not leave any information and do not add any of "
                 "your comments.",
                 file=file_local_path,
@@ -901,7 +1032,7 @@ class User:
                 f"Resume summary -\n"
                 f"{resume_summary}"
             )
-            resume_info_extracted, resume_info = get_gpt_response(
+            resume_info_extracted, resume_info = _llm_service.chat(
                 constants.gpt["system_prompts"]["resume_parser"],
                 user_prompt,
                 response_format=Resume,
@@ -969,11 +1100,40 @@ class User:
         return self._successful_applications_count
 
     @property
+    def lifetime_applications_count(self):
+        """Count the total number of successful job applications (submitted status) for this user"""
+        if self._lifetime_applications_count is None:
+            query = f"""
+                SELECT COUNT(*) as count
+                FROM users.job_applications
+                WHERE user_id = {self.id}
+                AND application_status = 'submitted'
+            """
+            result = get_sql_query_output(query)
+            self._lifetime_applications_count = result[0]["count"] if result else 0
+
+        return self._lifetime_applications_count
+
+    @property
+    def lifetime_shares_count(self):
+        """Count the total number of job shares for this user"""
+        if self._lifetime_shares_count is None:
+            query = f"""
+                SELECT COUNT(*) as count
+                FROM users.jobs_shared
+                WHERE user_id = {self.id}
+            """
+            result = get_sql_query_output(query)
+            self._lifetime_shares_count = result[0]["count"] if result else 0
+
+        return self._lifetime_shares_count
+
+    @property
     def should_stream_applications(self):
-        """Determine if streaming should be enabled - only for trial users whose plan is not exhausted"""
+        """Determine if streaming should be enabled - only for trial users"""
         if self.subscription_plan_code != "TRIAL":
             return False
-        return self.applications_remaining > 0
+        return True
 
     @property
     def phone_number(self):
@@ -1207,6 +1367,7 @@ class User:
             WHERE a.is_application_feasible = true
             and a.is_identification_complete = true
             and a.is_active = true
+            and j.employment_type not ilike '%intern%'
             AND j.id in (
                 select id
                 from jobs.jobs
@@ -1216,7 +1377,7 @@ class User:
             AND j.job_url ilike '%greenhouse%'
             AND j.id NOT IN (SELECT job_id FROM submitted_jobs)
             AND j.id NOT IN (SELECT job_id FROM failed_jobs)
-            ORDER BY j.id
+            ORDER BY j.id desc
         """
 
         job_details = get_sql_query_output(job_details_query)

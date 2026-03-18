@@ -1,6 +1,8 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from enum import Enum
+from selenium.webdriver.common.by import By
+from selenium.common.exceptions import InvalidSelectorException
 
 from jobs.page_components import (
     PageComponent,
@@ -13,8 +15,10 @@ from utilities.selenium import (
     minify_html_for_gpt_prompt,
     find_input_block_for_title,
 )
-from utilities.gpt import get_gpt_response
+from utilities.llm import create_llm_service
 from utilities import constants
+
+_llm_service = create_llm_service(provider="openai")
 
 driver = get_selenium_driver()
 driver.set_page_load_timeout(15)
@@ -31,6 +35,36 @@ class PhoneInfo(PageComponent):
         self.prev = None
         self.is_component_functional = False
 
+    @staticmethod
+    def _find_best_parent_element(element, max_levels=3):
+        """
+        Find the best parent element by trying to traverse up the DOM tree.
+        Reduces level by one if InvalidSelectorException occurs until no parent is left.
+
+        Args:
+            element: The starting element
+            max_levels: Maximum number of levels to traverse up (default: 3)
+
+        Returns:
+            The best available parent element or the original element if no parent found
+        """
+        # Generate XPath patterns from highest to lowest level
+        xpath_patterns = [
+            f"./{'../' * i}".rstrip("/") for i in range(max_levels, -1, -1)
+        ]
+
+        for xpath in xpath_patterns:
+            try:
+                return element.find_element(By.XPATH, xpath)
+            except InvalidSelectorException:
+                continue
+            except Exception:
+                # Re-raise non-InvalidSelectorException errors
+                raise
+
+        # Fallback to original element if no parent found
+        return element
+
     def proceed(self, retry=False):
         if not self.component_identified:
             return self._identify()
@@ -43,8 +77,8 @@ class PhoneInfo(PageComponent):
 
         user_input_element = None
         try:
-            element_identified, user_input_element = find_input_block_for_title(
-                self.title
+            element_identified, user_input_element, computed_container_xpath = (
+                find_input_block_for_title(self.title)
             )
             if not element_identified:
                 logger.warn(
@@ -59,6 +93,9 @@ class PhoneInfo(PageComponent):
             )
 
         if user_input_element:
+            # since it's phone field, we'll consider parent elements up to 3 levels up to possibly capture
+            # country code dropdowns etc.
+            user_input_element = self._find_best_parent_element(user_input_element)
             minified_html = minify_html_for_gpt_prompt(
                 user_input_element.get_attribute("outerHTML")
             )
@@ -101,7 +138,7 @@ class PhoneInfo(PageComponent):
                 ..., description="List of phone related fields found on the page"
             )
 
-        fields_found, fields = get_gpt_response(
+        fields_found, fields = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=PhoneFields,

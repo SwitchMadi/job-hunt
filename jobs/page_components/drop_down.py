@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import Select
+from selenium.common.exceptions import NoSuchElementException
 import time
 
 from jobs.page_components import (
@@ -12,7 +13,7 @@ from jobs.page_components import (
 )
 from jobs.page_components.button import Button
 from utilities import constants, remove_emoji
-from utilities.gpt import get_gpt_response
+from utilities.llm import create_llm_service
 from utilities.selenium import (
     find_clickable_parent_xpath,
     get_selenium_driver,
@@ -24,6 +25,7 @@ from utilities.selenium import (
     get_unique_element_by_xpath,
 )
 
+_llm_service = create_llm_service(provider="openai")
 
 driver = get_selenium_driver()
 driver.set_page_load_timeout(15)
@@ -53,67 +55,152 @@ class DropDown(PageComponent):
         )
 
         self.options_xpath_pattern = None
+        self.container_x_path = None
 
         self.is_component_functional = False
 
         self.next = None
         self.prev = None
 
+    def _get_clickable_xpath_for_option(self, option_xpath, option_text):
+        """
+        Get the clickable xpath for an option, either directly or by scrolling to find it.
+
+        :param option_xpath: XPath of the option element
+        :param option_text: Text content of the option
+        :return: Clickable xpath of the option element
+        :raises: Exception if option cannot be found
+        """
+        global driver
+
+        try:
+            # Try to get clickable xpath directly
+            clickable_xpath = find_clickable_parent_xpath(option_xpath, option_text)
+
+            current_option = driver.find_element(By.XPATH, clickable_xpath)
+            actions = ActionChains(driver)
+            actions.move_to_element(current_option).perform()
+
+            return clickable_xpath
+        except NoSuchElementException:
+            # Fallback strategy: scroll until we see the option
+            # Since we're already at the end, scroll up (towards first element)
+            logger.info(
+                f"Option not found by xpath, scrolling up to find option: {option_text}"
+            )
+            same_first_element_count = 0
+            first_element_xpath = None
+            scroll_iteration = 0
+
+            while True:
+                scroll_iteration += 1
+                # Get current visible options
+                current_options = driver.find_elements(
+                    By.XPATH, self.options_xpath_pattern
+                )
+
+                if not current_options:
+                    break
+
+                # Check if target option is visible
+                for opt in current_options:
+                    opt_text = remove_emoji(opt.text)
+                    if opt_text == option_text:
+                        # Found the option, return its clickable xpath
+                        clickable_xpath = find_clickable_parent_xpath(
+                            get_element_xpath(opt), option_text
+                        )
+                        logger.info(
+                            f"Found option after scrolling (iteration {scroll_iteration})"
+                        )
+
+                        actions = ActionChains(driver)
+                        actions.move_to_element(opt).perform()
+
+                        return clickable_xpath
+
+                # Option not found in current view, scroll up (towards first element)
+                first_option = current_options[0]
+                current_first_xpath = get_element_xpath(first_option)
+                if current_first_xpath == first_element_xpath:
+                    same_first_element_count += 1
+                    if same_first_element_count >= 3:
+                        logger.warning(
+                            f"Reached top of dropdown without finding option: {option_text}"
+                        )
+                        raise Exception(
+                            f"Could not find option '{option_text}' after scrolling to top"
+                        )
+                else:
+                    same_first_element_count = 0
+                    first_element_xpath = current_first_xpath
+
+                actions = ActionChains(driver)
+                actions.move_to_element(first_option).perform()
+
     def proceed(self, retry=False):
         global driver
 
-        dropdown_element = get_unique_element_by_xpath(self.x_path, title=self.title)
+        dropdown_element = get_unique_element_by_xpath(
+            self.x_path, title=self.title, container_xpath=self.container_x_path
+        )
         dropdown_type = ApplicationField.identify_options_container_type(
             dropdown_element
         )
         if dropdown_type == "select-option":
             self.options_container_x_path = None
 
-        option = None
-        max_tries = 3
-        current_try = 1
-        while (option is None) or is_element_visible(self.options_container_x_path):
-            if dropdown_type != "select-option":
-                simulate_empty_area_click()
-                self.dropdown_button.proceed()
+        if dropdown_type != "select-option":
+            simulate_empty_area_click()
+            self.dropdown_button.container_x_path = self.container_x_path
+            self.dropdown_button.proceed()
 
-                if (
-                    not element_exists(self.options_container_x_path)
-                    and dropdown_element.tag_name.lower() == "input"
-                ):
-                    # send vowels to trigger options loading for cases where just click is not enough
-                    for vowel in "aeiou":
-                        dropdown_element.send_keys(vowel)
-                        time.sleep(0.5)
-                        dropdown_element.send_keys("\ue003")  # Backspace key
+            if (
+                not element_exists(self.options_container_x_path)
+                and dropdown_element.tag_name.lower() == "input"
+            ):
+                # send vowels to trigger options loading for cases where just click is not enough
+                for vowel in "aeiou":
+                    dropdown_element.send_keys(vowel)
+                    time.sleep(0.5)
+                    dropdown_element.send_keys("\ue003")  # Backspace key
 
-                if not element_exists(self.options_container_x_path):
-                    logger.warning(
-                        f"Element with dropdown container XPath {self.options_container_x_path} not found at url "
-                        f"{self.parent_application_page.url}. Retrying with generalized XPath..."
-                    )
-                    self.options_container_x_path = generalize_xpath_attributes(
-                        self.options_container_x_path
-                    )
-
-                if not element_exists(self.options_container_x_path):
-                    raise Exception(
-                        f"Element with generalized dropdown container XPath {self.options_container_x_path} not found at url "
-                        f"{self.parent_application_page.url}"
-                    )
-            else:
-                driver.execute_script(
-                    """
-                    const element = arguments[0];
-                    const rect = element.getBoundingClientRect();
-                    const elementTop = rect.top + window.pageYOffset;
-                    const viewportHeight = window.innerHeight;
-                    const offsetToCenter = elementTop - (viewportHeight / 2) + (rect.height / 2) + 100;
-                    window.scrollTo({top: offsetToCenter, behavior: 'auto'});
-                """,
-                    dropdown_element,
+            if not element_exists(self.options_container_x_path):
+                logger.warning(
+                    f"Element with dropdown container XPath {self.options_container_x_path} not found at url "
+                    f"{self.parent_application_page.url}. Retrying with generalized XPath..."
+                )
+                self.options_container_x_path = generalize_xpath_attributes(
+                    self.options_container_x_path
                 )
 
+            if not element_exists(self.options_container_x_path):
+                raise Exception(
+                    f"Element with generalized dropdown container XPath {self.options_container_x_path} not found at url "
+                    f"{self.parent_application_page.url}"
+                )
+        else:
+            driver.execute_script(
+                """
+                const element = arguments[0];
+                const rect = element.getBoundingClientRect();
+                const elementTop = rect.top + window.pageYOffset;
+                const viewportHeight = window.innerHeight;
+                const offsetToCenter = elementTop - (viewportHeight / 2) + (rect.height / 2) + 100;
+                window.scrollTo({top: offsetToCenter, behavior: 'auto'});
+            """,
+                dropdown_element,
+            )
+
+        option = None
+        max_empty_options_retries = 3
+        empty_options_retry_count = 1
+        max_iterations = 3
+        iteration_count = 0
+        while (
+            (option is None) or is_element_visible(self.options_container_x_path)
+        ) and iteration_count < max_iterations:
+            iteration_count += 1
             if not self.options_xpath_pattern:
                 self.options_xpath_pattern, options = self.get_dropdown_options(
                     job_title=self.parent_application_page.parent_job.title,
@@ -135,10 +222,10 @@ class DropDown(PageComponent):
             if not options:
                 self.options_xpath_pattern = None
 
-                if current_try >= max_tries:
+                if empty_options_retry_count >= max_empty_options_retries:
                     simulate_empty_area_click()
                     return
-                current_try += 1
+                empty_options_retry_count += 1
 
                 continue
 
@@ -174,13 +261,13 @@ class DropDown(PageComponent):
             if dropdown_type == "select-option":
                 # Handle standard select dropdowns
                 select_element = get_unique_element_by_xpath(
-                    self.x_path, title=self.title
+                    self.x_path, title=self.title, container_xpath=self.container_x_path
                 )
                 select = Select(select_element)
                 select.select_by_visible_text(option["text"])
             else:
-                # Get the clickable parent xpath for this option
-                clickable_xpath = find_clickable_parent_xpath(
+                # Get the clickable xpath for this option (with fallback scrolling if needed)
+                clickable_xpath = self._get_clickable_xpath_for_option(
                     option["x_path"], option["text"]
                 )
 
@@ -191,9 +278,28 @@ class DropDown(PageComponent):
                     title=self.title,
                     parent_application_page=self.parent_application_page,
                 )
+                option_button.container_x_path = self.container_x_path
                 option_button.proceed()
 
-            break
+        # Check if loop ended due to maximum iterations without completing successfully
+        if iteration_count >= max_iterations:
+            option_text = option["text"] if option else None
+            dropdown_visible = False
+            if self.options_container_x_path:
+                try:
+                    dropdown_visible = is_element_visible(self.options_container_x_path)
+                except Exception:
+                    dropdown_visible = "unknown"
+
+            # Only raise exception if task didn't complete successfully
+            # (option is None OR dropdown is still visible)
+            if option is None or dropdown_visible:
+                raise Exception(
+                    f"Maximum iterations ({max_iterations}) reached for dropdown '{self.title}' "
+                    f"at url {self.parent_application_page.url}. "
+                    f"Option selected: {option_text}, "
+                    f"Dropdown still visible: {dropdown_visible}"
+                )
 
         # Store the response
         if option and self.parent_application_page:
@@ -314,7 +420,7 @@ class DropDown(PageComponent):
                 description="XPath pattern that matches all option elements in the dropdown",
             )
 
-        pattern_found, pattern_result = get_gpt_response(
+        pattern_found, pattern_result = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=OptionsXPath,
@@ -338,60 +444,87 @@ class DropDown(PageComponent):
             )
 
     @classmethod
-    def build_options_list(
-        cls, xpath_pattern, dropdown_type=None, max_scroll_attempts=50
-    ):
+    def build_options_list(cls, xpath_pattern, dropdown_type=None):
         """
         Scrolls through a dropdown container and collects all visible option elements.
 
         :param dropdown_type: Type of dropdown container (e.g., "select-option", "ul-li", "ol-li", etc.)
         :param xpath_pattern: XPath pattern for the dropdown options inside the container
-        :param max_scroll_attempts: Safety limit to prevent infinite loops
-        :return: List of all option WebElement objects
+        :return: List of all option dictionaries with text and x_path
         """
         global driver
 
-        all_options = []
+        output_options = []
+        option_texts = []
 
         if dropdown_type == "select-option":
             all_options = driver.find_elements(By.XPATH, xpath_pattern)
             all_options = [
                 option for option in all_options if option.get_attribute("value")
             ]
+            logger.info(f"Found {len(all_options)} select options")
+            for option in all_options:
+                clean_text = remove_emoji(option.text)
+                if clean_text not in option_texts:
+                    output_options.append(
+                        {"text": clean_text, "x_path": get_element_xpath(option)}
+                    )
+                    option_texts.append(clean_text)
         else:
-            # Scroll the container by sending PAGE_DOWN or using JS scroll
-            last_count = 0
-            same_count_attempts = 0
+            # Scroll the container and collect options as we go
+            last_element_xpath = None
+            same_last_element_count = 0
+            scroll_iteration = 0
 
-            for _ in range(max_scroll_attempts):
+            while True:
+                scroll_iteration += 1
                 options = driver.find_elements(By.XPATH, xpath_pattern)
                 if not options:
+                    logger.info(
+                        f"No options found, stopping scroll at iteration {scroll_iteration}"
+                    )
                     break
 
+                # Process current options immediately to avoid stale elements
+                new_options_count = 0
+                for option in options:
+                    clean_text = remove_emoji(option.text)
+                    if clean_text not in option_texts:
+                        output_options.append(
+                            {"text": clean_text, "x_path": get_element_xpath(option)}
+                        )
+                        option_texts.append(clean_text)
+                        new_options_count += 1
+
+                if new_options_count > 0:
+                    logger.info(
+                        f"Scroll iteration {scroll_iteration}: Added {new_options_count} new options (total: {len(output_options)})"
+                    )
+
+                # Check if we've reached the end
                 last_option = options[-1]
+                current_last_xpath = get_element_xpath(last_option)
+                if current_last_xpath == last_element_xpath:
+                    same_last_element_count += 1
+                    logger.info(
+                        f"Same last element detected (count: {same_last_element_count}/3)"
+                    )
+                    if same_last_element_count >= 3:
+                        logger.info(
+                            f"Reached end of dropdown after {scroll_iteration} iterations"
+                        )
+                        break  # Same last element seen 3 times, stop scrolling
+                else:
+                    same_last_element_count = 0
+                    last_element_xpath = current_last_xpath
+
+                # Scroll to last option
                 actions = ActionChains(driver)
                 actions.move_to_element(last_option).perform()
 
-                if len(options) == last_count:
-                    same_count_attempts += 1
-                    if same_count_attempts >= 3:
-                        break  # No more new options
-                else:
-                    same_count_attempts = 0
-                    last_count = len(options)
-
-                all_options = options
-
-        output_options = []
-        option_texts = []
-        for option in all_options:
-            clean_text = remove_emoji(option.text)
-            if clean_text not in option_texts:
-                output_options.append(
-                    {"text": clean_text, "x_path": get_element_xpath(option)}
-                )
-                option_texts.append(clean_text)
-
+        logger.info(
+            f"Completed building options list: {len(output_options)} total options"
+        )
         return output_options
 
     def to_dict(self):
@@ -403,6 +536,7 @@ class DropDown(PageComponent):
             "category": self.category,
             "options_xpath_pattern": self.options_xpath_pattern,
             "options_container_x_path": self.options_container_x_path,
+            "container_x_path": self.container_x_path,
             "next": self.next.to_dict() if self.next else None,
         }
 
@@ -418,6 +552,7 @@ class DropDown(PageComponent):
         )
 
         instance.options_xpath_pattern = input_dict["options_xpath_pattern"]
+        instance.container_x_path = input_dict.get("container_x_path")
         instance.is_component_functional = True
 
         if input_dict["next"]:

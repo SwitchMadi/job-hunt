@@ -3,7 +3,7 @@ import sys
 import yaml
 import os
 
-from jobs import ApplicationPage
+from jobs import ApplicationPage, Job
 from user import User
 from utilities import take_screenshot
 from utilities.logging import get_logger
@@ -69,8 +69,9 @@ try:
     # Apply subscription-based limits using generic service methods
     remaining_applications = user.applications_remaining
     if remaining_applications > 0:
-        logger.info(f"User plan - limiting to {remaining_applications} applications")
-        jobs = jobs[:remaining_applications]
+        logger.info(
+            f"User plan - attempting up to {remaining_applications} applications"
+        )
     else:
         logger.info("No applications remaining for user")
         jobs = []
@@ -80,11 +81,16 @@ try:
     if not jobs:
         logger.warning("No jobs found for application.")
     else:
-        logger.info(f"Applying for {len(jobs)} jobs.")
+        logger.info(f"Preparing {len(jobs)} jobs for potential applications.")
 
-        # Extract job IDs from the job details
-        job_ids = [job["job_id"] for job in jobs]
-        for curr_job_id in job_ids:
+        counted_jobs = []
+
+        for job in jobs:
+            if len(counted_jobs) >= remaining_applications:
+                logger.info("Reached application limit based on active jobs.")
+                break
+
+            curr_job_id = job["job_id"]
             logger.info(f"Applying job for job ID: {curr_job_id}")
 
             # TODO: Remove uploading screenshot before starting the identification process from all places
@@ -151,6 +157,30 @@ try:
                 kill_selenium_chrome()
                 logger.info("Selenium Chrome process killed.")
 
+            if Job.is_job_active(curr_job_id):
+                counted_jobs.append(job)
+                logger.info(
+                    f"Job {curr_job_id} is active. Counting towards remaining applications."
+                )
+            else:
+                logger.info(
+                    f"Job {curr_job_id} is inactive. It will not count towards remaining applications."
+                )
+
+        if counted_jobs:
+            logger.info(
+                f"Counted {len(counted_jobs)} active job applications after processing."
+            )
+        else:
+            logger.info("No active jobs counted towards remaining applications.")
+
+        if len(counted_jobs) < remaining_applications:
+            logger.info(
+                "Available active jobs were fewer than the remaining application allowance."
+            )
+
+        jobs = counted_jobs
+
 finally:
     # Always release the lock, even if an error occurred
     if lock_id:
@@ -188,7 +218,7 @@ finally:
                         FROM users.job_applications 
                         WHERE user_id = {user.id} 
                         AND job_id IN ({job_ids_str})
-                        AND created_at >= NOW() - INTERVAL '1 hour'
+                        AND created_at >= EXTRACT(EPOCH FROM NOW() - INTERVAL '1 hour')
                     """
                     stats = get_sql_query_output(stats_query)
 
@@ -197,21 +227,14 @@ finally:
                         successful_apps = stats["successful_applications"] or 0
                         failed_apps = stats["failed_applications"] or 0
 
-                # Create responses URL using the first job's hash ID (or a generic one)
-                responses_url = "https://switchmadi.com/jobs/responses"
-                if jobs and len(jobs) > 0:
-                    # Use the first job's hash ID for the responses URL
-                    first_job_hash = jobs[0]["job_hash_id"]
-                    responses_url = (
-                        f"https://switchmadi.com/jobs/{first_job_hash}/responses"
-                    )
+                responses_url = "https://switchmadi.com/job-applications"
 
                 completion_data = {
                     "total_applications": total_apps,
                     "successful_applications": successful_apps,
                     "failed_applications": failed_apps,
                     "responsesUrl": responses_url,
-                    "message": f"🎉 Job application process completed! Successfully applied for {successful_apps} out of {total_apps} jobs.",
+                    "message": f"🎉 Job application process completed successfully! Apply to 100s of jobs automatically every month - no stress, no wasted time. Click below! 👇",
                 }
 
                 websocket_client.send_message(

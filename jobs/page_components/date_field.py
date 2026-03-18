@@ -19,9 +19,12 @@ from utilities.selenium import (
     element_exists,
     get_element_xpath,
     find_input_block_for_title,
+    extract_element_value,
 )
 from utilities import constants
-from utilities.gpt import get_gpt_response
+from utilities.llm import create_llm_service
+
+_llm_service = create_llm_service(provider="openai")
 
 
 driver = get_selenium_driver()
@@ -57,7 +60,11 @@ class DateField(PageComponent):
             "date": {},
         }
         self.date_format = None
+        self.day_format = None
+        self.month_format = None
+        self.year_format = None
         self.is_component_functional = False
+        self.container_x_path = None
 
         self.next = None
         self.prev = None
@@ -79,7 +86,9 @@ class DateField(PageComponent):
         - Always calls simulate_empty_area_click() for cleanup
         """
         # Clean up any existing open widgets
-        simulate_empty_area_click(text_to_click=self.title)
+        simulate_empty_area_click(
+            text_to_click=self.title, container_xpath=self.container_x_path
+        )
 
         click_xpath = self.components.get("calendar", {}).get(
             "xpath"
@@ -96,8 +105,10 @@ class DateField(PageComponent):
             button = Button(
                 x_path=click_xpath,
                 button_type="date",
+                title=self.title,
                 parent_application_page=self.parent_application_page,
             )
+            button.container_x_path = self.container_x_path
             button.proceed()
 
             observed_elements = get_observed_elements()
@@ -109,8 +120,10 @@ class DateField(PageComponent):
                 button = Button(
                     x_path=self.components["date"]["xpath"],
                     button_type="date",
+                    title=self.title,
                     parent_application_page=self.parent_application_page,
                 )
+                button.container_x_path = self.container_x_path
                 button.proceed()
 
                 observed_elements = get_observed_elements()
@@ -121,7 +134,9 @@ class DateField(PageComponent):
                     observed_elements
                 )
                 if not is_regex_op_successful:
-                    simulate_empty_area_click(text_to_click=self.title)
+                    simulate_empty_area_click(
+                        text_to_click=self.title, container_xpath=self.container_x_path
+                    )
 
                     start_dom_mutation_observer()
                     button.proceed()
@@ -151,10 +166,14 @@ class DateField(PageComponent):
                 self.input_method_details_identified = True
                 logger.debug(f"Successfully extracted date format: {field_value}")
 
-                simulate_empty_area_click(text_to_click=self.title)
+                simulate_empty_area_click(
+                    text_to_click=self.title, container_xpath=self.container_x_path
+                )
                 return True
 
-        simulate_empty_area_click(text_to_click=self.title)
+        simulate_empty_area_click(
+            text_to_click=self.title, container_xpath=self.container_x_path
+        )
         return False
 
     @staticmethod
@@ -172,7 +191,18 @@ class DateField(PageComponent):
         a) First try with leading zero (e.g. "05" for day=5). Replace *all* such occurrences if found.
         b) Otherwise try without leading zero (e.g. "5"). Replace *all* such occurrences if found.
         c) If neither is found, return original.
+
+        Only performs replacement if date_str contains exactly 3 groups (day, month, year).
         """
+
+        # Split date string by common delimiters to identify groups
+        # Groups are sequences of digits or letters separated by delimiters
+        groups = re.split(r"[/\-\s\.,]+", date_str)
+        groups = [g.strip() for g in groups if g.strip()]
+
+        # Only proceed if there are exactly 3 groups (day, month, year)
+        if len(groups) != 3:
+            return date_str
 
         # Case 1: day = 1, month = 1
         if day == 1 and month == 1:
@@ -386,10 +416,11 @@ class DateField(PageComponent):
                 f"Previous XPath - {prev_xpath}\n"
             )
 
-        date_info_found, date_info = get_gpt_response(
+        date_info_found, date_info = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=DateInfo,
+            model="intermediate",
         )
 
         if date_info_found and date_info.has_calendar and date_info.date_xpath:
@@ -408,8 +439,10 @@ class DateField(PageComponent):
             date_button = Button(
                 x_path=date_info.date_xpath,
                 button_type="date",
+                title=self.title,
                 parent_application_page=self.parent_application_page,
             )
+            date_button.container_x_path = self.container_x_path
             date_button.proceed()
 
             return True
@@ -468,18 +501,45 @@ class DateField(PageComponent):
                     f"the date in question here?",
                     category=f"{self.category} - {component_type}",
                     x_path=component["xpath"],
+                    container_x_path=self.container_x_path,
                 )
                 field.html_type = component["html_type"]
 
                 # Get component object and its class
                 component_obj = field.get_field_component()
                 if component_obj:
+                    # Propagate container_x_path to sub-component
+                    component_obj.container_x_path = self.container_x_path
                     # Add class name to component dict
                     self.components[component_type] = component_obj
                     logger.debug(
                         f"Identified {component_type} component as {component_obj.__class__.__name__} "
                         f"with html_type: {field.html_type}"
                     )
+
+                    # Extract format from field if it's a TextInput and date_format is not set
+                    if (
+                        not self.date_format
+                        and component_obj.__class__.__name__ == "TextInput"
+                    ):
+                        try:
+                            element = driver.find_element(By.XPATH, component["xpath"])
+                            field_value = extract_element_value(element)
+
+                            if field_value:
+                                if component_type == "day":
+                                    self.day_format = field_value
+                                elif component_type == "month":
+                                    self.month_format = field_value
+                                elif component_type == "year":
+                                    self.year_format = field_value
+                                logger.debug(
+                                    f"Extracted {component_type}_format: {field_value}"
+                                )
+                        except Exception as e:
+                            logger.warn(
+                                f"Error extracting format from {component_type} field: {str(e)}"
+                            )
                 else:
                     all_components_valid = False
                     logger.debug(f"Failed to get component for {component_type}")
@@ -524,9 +584,11 @@ class DateField(PageComponent):
                 x_path=self.components.get("date", {}).get("xpath"),
                 category="date_field",
                 question=self.question,
+                title=self.title,
                 parent_application_page=self.parent_application_page,
             )
             date_field.answer = self.answer
+            date_field.container_x_path = self.container_x_path
             date_field.proceed()
 
         if self.has_separate_components:
@@ -537,10 +599,20 @@ class DateField(PageComponent):
                 ("year", self.components.get("year")),
             ]:
                 if component and isinstance(component, PageComponent):
-                    if self.date_format:
+                    # Use date_format if available, otherwise use component-specific format
+                    format_to_use = self.date_format
+                    if not format_to_use:
+                        if component_type == "day":
+                            format_to_use = self.day_format
+                        elif component_type == "month":
+                            format_to_use = self.month_format
+                        elif component_type == "year":
+                            format_to_use = self.year_format
+
+                    if format_to_use:
                         date_component = self._get_date_component_in_format(
                             date=self.answer,
-                            date_format=self.date_format,
+                            date_format=format_to_use,
                             date_component=component_type,
                         )
                         component.answer = date_component
@@ -558,7 +630,9 @@ class DateField(PageComponent):
                         component.question = None
                         component.category = None
 
-        simulate_empty_area_click(self.title)
+        simulate_empty_area_click(
+            text_to_click=self.title, container_xpath=self.container_x_path
+        )
 
         # store the response
         if self.parent_application_page:
@@ -575,8 +649,10 @@ class DateField(PageComponent):
 
         user_input_element = None
         try:
-            element_identified, user_input_element = find_input_block_for_title(
-                self.title
+            element_identified, user_input_element, computed_container_xpath = (
+                find_input_block_for_title(
+                    self.title, container_xpath=self.container_x_path
+                )
             )
             if not element_identified:
                 logger.warn(
@@ -684,10 +760,11 @@ class DateField(PageComponent):
                 f"{self.title}.",
             )
 
-        input_found, input_data = get_gpt_response(
+        input_found, input_data = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=DateInputMethod,
+            model="intermediate",
         )
 
         if input_found:
@@ -704,6 +781,7 @@ class DateField(PageComponent):
                             prompt=prompt,
                             job_title=self.parent_application_page.parent_job.title,
                             job_url=self.parent_application_page.url,
+                            container_x_path=self.container_x_path,
                         )
                     )
 
@@ -756,6 +834,7 @@ class DateField(PageComponent):
                             prompt=prompt,
                             job_title=self.parent_application_page.parent_job.title,
                             job_url=self.parent_application_page.url,
+                            container_x_path=self.container_x_path,
                         )
 
                         if not xpath:
@@ -784,6 +863,7 @@ class DateField(PageComponent):
                     prompt=prompt,
                     job_title=self.parent_application_page.parent_job.title,
                     job_url=self.parent_application_page.url,
+                    container_x_path=self.container_x_path,
                 )
 
                 if not input_data.date_field.xpath:
@@ -908,10 +988,11 @@ class DateField(PageComponent):
                 description="Whether the day component XPath is correct and should be kept.",
             )
 
-        components_found, components_data = get_gpt_response(
+        components_found, components_data = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=ComponentsXPathCorrectness,
+            model="intermediate",
         )
         if components_found:
             # Remove components based on GPT response
@@ -949,7 +1030,7 @@ class DateField(PageComponent):
                 description="Extracted date component in the specified format",
             )
 
-        date_component_found, date_component_data = get_gpt_response(
+        date_component_found, date_component_data = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
             user_prompt,
             response_format=DateComponentFormat,
@@ -966,6 +1047,9 @@ class DateField(PageComponent):
             "class": self.__class__.__name__,
             "title": self.title,
             "date_format": self.date_format,
+            "day_format": self.day_format,
+            "month_format": self.month_format,
+            "year_format": self.year_format,
             "category": self.category,
             "components": {
                 k: v.to_dict() if isinstance(v, PageComponent) else v
@@ -978,6 +1062,7 @@ class DateField(PageComponent):
             "input_method_details_identified": self.input_method_details_identified,
             "question": self.question,
             "persist_context_fields": self.persist_context_fields,
+            "container_x_path": self.container_x_path,
             "next": self.next.to_dict() if self.next else None,
         }
         return output
@@ -992,6 +1077,10 @@ class DateField(PageComponent):
             persist_context_fields=input_dict.get("persist_context_fields", True),
         )
         instance.date_format = input_dict["date_format"]
+        instance.day_format = input_dict.get("day_format")
+        instance.month_format = input_dict.get("month_format")
+        instance.year_format = input_dict.get("year_format")
+        instance.container_x_path = input_dict.get("container_x_path")
 
         # Restore component info and state
         if input_dict.get("components"):

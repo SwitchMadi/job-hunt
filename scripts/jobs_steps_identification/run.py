@@ -34,21 +34,41 @@ try:
 
     logger.info(f"Lock acquired for job steps identification. Lock ID: {lock_id}")
 
-    steps_unidentified_jobs_query = """
+    # Get user and their job filters to build preference filters
+    user = User(email=config["user_email"])
+    user_job_filters = user.job_filters
+
+    # Build preference filters for all active job filters
+    preference_filters = []
+    if user_job_filters:
+        for job_filter in user_job_filters:
+            filter_conditions = user._preferred_jobs_query_filters(job_filter["id"])
+            if filter_conditions:
+                preference_filters.append(f"({filter_conditions})")
+
+    # Combine all filters with OR logic (job matching any filter is eligible)
+    user_preference_filter_clause = ""
+    if preference_filters:
+        user_preference_filter_clause = f"and ({' or '.join(preference_filters)})"
+    else:
+        logger.warning(
+            f"No active job filters found for user {config['user_email']}. All jobs will be considered."
+        )
+
+    steps_unidentified_jobs_query = f"""
         select distinct t1.id job_id
         from jobs.jobs t1
-        left join jobs.application_steps t2
+        left join (
+            select id, job_id 
+            from jobs.application_steps
+        ) t2
         on t1.id = t2.job_id
         where t1.is_active
         and t2.id is null
         and not t1.linkedin_easy_apply
-        and t1.job_url ilike '%greenhouse%'
-        and (
-                t1.job_domain ilike '%business%' 
-                or t1.job_domain ilike '%analy%' 
-                or t1.job_domain ilike '%data%'
-        )
-        and t1.job_posted_at >= EXTRACT(EPOCH FROM (CURRENT_DATE - INTERVAL '7 days'));
+        and t1.employment_type not ilike '%intern%'
+        and t1.job_posted_at >= EXTRACT(EPOCH FROM (CURRENT_DATE - INTERVAL '7 days'))
+        {user_preference_filter_clause};
     """
     jobs = get_sql_query_output(steps_unidentified_jobs_query)
     kill_selenium_chrome()
@@ -84,7 +104,7 @@ try:
                 ]
             )
             try:
-                proc.wait(timeout=30 * 60)  # Wait for 30 minutes
+                proc.wait(timeout=90 * 60)  # Wait for 90 minutes
             except Exception as e:
                 if isinstance(e, subprocess.TimeoutExpired):
                     proc.kill()

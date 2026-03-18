@@ -1,6 +1,7 @@
 import json
 
 from user import User
+from utilities.aws import send_lambda_response
 from utilities.logging import get_logger
 from utilities.aws.ec2 import EC2
 from utilities.aws.dynamo import OperationLocksTable, WebSocketConnectionsTable
@@ -9,6 +10,7 @@ from utilities.aws.websocket import WebSocketClient
 logger = get_logger(name="trigger_job_application")
 
 
+@send_lambda_response(logger)
 def lambda_handler(event, context):
     """
     Lambda function to trigger job free job application.
@@ -167,12 +169,12 @@ def lambda_handler(event, context):
         # Launch EC2 instance to run job scraping
         EC2(
             instance_pricing_model="on_demand",
-            ami_id="ami-0728222dafaad95d8",
+            ami_id="ami-08b28ae49511d344b",
             instance_type="t3a.2xlarge",
             key_name="job-hunt",
             security_group="sg-011a3786d569e6382",
             user_data_script=script,
-            instance_name=f"jobs-application-{user.id}",
+            instance_name=f"jobs-application--user-id--{user.id}",
         )
 
         logger.info("Successfully triggered job application EC2 instance.")
