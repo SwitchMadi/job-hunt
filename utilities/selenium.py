@@ -335,6 +335,83 @@ def _create_chrome_driver(config, driver_type, options):
     return webdriver.Chrome(service=service, options=options)
 
 
+def _build_chrome_options(config, driver_type, headless):
+    if driver_type == "undetected":
+        options = uc.ChromeOptions()
+
+        if headless:
+            options.add_argument("--headless")
+        else:
+            options.add_argument("--start-maximized")  # open Browser in maximized mode
+
+        options.set_capability("goog:chromeOptions", {"w3c": False})
+
+        # Tell ChromeDriver to collect performance logs
+        options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
+
+        # Enable network in perfLoggingPrefs
+        options.add_experimental_option(
+            "perfLoggingPrefs",
+            {
+                "enableNetwork": True,
+            },
+        )
+
+        options.add_argument(
+            "--disable-blink-features=AutomationControlled"
+        )  # disables detection feature
+        options.add_argument("--disable-popup-blocking")
+        options.add_argument("--deny-permission-prompts")
+        options.add_argument("--hide-crash-restore-bubble")
+
+        options.add_argument(
+            f"--user-data-dir={config['chrome_profile_path']}"
+        )  # User Data directory
+        if config.get("user_email"):
+            options.add_argument(
+                f"--profile-directory={config['user_email']}"
+            )  # Profile directory
+
+        return options
+
+    options = Options()
+    if headless:
+        options.add_argument("--headless")
+    else:
+        options.add_argument("start-maximized")  # open Browser in maximized mode
+    options.add_argument("disable-infobars")  # disabling infobars
+    options.add_argument("--disable-extensions")  # disabling extensions
+    options.add_argument(
+        "--disable-dev-shm-usage"
+    )  # overcome limited resource problems
+    options.add_argument("--no-sandbox")  # Bypass OS security model
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_experimental_option("useAutomationExtension", False)
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("--deny-permission-prompts")
+    options.add_argument("--disable-popup-blocking")
+    options.add_argument("--hide-crash-restore-bubble")
+
+    user_agent = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/122.0.0.0 Safari/537.36"
+    )
+    options.add_argument(f"user-agent={user_agent}")
+
+    options.add_argument("window-size=1920,1080")
+    options.add_argument("window-position=0,0")
+
+    options.add_argument(
+        f"user-data-dir={config['chrome_profile_path']}"
+    )  # User Data directory
+    if config.get("user_email"):
+        options.add_argument(
+            f"profile-directory={config['user_email']}"
+        )  # Profile directory
+
+    return options
+
+
 def get_selenium_driver():
     try:
         global driver
@@ -345,87 +422,12 @@ def get_selenium_driver():
         headless = config["selenium_headless"]
 
         if driver is None:
-            if driver_type == "undetected":
-                # Start undetected Chrome
-                options = uc.ChromeOptions()
-
-                if headless:
-                    options.add_argument("--headless")
-                else:
-                    options.add_argument(
-                        "--start-maximized"
-                    )  # open Browser in maximized mode
-
-                options.set_capability("goog:chromeOptions", {"w3c": False})
-
-                # Tell ChromeDriver to collect performance logs
-                options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
-
-                # Enable network in perfLoggingPrefs
-                options.add_experimental_option(
-                    "perfLoggingPrefs",
-                    {
-                        "enableNetwork": True,
-                    },
-                )
-
-                options.add_argument(
-                    "--disable-blink-features=AutomationControlled"
-                )  # disables detection feature
-                options.add_argument("--disable-popup-blocking")
-                options.add_argument("--deny-permission-prompts")
-                options.add_argument("--hide-crash-restore-bubble")
-
-                options.add_argument(
-                    f"--user-data-dir={config['chrome_profile_path']}"
-                )  # User Data directory
-                if config.get("user_email"):
-                    options.add_argument(
-                        f"--profile-directory={config['user_email']}"
-                    )  # Profile directory
-            else:
-                # Setup Chrome options
-                options = Options()
-                if headless:
-                    options.add_argument("--headless")
-                else:
-                    options.add_argument(
-                        "start-maximized"
-                    )  # open Browser in maximized mode
-                options.add_argument("disable-infobars")  # disabling infobars
-                options.add_argument("--disable-extensions")  # disabling extensions
-                options.add_argument(
-                    "--disable-dev-shm-usage"
-                )  # overcome limited resource problems
-                options.add_argument("--no-sandbox")  # Bypass OS security model
-                options.add_experimental_option(
-                    "excludeSwitches", ["enable-automation"]
-                )
-                options.add_experimental_option("useAutomationExtension", False)
-                options.add_argument("--disable-blink-features=AutomationControlled")
-                options.add_argument("--deny-permission-prompts")
-                options.add_argument("--disable-popup-blocking")
-                options.add_argument("--hide-crash-restore-bubble")
-
-                user_agent = (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/122.0.0.0 Safari/537.36"
-                )
-                options.add_argument(f"user-agent={user_agent}")
-
-                options.add_argument("window-size=1920,1080")
-                options.add_argument("window-position=0,0")
-
-                options.add_argument(
-                    f"user-data-dir={config['chrome_profile_path']}"
-                )  # User Data directory
-                if config.get("user_email"):
-                    options.add_argument(
-                        f"profile-directory={config['user_email']}"
-                    )  # Profile directory
-
             try:
-                driver = _create_chrome_driver(config, driver_type, options)
+                driver = _create_chrome_driver(
+                    config,
+                    driver_type,
+                    _build_chrome_options(config, driver_type, headless),
+                )
             except Exception as driver_error:
                 if not _should_refresh_chromedriver(driver_error):
                     raise
@@ -435,7 +437,11 @@ def get_selenium_driver():
                     driver_error,
                 )
                 _resolve_chromedriver_path(config, force_download=True)
-                driver = _create_chrome_driver(config, driver_type, options)
+                driver = _create_chrome_driver(
+                    config,
+                    driver_type,
+                    _build_chrome_options(config, driver_type, headless),
+                )
 
             if driver_type != "undetected":
                 # This script attempts to set navigator.webdriver to undefined
