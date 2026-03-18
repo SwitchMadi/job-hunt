@@ -29,10 +29,387 @@ import htmlmin
 import re
 import psutil
 import json
+import shutil
+import stat
+import tempfile
+import zipfile
 from urllib.parse import urlparse, parse_qsl
+import requests
 
 
 driver = None
+
+CHROME_FOR_TESTING_LATEST_PATCH_URL = "https://googlechromelabs.github.io/chrome-for-testing/latest-patch-versions-per-build.json"
+CHROME_FOR_TESTING_MILESTONE_URL = "https://googlechromelabs.github.io/chrome-for-testing/latest-versions-per-milestone.json"
+CHROME_FOR_TESTING_DOWNLOADS_URL = "https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json"
+
+
+def _run_command_for_output(command):
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except (FileNotFoundError, OSError):
+        return None
+
+    output = (result.stdout or result.stderr or "").strip()
+    return output or None
+
+
+def _extract_version_from_text(text):
+    if not text:
+        return None
+
+    match = re.search(r"(\d+\.\d+\.\d+\.\d+)", text)
+    if match:
+        return match.group(1)
+
+    return None
+
+
+def _get_windows_chrome_version():
+    registry_keys = [
+        r"HKCU\Software\Google\Chrome\BLBeacon",
+        r"HKLM\Software\Google\Chrome\BLBeacon",
+        r"HKLM\Software\WOW6432Node\Google\Chrome\BLBeacon",
+    ]
+
+    for key in registry_keys:
+        output = _run_command_for_output(["reg", "query", key, "/v", "version"])
+        version = _extract_version_from_text(output)
+        if version:
+            return version
+
+    chrome_paths = [
+        os.path.join(
+            os.environ.get("PROGRAMFILES", r"C:\Program Files"),
+            "Google",
+            "Chrome",
+            "Application",
+            "chrome.exe",
+        ),
+        os.path.join(
+            os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)"),
+            "Google",
+            "Chrome",
+            "Application",
+            "chrome.exe",
+        ),
+        os.path.join(
+            os.environ.get("LOCALAPPDATA", ""),
+            "Google",
+            "Chrome",
+            "Application",
+            "chrome.exe",
+        ),
+    ]
+
+    for chrome_path in chrome_paths:
+        if chrome_path and os.path.exists(chrome_path):
+            version = _extract_version_from_text(
+                _run_command_for_output([chrome_path, "--version"])
+            )
+            if version:
+                return version
+
+    return None
+
+
+def _get_macos_chrome_version():
+    chrome_apps = [
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/Applications/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing",
+        "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    ]
+
+    for chrome_app in chrome_apps:
+        if os.path.exists(chrome_app):
+            version = _extract_version_from_text(
+                _run_command_for_output([chrome_app, "--version"])
+            )
+            if version:
+                return version
+
+    return None
+
+
+def _get_linux_chrome_version():
+    chrome_commands = [
+        ["google-chrome", "--version"],
+        ["google-chrome-stable", "--version"],
+        ["chromium", "--version"],
+        ["chromium-browser", "--version"],
+    ]
+
+    for command in chrome_commands:
+        version = _extract_version_from_text(_run_command_for_output(command))
+        if version:
+            return version
+
+    return None
+
+
+def _get_installed_chrome_version():
+    system = platform.system().lower()
+
+    if system == "windows":
+        return _get_windows_chrome_version()
+    if system == "darwin":
+        return _get_macos_chrome_version()
+    if system == "linux":
+        return _get_linux_chrome_version()
+
+    return None
+
+
+def _get_chromedriver_platform():
+    system = platform.system().lower()
+    machine = platform.machine().lower()
+
+    if system == "windows":
+        return "win32"
+    if system == "darwin":
+        return "mac-arm64" if machine in {"arm64", "aarch64"} else "mac-x64"
+    if system == "linux":
+        return "linux64"
+
+    raise RuntimeError(f"Unsupported OS for ChromeDriver auto-download: {system}")
+
+
+def _get_configured_chromedriver_path(config):
+    configured_path = config.get("chromedriver")
+    if not configured_path:
+        raise RuntimeError("`chromedriver` is not configured in config.yml")
+
+    normalized = os.path.expanduser(configured_path)
+    if os.path.isabs(normalized):
+        return normalized
+    return os.path.abspath(normalized)
+
+
+def _get_matching_chromedriver_version(chrome_version):
+    build = ".".join(chrome_version.split(".")[:3])
+    milestone = chrome_version.split(".")[0]
+
+    latest_patch_response = requests.get(
+        CHROME_FOR_TESTING_LATEST_PATCH_URL, timeout=30
+    )
+    latest_patch_response.raise_for_status()
+    latest_patch_data = latest_patch_response.json()
+
+    version = latest_patch_data.get("builds", {}).get(build, {}).get("version")
+    if version:
+        return version
+
+    milestone_response = requests.get(CHROME_FOR_TESTING_MILESTONE_URL, timeout=30)
+    milestone_response.raise_for_status()
+    milestone_data = milestone_response.json()
+
+    version = milestone_data.get("milestones", {}).get(milestone, {}).get("version")
+    if version:
+        return version
+
+    raise RuntimeError(
+        f"Could not find a ChromeDriver version matching installed Chrome {chrome_version}"
+    )
+
+
+def _get_chromedriver_download_url(chrome_version):
+    driver_version = _get_matching_chromedriver_version(chrome_version)
+    platform_name = _get_chromedriver_platform()
+
+    downloads_response = requests.get(CHROME_FOR_TESTING_DOWNLOADS_URL, timeout=30)
+    downloads_response.raise_for_status()
+    downloads_data = downloads_response.json()
+
+    versions = downloads_data.get("versions", [])
+    version_entry = next(
+        (entry for entry in versions if entry.get("version") == driver_version),
+        None,
+    )
+    if not version_entry:
+        raise RuntimeError(
+            f"Could not find ChromeDriver download metadata for version {driver_version}"
+        )
+
+    for download in version_entry.get("downloads", {}).get("chromedriver", []):
+        if download.get("platform") == platform_name:
+            return driver_version, download.get("url")
+
+    raise RuntimeError(
+        f"ChromeDriver download is not available for platform {platform_name}"
+    )
+
+
+def _download_matching_chromedriver(config, chrome_version):
+    driver_version, download_url = _get_chromedriver_download_url(chrome_version)
+    target_path = _get_configured_chromedriver_path(config)
+    target_dir = os.path.dirname(target_path)
+    os.makedirs(target_dir, exist_ok=True)
+
+    response = requests.get(download_url, timeout=60)
+    response.raise_for_status()
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        archive_path = os.path.join(temp_dir, "chromedriver.zip")
+        with open(archive_path, "wb") as archive_file:
+            archive_file.write(response.content)
+
+        with zipfile.ZipFile(archive_path) as archive:
+            archive.extractall(temp_dir)
+
+        extracted_binary = None
+        for root, _, files in os.walk(temp_dir):
+            for file_name in files:
+                if file_name == "chromedriver" or file_name == "chromedriver.exe":
+                    extracted_binary = os.path.join(root, file_name)
+                    break
+            if extracted_binary:
+                break
+
+        if not extracted_binary:
+            raise RuntimeError(
+                "Downloaded ChromeDriver archive did not contain a driver binary"
+            )
+
+        shutil.copy2(extracted_binary, target_path)
+
+    if platform.system().lower() != "windows":
+        current_mode = os.stat(target_path).st_mode
+        os.chmod(target_path, current_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+    logging.info(
+        "Downloaded ChromeDriver %s for Chrome %s to %s",
+        driver_version,
+        chrome_version,
+        target_path,
+    )
+
+    return target_path
+
+
+def _should_refresh_chromedriver(exception):
+    message = str(exception).lower()
+    mismatch_markers = [
+        "this version of chromedriver only supports chrome version",
+        "current browser version is",
+        "chromedriver executable needs to be in path",
+        "unable to obtain driver for chrome",
+    ]
+    return any(marker in message for marker in mismatch_markers)
+
+
+def _resolve_chromedriver_path(config, force_download=False):
+    current_path = _get_configured_chromedriver_path(config)
+    if os.path.exists(current_path) and not force_download:
+        return current_path
+
+    chrome_version = _get_installed_chrome_version()
+    if not chrome_version:
+        raise RuntimeError(
+            "Could not determine the installed Chrome version required for automatic ChromeDriver download"
+        )
+
+    return _download_matching_chromedriver(config, chrome_version)
+
+
+def _create_chrome_driver(config, driver_type, options):
+    chromedriver_path = _resolve_chromedriver_path(config)
+
+    if driver_type == "undetected":
+        return uc.Chrome(
+            options=options,
+            driver_executable_path=chromedriver_path,
+        )
+
+    service = Service(executable_path=chromedriver_path)
+    if driver_type == "selenium_wire":
+        new_driver = webdriver_wire.Chrome(service=service, options=options)
+        logging.getLogger("seleniumwire").setLevel(logging.ERROR)
+        import_seleniumwire_ca_cert()
+        return new_driver
+
+    return webdriver.Chrome(service=service, options=options)
+
+
+def _build_chrome_options(config, driver_type, headless):
+    if driver_type == "undetected":
+        options = uc.ChromeOptions()
+
+        if headless:
+            options.add_argument("--headless")
+        else:
+            options.add_argument("--start-maximized")  # open Browser in maximized mode
+
+        options.set_capability("goog:chromeOptions", {"w3c": False})
+
+        # Tell ChromeDriver to collect performance logs
+        options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
+
+        # Enable network in perfLoggingPrefs
+        options.add_experimental_option(
+            "perfLoggingPrefs",
+            {
+                "enableNetwork": True,
+            },
+        )
+
+        options.add_argument(
+            "--disable-blink-features=AutomationControlled"
+        )  # disables detection feature
+        options.add_argument("--disable-popup-blocking")
+        options.add_argument("--deny-permission-prompts")
+        options.add_argument("--hide-crash-restore-bubble")
+
+        options.add_argument(
+            f"--user-data-dir={config['chrome_profile_path']}"
+        )  # User Data directory
+        if config.get("user_email"):
+            options.add_argument(
+                f"--profile-directory={config['user_email']}"
+            )  # Profile directory
+
+        return options
+
+    options = Options()
+    if headless:
+        options.add_argument("--headless")
+    else:
+        options.add_argument("start-maximized")  # open Browser in maximized mode
+    options.add_argument("disable-infobars")  # disabling infobars
+    options.add_argument("--disable-extensions")  # disabling extensions
+    options.add_argument(
+        "--disable-dev-shm-usage"
+    )  # overcome limited resource problems
+    options.add_argument("--no-sandbox")  # Bypass OS security model
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_experimental_option("useAutomationExtension", False)
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("--deny-permission-prompts")
+    options.add_argument("--disable-popup-blocking")
+    options.add_argument("--hide-crash-restore-bubble")
+
+    user_agent = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/122.0.0.0 Safari/537.36"
+    )
+    options.add_argument(f"user-agent={user_agent}")
+
+    options.add_argument("window-size=1920,1080")
+    options.add_argument("window-position=0,0")
+
+    options.add_argument(
+        f"user-data-dir={config['chrome_profile_path']}"
+    )  # User Data directory
+    if config.get("user_email"):
+        options.add_argument(
+            f"profile-directory={config['user_email']}"
+        )  # Profile directory
+
+    return options
 
 
 def get_selenium_driver():
@@ -45,99 +422,28 @@ def get_selenium_driver():
         headless = config["selenium_headless"]
 
         if driver is None:
-            if driver_type == "undetected":
-                # Start undetected Chrome
-                options = uc.ChromeOptions()
+            try:
+                driver = _create_chrome_driver(
+                    config,
+                    driver_type,
+                    _build_chrome_options(config, driver_type, headless),
+                )
+            except Exception as driver_error:
+                if not _should_refresh_chromedriver(driver_error):
+                    raise
 
-                if headless:
-                    options.add_argument("--headless")
-                else:
-                    options.add_argument(
-                        "--start-maximized"
-                    )  # open Browser in maximized mode
-
-                options.set_capability("goog:chromeOptions", {"w3c": False})
-
-                # Tell ChromeDriver to collect performance logs
-                options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
-
-                # Enable network in perfLoggingPrefs
-                options.add_experimental_option(
-                    "perfLoggingPrefs",
-                    {
-                        "enableNetwork": True,
-                    },
+                logging.warning(
+                    "ChromeDriver startup failed, attempting automatic refresh: %s",
+                    driver_error,
+                )
+                _resolve_chromedriver_path(config, force_download=True)
+                driver = _create_chrome_driver(
+                    config,
+                    driver_type,
+                    _build_chrome_options(config, driver_type, headless),
                 )
 
-                options.add_argument(
-                    "--disable-blink-features=AutomationControlled"
-                )  # disables detection feature
-                options.add_argument("--disable-popup-blocking")
-                options.add_argument("--deny-permission-prompts")
-                options.add_argument("--hide-crash-restore-bubble")
-
-                options.add_argument(
-                    f"--user-data-dir={config['chrome_profile_path']}"
-                )  # User Data directory
-                if config.get("user_email"):
-                    options.add_argument(
-                        f"--profile-directory={config['user_email']}"
-                    )  # Profile directory
-
-                # Create driver
-                driver = uc.Chrome(options=options)
-            else:
-                # Setup Chrome options
-                options = Options()
-                if headless:
-                    options.add_argument("--headless")
-                else:
-                    options.add_argument(
-                        "start-maximized"
-                    )  # open Browser in maximized mode
-                options.add_argument("disable-infobars")  # disabling infobars
-                options.add_argument("--disable-extensions")  # disabling extensions
-                options.add_argument(
-                    "--disable-dev-shm-usage"
-                )  # overcome limited resource problems
-                options.add_argument("--no-sandbox")  # Bypass OS security model
-                options.add_experimental_option(
-                    "excludeSwitches", ["enable-automation"]
-                )
-                options.add_experimental_option("useAutomationExtension", False)
-                options.add_argument("--disable-blink-features=AutomationControlled")
-                options.add_argument("--deny-permission-prompts")
-                options.add_argument("--disable-popup-blocking")
-                options.add_argument("--hide-crash-restore-bubble")
-
-                user_agent = (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/122.0.0.0 Safari/537.36"
-                )
-                options.add_argument(f"user-agent={user_agent}")
-
-                options.add_argument("window-size=1920,1080")
-                options.add_argument("window-position=0,0")
-
-                options.add_argument(
-                    f"user-data-dir={config['chrome_profile_path']}"
-                )  # User Data directory
-                if config.get("user_email"):
-                    options.add_argument(
-                        f"profile-directory={config['user_email']}"
-                    )  # Profile directory
-
-                # Set up service
-                service = Service(executable_path=config["chromedriver"])
-
-                # Start browser
-                if driver_type == "selenium_wire":
-                    driver = webdriver_wire.Chrome(service=service, options=options)
-                    logging.getLogger("seleniumwire").setLevel(logging.ERROR)
-                    import_seleniumwire_ca_cert()
-                else:
-                    driver = webdriver.Chrome(service=service, options=options)
-
+            if driver_type != "undetected":
                 # This script attempts to set navigator.webdriver to undefined
                 driver.execute_script(
                     "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
