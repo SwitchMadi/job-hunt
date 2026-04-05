@@ -8,7 +8,7 @@ gpt = {
         "containing random alphanumeric characters) when extracting XPath because these strings may change when the "
         "page reloads, making the XPath unusable. Using alphanumeric strings should be the last resort. Also don't "
         "respond with long XPaths, just try to use domain specific / functionality attributes which will not match with just any "
-        "other element on the page.",
+        "other element on the page. Do not try to guess the Xpath, consider the HTML given as input as the source of truth.",
         "resume_parser": "You're a tool which helps in extracting information out of resume summary.",
     }
 }
