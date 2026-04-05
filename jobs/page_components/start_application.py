@@ -296,12 +296,22 @@ class StartApplication(PageComponent):
                     )
                     if not correct_x_path:
                         raise Exception(
-                            f"Couldn't extract next step button XPath for "
+                            f"Couldn't extract next step button XPath after clicking a button to start the application for "
                             f"{self.parent_application_page.parent_job.title}. "
                             f"URL - {self.parent_application_page.parent_job.url}"
                         )
                     else:
                         next_steps.next_step_button_x_path = correct_x_path
+
+                # if button text has autofill word then it's not next step button
+                elm = driver.find_element(By.XPATH, next_steps.next_step_button_x_path)
+                element_text = elm.text or ""
+                if "autofill" in element_text.strip().lower():
+                    logger.warn(
+                        f"Next step button actually seems to be autofill button after clicking start application button for "
+                        f"{self.parent_application_page.parent_job.title}. URL - {self.parent_application_page.url}"
+                    )
+                    return
 
                 self.next_step_component = Button(
                     x_path=next_steps.next_step_button_x_path,
