@@ -64,12 +64,24 @@ class ApplicationDataSource(PageComponent):
             true = True
             false = False
 
+        class OptionPartOf(Enum):
+            application_data_source_strategy = "application_data_source_strategy"
+            resume_submission_options = "resume_submission_options"
+            not_present = "not_present"
+
         class ManualDataInputOption(BaseModel):
             manual_data_input_option_present: IsElementPresent = Field(
                 ...,
                 description="Out of the given application data source options, is there an option to opt for manual "
                 "data input as primary method? This button should only be for selecting data strategy. "
                 "Return false if no such button found.",
+            )
+            # if the options is present, is it part of application data source strategy or part of options on hwo to submit resume / CV
+            option_part_of: OptionPartOf = Field(
+                ...,
+                description="If the option to select manual data input strategy is present, then is it part of "
+                "application data source strategy or part of options on how to submit resume / CV. If "
+                "there is no such button then return not_present.",
             )
             manual_data_input_x_path: str = Field(
                 ...,
@@ -90,7 +102,11 @@ class ApplicationDataSource(PageComponent):
         )
 
         if manual_data_input_option_searched:
-            if manual_data_input_option.manual_data_input_option_present.value:
+            if (
+                manual_data_input_option.manual_data_input_option_present.value
+                and manual_data_input_option.option_part_of
+                == OptionPartOf.application_data_source_strategy
+            ):
                 if self.parent_application_page.component_x_path_exists(
                     manual_data_input_option.manual_data_input_x_path
                 ):
