@@ -144,7 +144,9 @@ class ApplicationField:
         )
 
         # 3. Get response model class (conditional based on user_input_element)
-        ResponseModel = self._get_field_info_model(has_user_input_element=(user_input_element is not None))
+        ResponseModel = self._get_field_info_model(
+            has_user_input_element=(user_input_element is not None)
+        )
 
         # 4. Call LLM
         model = "complex" if retry_with_complex else "intermediate"
@@ -188,7 +190,9 @@ class ApplicationField:
                 return None
 
         # 7. Validate and correct XPath
-        corrected_xpath = self._validate_and_correct_xpath(application_field, minified_html)
+        corrected_xpath = self._validate_and_correct_xpath(
+            application_field, minified_html
+        )
         if corrected_xpath is None:
             return None
 
@@ -200,7 +204,9 @@ class ApplicationField:
             return None
 
         # 9. Set field properties
-        self._set_field_properties(application_field, corrected_xpath, user_input_element)
+        self._set_field_properties(
+            application_field, corrected_xpath, user_input_element
+        )
 
         # 10. Handle MCQ options if applicable
         self._finalize_mcq_options(application_field)
@@ -265,7 +271,9 @@ class ApplicationField:
 
         return minified_html, user_input_element
 
-    def _build_xpath_identification_prompt(self, minified_html, retry=False, prev_x_path=None):
+    def _build_xpath_identification_prompt(
+        self, minified_html, retry=False, prev_x_path=None
+    ):
         """
         Build the LLM prompt for XPath identification.
 
@@ -338,6 +346,7 @@ class ApplicationField:
         Returns:
             Type[BaseModel]: The appropriate ApplicationFieldInfo class
         """
+
         class FieldHtmlType(Enum):
             textBox = "text_box"
             checkBox = "check_box"
@@ -371,6 +380,7 @@ class ApplicationField:
             )
 
         if has_user_input_element:
+
             class ApplicationFieldInfo(BaseModel):
                 x_path_info: XPathInfo = Field(
                     ...,
@@ -403,7 +413,9 @@ class ApplicationField:
                     description="Format of field answer if the field requires its answer to be in some specific format. "
                     "e.g. date format etc.",
                 )
+
         else:
+
             class ApplicationFieldInfo(BaseModel):
                 x_path_info: XPathInfo = Field(
                     ...,
@@ -534,7 +546,9 @@ class ApplicationField:
 
         return xpath
 
-    def _try_form_xpath_from_container(self, xpath, uses_alphanumeric, application_field):
+    def _try_form_xpath_from_container(
+        self, xpath, uses_alphanumeric, application_field
+    ):
         """
         Try to form XPath from container if conditions are met.
 
@@ -553,13 +567,10 @@ class ApplicationField:
             tuple: (xpath, uses_alphanumeric) - possibly updated values
         """
         should_try_container = (
-            application_field.html_type.value in ["text_box", "dropdown", "dropdown_button"]
+            application_field.html_type.value
+            in ["text_box", "dropdown", "dropdown_button"]
             and application_field.field_type.value in ["text_field", "other"]
-            and (
-                not xpath
-                or not element_exists(xpath)
-                or uses_alphanumeric
-            )
+            and (not xpath or not element_exists(xpath) or uses_alphanumeric)
             and self.container_x_path
         )
 
@@ -643,7 +654,8 @@ class ApplicationField:
 
         # Check conditions for uniqueness validation
         should_check_uniqueness = (
-            application_field.html_type.value in ["text_box", "dropdown", "dropdown_button"]
+            application_field.html_type.value
+            in ["text_box", "dropdown", "dropdown_button"]
             and application_field.field_type.value in ["text_field", "other"]
             and self.container_x_path
             and element_exists(self.container_x_path)
@@ -690,7 +702,9 @@ class ApplicationField:
 
         return xpath
 
-    def _set_field_properties(self, application_field, corrected_xpath, user_input_element):
+    def _set_field_properties(
+        self, application_field, corrected_xpath, user_input_element
+    ):
         """
         Set field properties from LLM response.
 
