@@ -316,14 +316,30 @@ def _resolve_chromedriver_path(config, force_download=False):
     return _download_matching_chromedriver(config, chrome_version)
 
 
-def _create_chrome_driver(config, driver_type, options):
-    chromedriver_path = _resolve_chromedriver_path(config)
+def _get_installed_chrome_major_version():
+    chrome_version = _get_installed_chrome_version()
+    if not chrome_version:
+        return None
 
-    if driver_type == "undetected":
-        return uc.Chrome(
-            options=options,
-            driver_executable_path=chromedriver_path,
+    try:
+        return int(chrome_version.split(".")[0])
+    except (TypeError, ValueError):
+        logging.warning(
+            "Could not parse Chrome major version from installed version %s",
+            chrome_version,
         )
+        return None
+
+
+def _create_chrome_driver(config, driver_type, options):
+    if driver_type == "undetected":
+        chrome_major_version = _get_installed_chrome_major_version()
+        uc_kwargs = {"options": options}
+        if chrome_major_version is not None:
+            uc_kwargs["version_main"] = chrome_major_version
+        return uc.Chrome(**uc_kwargs)
+
+    chromedriver_path = _resolve_chromedriver_path(config)
 
     service = Service(executable_path=chromedriver_path)
     if driver_type == "selenium_wire":
@@ -436,7 +452,8 @@ def get_selenium_driver():
                     "ChromeDriver startup failed, attempting automatic refresh: %s",
                     driver_error,
                 )
-                _resolve_chromedriver_path(config, force_download=True)
+                if driver_type != "undetected":
+                    _resolve_chromedriver_path(config, force_download=True)
                 driver = _create_chrome_driver(
                     config,
                     driver_type,
