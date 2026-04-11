@@ -1813,6 +1813,47 @@ def has_zero_dimension(tag):
     return False
 
 
+def is_captcha_related_tag(tag):
+    """Preserve standard captcha markup even when hidden or empty."""
+    if not tag:
+        return False
+
+    tag_attrs = getattr(tag, "attrs", None)
+    if not hasattr(tag_attrs, "items"):
+        tag_attrs = {}
+
+    captcha_markers = [
+        "captcha",
+        "recaptcha",
+        "g-recaptcha",
+        "grecaptcha",
+        "hcaptcha",
+        "cf-turnstile",
+        "turnstile",
+        "cloudflare",
+        "arkose",
+        "funcaptcha",
+        "geetest",
+    ]
+
+    tag_name = (tag.name or "").lower()
+    if tag_name == "iframe":
+        src = " ".join(
+            str(tag_attrs.get(attr, "")).lower()
+            for attr in ["src", "title", "name", "id", "class"]
+        )
+        if any(marker in src for marker in captcha_markers):
+            return True
+
+    for attr_value in tag_attrs.values():
+        values = attr_value if isinstance(attr_value, list) else [attr_value]
+        normalized_values = " ".join(str(value).lower() for value in values if value)
+        if any(marker in normalized_values for marker in captcha_markers):
+            return True
+
+    return False
+
+
 def minify_html_for_gpt_prompt(html_content):
     # Parse the HTML content
     soup = BeautifulSoup(html_content, "html.parser")
@@ -1820,6 +1861,9 @@ def minify_html_for_gpt_prompt(html_content):
     # Find all elements with style attribute
     for tag in soup.find_all(True):
         try:
+            if is_captcha_related_tag(tag):
+                continue
+
             if tag and (
                 (
                     tag.attrs
@@ -1852,6 +1896,9 @@ def minify_html_for_gpt_prompt(html_content):
 
     # Remove any element that appears to have zero width or height.
     for tag in soup.find_all(True):
+        if is_captcha_related_tag(tag):
+            continue
+
         if has_zero_dimension(tag):
             try:
                 tag_element = find_element_from_bs4_tag(tag)
@@ -1899,28 +1946,49 @@ def minify_html_for_gpt_prompt(html_content):
 
     for tag in soup.find_all(True):
         # Remove unnecessary attributes from the tags
+        allowed_attrs = [
+            "id",
+            "class",
+            "href",
+            "type",
+            "name",
+            "value",
+            "display",
+            "placeholder",
+            "alt",
+            "title",
+            "role",
+            "aria-label",
+            "aria-labelledby",
+            "aria-expanded",
+            "data-automation-id",
+            "data-id",
+            "tabindex",
+            "contenteditable",
+            "aria-haspopup",
+        ]
+        if is_captcha_related_tag(tag):
+            allowed_attrs.extend(
+                [
+                    "src",
+                    "style",
+                    "data-sitekey",
+                    "sitekey",
+                    "data-callback",
+                    "data-action",
+                    "data-theme",
+                    "data-size",
+                    "data-badge",
+                    "data-tabindex",
+                    "data-s",
+                    "data-widget-id",
+                    "data-response-field",
+                    "data-response-field-name",
+                ]
+            )
+
         for attr in list(tag.attrs):
-            if attr not in [
-                "id",
-                "class",
-                "href",
-                "type",
-                "name",
-                "value",
-                "display",
-                "placeholder",
-                "alt",
-                "title",
-                "role",
-                "aria-label",
-                "aria-labelledby",
-                "aria-expanded",
-                "data-automation-id",
-                "data-id",
-                "tabindex",
-                "contenteditable",
-                "aria-haspopup",
-            ]:
+            if attr not in allowed_attrs:
                 del tag[attr]
 
         # Check if the tag has no attributes
