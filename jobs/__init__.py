@@ -19,7 +19,9 @@ from utilities.selenium import (
 )
 from utilities.llm import create_llm_service
 from utilities.logging import get_logger
-from utilities.sql import get_sql_query_output, execute_sql_query
+from psycopg2 import errors as pg_errors
+
+from utilities.sql import get_sql_query_output, execute_sql_query, get_sql_connection
 from utilities.aws.s3 import S3Bucket
 from utilities.aws.websocket import WebSocketClient
 from utilities.aws.dynamo.websocket_connections import WebSocketConnectionsTable
@@ -1615,14 +1617,109 @@ class ApplicationPage:
         phone_info.proceed()
         self.update_steps(phone_info)
 
+    @staticmethod
+    def _slack_message_ts_epoch_ms(ts: Optional[str]) -> int:
+        """Slack message ts is fractional Unix seconds; store as epoch milliseconds like other tables."""
+        if not ts:
+            return 0
+        try:
+            return int(round(float(ts) * 1000))
+        except (TypeError, ValueError):
+            return 0
+
+    def _slack_captcha_request_pending(self, job_application_id: Optional[int]) -> bool:
+        if job_application_id is None:
+            return False
+        con = get_sql_connection()
+        try:
+            cur = con.cursor()
+            cur.execute(
+                """
+                SELECT 1
+                FROM users.slack_interactive_requests
+                WHERE job_application_id = %s
+                  AND request_kind = 'captcha_dcv'
+                  AND status = 'pending'
+                LIMIT 1;
+                """,
+                (job_application_id,),
+            )
+            return cur.fetchone() is not None
+        finally:
+            con.close()
+
+    def _insert_slack_interactive_captcha_row(
+        self,
+        *,
+        job_application_id: Optional[int],
+        job_id: Optional[int],
+        user_id: Optional[int],
+    ) -> Optional[int]:
+        con = get_sql_connection()
+        try:
+            cur = con.cursor()
+            cur.execute(
+                """
+                INSERT INTO users.slack_interactive_requests (
+                    request_kind,
+                    status,
+                    job_application_id,
+                    job_id,
+                    user_id
+                )
+                VALUES ('captcha_dcv', 'pending', %s, %s, %s)
+                RETURNING id;
+                """,
+                (job_application_id, job_id, user_id),
+            )
+            row = cur.fetchone()
+            con.commit()
+            return int(row[0]) if row else None
+        except pg_errors.UniqueViolation:
+            con.rollback()
+            return None
+        except Exception:
+            con.rollback()
+            raise
+        finally:
+            con.close()
+
+    def _update_slack_interactive_after_post(
+        self,
+        request_id: int,
+        *,
+        slack_channel_id: str,
+        slack_message_ts: str,
+    ) -> None:
+        con = get_sql_connection()
+        try:
+            cur = con.cursor()
+            cur.execute(
+                """
+                UPDATE users.slack_interactive_requests
+                SET slack_channel_id = %s,
+                    slack_message_ts_epoch_ms = %s,
+                    slack_message_id = %s,
+                    updated_at = NOW()
+                WHERE id = %s;
+                """,
+                (
+                    slack_channel_id,
+                    self._slack_message_ts_epoch_ms(slack_message_ts),
+                    slack_message_ts,
+                    request_id,
+                ),
+            )
+            con.commit()
+        finally:
+            con.close()
+
     def _handle_captcha(self) -> bool:
         """
         Run Captcha page component; if an open captcha is present, notify Slack (DCV link),
         persist users.slack_interactive_requests, and store token signature in DynamoDB for Lambda auth.
         Returns True if captcha was open (notification attempted or duplicate skipped); False if none.
         """
-        import time
-
         from jobs.page_components.captcha import Captcha
         from utilities.aws.dynamo.dcv_session_tokens import DcvSessionTokensTable
         from utilities.aws.ec2 import resolve_public_host_for_dcv
@@ -1632,12 +1729,6 @@ class ApplicationPage:
             dcv_token_ttl_seconds,
         )
         from utilities.messaging import MessagingClientFactory
-        from utilities.slack_interactive_requests import (
-            insert_pending_captcha_request,
-            pending_captcha_request_exists,
-            update_slack_delivery_metadata,
-        )
-        from utilities.slack_ts import slack_ts_to_epoch_ms
 
         captcha = Captcha(self)
         if not captcha.proceed():
@@ -1650,7 +1741,7 @@ class ApplicationPage:
         job_id = getattr(job, "id", None)
         user_id = getattr(getattr(job, "user", None), "id", None)
 
-        if pending_captcha_request_exists(job_application_id):
+        if self._slack_captcha_request_pending(job_application_id):
             logger.info(
                 "Skipping duplicate captcha Slack alert; pending request exists for application_id=%s",
                 job_application_id,
@@ -1672,7 +1763,7 @@ class ApplicationPage:
 
         dcv_url = build_dcv_browser_url(public_host, token)
 
-        row_id = insert_pending_captcha_request(
+        row_id = self._insert_slack_interactive_captcha_row(
             job_application_id=job_application_id,
             job_id=job_id,
             user_id=user_id,
@@ -1746,11 +1837,10 @@ class ApplicationPage:
 
         result = client.post_message(channel, text, blocks=blocks)
         if result.ok and result.channel and result.message_ts:
-            update_slack_delivery_metadata(
+            self._update_slack_interactive_after_post(
                 row_id,
                 slack_channel_id=result.channel,
-                slack_message_ts_epoch_ms=slack_ts_to_epoch_ms(result.message_ts),
-                slack_message_id=result.message_ts,
+                slack_message_ts=result.message_ts,
             )
             return True
 

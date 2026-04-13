@@ -1,5 +1,5 @@
 -- Slack human-in-the-loop requests (e.g. captcha + DCV). Webhook updates rows by
--- slack_channel_id + slack_message_ts_epoch_ms (and optionally slack_message_id).
+-- slack_channel_id + slack_message_id (Slack message `ts` string).
 -- Apply manually against your RDS instance when ready.
 
 CREATE TABLE IF NOT EXISTS users.slack_interactive_requests (
@@ -11,8 +11,9 @@ CREATE TABLE IF NOT EXISTS users.slack_interactive_requests (
     user_id                 INTEGER REFERENCES users.users (id) ON DELETE SET NULL,
     slack_channel_id        VARCHAR(64),
     slack_message_ts_epoch_ms BIGINT,
-    -- Slack's message `ts` string (unique per channel); use with slack_channel_id in Events/interactivity payloads
+    -- Slack message `ts` (unique per channel); pair with slack_channel_id for webhook lookups
     slack_message_id        VARCHAR(64),
+    completed_by_slack_user_id VARCHAR(32),
     completed_at            TIMESTAMPTZ,
     resolution_notes        TEXT,
     created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -27,6 +28,9 @@ CREATE INDEX IF NOT EXISTS idx_slack_interactive_status_created
 
 CREATE INDEX IF NOT EXISTS idx_slack_interactive_slack_msg
     ON users.slack_interactive_requests (slack_channel_id, slack_message_ts_epoch_ms);
+
+CREATE INDEX IF NOT EXISTS idx_slack_interactive_slack_channel_message_id
+    ON users.slack_interactive_requests (slack_channel_id, slack_message_id);
 
 -- At most one pending captcha request per application row (avoids duplicate Slack threads).
 CREATE UNIQUE INDEX IF NOT EXISTS uq_slack_interactive_pending_captcha_per_app
