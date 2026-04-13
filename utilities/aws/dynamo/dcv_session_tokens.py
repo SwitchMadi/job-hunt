@@ -10,11 +10,10 @@ logger = get_logger(name="dcv_session_tokens")
 class DcvSessionTokensTable(BaseDynamoTable):
     """Stores DCV browser-session tokens for Lambda validation when the URL is opened."""
 
-    def __init__(self, table_name: Optional[str] = None):
-        import os
-
-        name = table_name or os.getenv("DCV_SESSION_TOKENS_TABLE", "dcv-session-tokens")
-        super().__init__(name)
+    def __init__(self, table_name: str):
+        if not (table_name or "").strip():
+            raise ValueError("dcv_session_tokens_table name is required in config.yml (aws.dcv_session_tokens_table)")
+        super().__init__(table_name.strip())
 
     def put_token(
         self,
@@ -24,7 +23,7 @@ class DcvSessionTokensTable(BaseDynamoTable):
         job_id: Optional[str] = None,
         user_id: Optional[str] = None,
         job_application_id: Optional[str] = None,
-        slack_request_id: Optional[str] = None,
+        captcha_task_id: Optional[str] = None,
         ttl_epoch_seconds: Optional[int] = None,
     ) -> bool:
         try:
@@ -40,8 +39,8 @@ class DcvSessionTokensTable(BaseDynamoTable):
                 item["userId"] = user_id
             if job_application_id is not None:
                 item["jobApplicationId"] = job_application_id
-            if slack_request_id is not None:
-                item["slackRequestId"] = slack_request_id
+            if captcha_task_id is not None:
+                item["captchaTaskId"] = captcha_task_id
             if ttl_epoch_seconds is not None:
                 item["ttl"] = ttl_epoch_seconds
 

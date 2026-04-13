@@ -22,8 +22,17 @@ from utilities.logging import get_logger
 from psycopg2 import errors as pg_errors
 
 from utilities.sql import get_sql_query_output, execute_sql_query, get_sql_connection
-from utilities.slack_interactive_request import SLACK_ACTION_CAPTCHA_COMPLETED
+from utilities.dcv_session import DcvSession
+from utilities.slack_captcha_constants import (
+    ACTION_MARK_FAILED,
+    ACTION_MARK_SOLVED,
+    ACTION_OPEN_DCV,
+)
+from utilities.aws.ec2 import EC2
+from utilities.aws.dynamo.dcv_session_tokens import DcvSessionTokensTable
 from utilities.aws.s3 import S3Bucket
+from utilities.messaging import MessagingClientFactory
+from jobs.page_components.captcha import Captcha
 from utilities.aws.websocket import WebSocketClient
 from utilities.aws.dynamo.websocket_connections import WebSocketConnectionsTable
 from jobs.page_components import ApplicationField
@@ -1628,7 +1637,7 @@ class ApplicationPage:
         except (TypeError, ValueError):
             return 0
 
-    def _pending_captcha_slack_request_id(
+    def _pending_captcha_task_id(
         self, job_application_id: Optional[int]
     ) -> Optional[int]:
         if job_application_id is None:
@@ -1639,9 +1648,9 @@ class ApplicationPage:
             cur.execute(
                 """
                 SELECT id
-                FROM users.slack_interactive_requests
+                FROM users.captcha_tasks
                 WHERE job_application_id = %s
-                  AND request_kind = 'captcha_dcv'
+                  AND task_kind = 'captcha_dcv'
                   AND status = 'pending'
                 ORDER BY id DESC
                 LIMIT 1;
@@ -1653,52 +1662,53 @@ class ApplicationPage:
         finally:
             con.close()
 
-    def _slack_interactive_request_status(self, request_id: int) -> Optional[str]:
+    def _captcha_task_status(self, task_id: int) -> Optional[str]:
         con = get_sql_connection()
         try:
             cur = con.cursor()
             cur.execute(
                 """
                 SELECT status
-                FROM users.slack_interactive_requests
+                FROM users.captcha_tasks
                 WHERE id = %s;
                 """,
-                (request_id,),
+                (task_id,),
             )
             row = cur.fetchone()
             return str(row[0]) if row else None
         finally:
             con.close()
 
-    def _wait_for_slack_captcha_resolution(self, request_id: int) -> str:
+    def _wait_for_captcha_task_resolution(self, task_id: int) -> str:
         """
-        After notifying Slack, block until the row leaves ``pending`` or max wait elapses.
-        Sleeps ``SLACK_CAPTCHA_INITIAL_WAIT_SEC`` (default 60) before the first status read, then polls.
+        After notifying Slack, block until the task leaves ``pending`` or max wait elapses.
+        Timing from ``config.yml`` → ``slack.captcha_task`` (initial_wait_seconds, poll_interval_seconds, max_wait_seconds).
         """
-        initial = int(os.getenv("SLACK_CAPTCHA_INITIAL_WAIT_SEC", "60"))
-        interval = int(os.getenv("SLACK_CAPTCHA_POLL_INTERVAL_SEC", "15"))
-        max_wait = int(os.getenv("SLACK_CAPTCHA_MAX_WAIT_SEC", "7200"))
+        ct = (config.get("slack") or {}).get("captcha_task") or {}
+        initial = int(ct.get("initial_wait_seconds", 60))
+        interval = int(ct.get("poll_interval_seconds", 15))
+        max_wait = int(ct.get("max_wait_seconds", 7200))
 
         time.sleep(max(0, initial))
         deadline = time.time() + max(0, max_wait)
         while time.time() < deadline:
-            status = self._slack_interactive_request_status(request_id)
+            status = self._captcha_task_status(task_id)
             if status and status != "pending":
                 logger.info(
-                    "Slack captcha request id=%s resolved with status=%s",
-                    request_id,
+                    "captcha_tasks id=%s resolved with status=%s",
+                    task_id,
                     status,
                 )
                 return status
             time.sleep(max(1, interval))
         logger.warning(
-            "Timed out waiting for Slack captcha resolution request_id=%s after %ss",
-            request_id,
+            "Timed out waiting for captcha task id=%s after %ss",
+            task_id,
             max_wait,
         )
         return "pending"
 
-    def _insert_slack_interactive_captcha_row(
+    def _add_captcha_task(
         self,
         *,
         job_application_id: Optional[int],
@@ -1710,8 +1720,8 @@ class ApplicationPage:
             cur = con.cursor()
             cur.execute(
                 """
-                INSERT INTO users.slack_interactive_requests (
-                    request_kind,
+                INSERT INTO users.captcha_tasks (
+                    task_kind,
                     status,
                     job_application_id,
                     job_id,
@@ -1734,9 +1744,9 @@ class ApplicationPage:
         finally:
             con.close()
 
-    def _update_slack_interactive_after_post(
+    def _record_captcha_task_slack_delivery(
         self,
-        request_id: int,
+        task_id: int,
         *,
         slack_channel_id: str,
         slack_message_ts: str,
@@ -1746,7 +1756,7 @@ class ApplicationPage:
             cur = con.cursor()
             cur.execute(
                 """
-                UPDATE users.slack_interactive_requests
+                UPDATE users.captcha_tasks
                 SET slack_channel_id = %s,
                     slack_message_ts_epoch_ms = %s,
                     slack_message_id = %s,
@@ -1757,7 +1767,7 @@ class ApplicationPage:
                     slack_channel_id,
                     self._slack_message_ts_epoch_ms(slack_message_ts),
                     slack_message_ts,
-                    request_id,
+                    task_id,
                 ),
             )
             con.commit()
@@ -1767,20 +1777,10 @@ class ApplicationPage:
     def _handle_captcha(self) -> bool:
         """
         Run Captcha page component; if an open captcha is present, ensure a pending
-        ``users.slack_interactive_requests`` row, post Slack (DCV link + mark-complete button),
-        then wait until the row is no longer ``pending`` (initial sleep 60s before polling).
+        ``users.captcha_tasks`` row, post Slack (DCV link + solved/failed buttons with confirm modals in Lambda),
+        then wait until the task is no longer ``pending``.
         Returns True if captcha was open; False if none detected.
         """
-        from jobs.page_components.captcha import Captcha
-        from utilities.aws.dynamo.dcv_session_tokens import DcvSessionTokensTable
-        from utilities.aws.ec2 import resolve_public_host_for_dcv
-        from utilities.dcv_session import (
-            build_dcv_browser_url,
-            create_dcv_session_token_pair,
-            dcv_token_ttl_seconds,
-        )
-        from utilities.messaging import MessagingClientFactory
-
         captcha = Captcha(self)
         if not captcha.proceed():
             return False
@@ -1792,46 +1792,54 @@ class ApplicationPage:
         job_id = getattr(job, "id", None)
         user_id = getattr(getattr(job, "user", None), "id", None)
 
-        existing_id = self._pending_captcha_slack_request_id(job_application_id)
+        dcv_session = DcvSession(config)
+        table_name = (config.get("aws") or {}).get("dcv_session_tokens_table")
+        try:
+            dcv_table = DcvSessionTokensTable(table_name)
+        except ValueError as e:
+            logger.error("%s", e)
+            return True
+
+        existing_id = self._pending_captcha_task_id(job_application_id)
         if existing_id is not None:
             logger.info(
-                "Pending captcha Slack request already exists id=%s for application_id=%s; waiting for resolution",
+                "Pending captcha task already exists id=%s for application_id=%s; waiting for resolution",
                 existing_id,
                 job_application_id,
             )
-            self._wait_for_slack_captcha_resolution(existing_id)
+            self._wait_for_captcha_task_resolution(existing_id)
             return True
 
-        row_id = self._insert_slack_interactive_captcha_row(
+        task_id = self._add_captcha_task(
             job_application_id=job_application_id,
             job_id=job_id,
             user_id=user_id,
         )
-        if row_id is None:
-            existing_id = self._pending_captcha_slack_request_id(job_application_id)
+        if task_id is None:
+            existing_id = self._pending_captcha_task_id(job_application_id)
             if existing_id is not None:
-                self._wait_for_slack_captcha_resolution(existing_id)
+                self._wait_for_captcha_task_resolution(existing_id)
             return True
 
-        public_host = resolve_public_host_for_dcv()
+        metadata_ec2 = EC2(self_identify_instance=True)
+        public_host = metadata_ec2.resolve_public_connectable_host()
         if not public_host:
             logger.error(
-                "Cannot resolve public host for DCV URL (metadata / DCV_PUBLIC_HOST)"
+                "Cannot resolve instance public host from metadata for DCV URL"
             )
-            self._wait_for_slack_captcha_resolution(row_id)
+            self._wait_for_captcha_task_resolution(task_id)
             return True
 
         try:
-            token, sig = create_dcv_session_token_pair()
+            token, sig = dcv_session.create_token_pair()
         except ValueError as e:
             logger.error("%s", e)
-            self._wait_for_slack_captcha_resolution(row_id)
+            self._wait_for_captcha_task_resolution(task_id)
             return True
 
-        dcv_url = build_dcv_browser_url(public_host, token)
+        dcv_url = dcv_session.build_browser_url(public_host, token)
 
-        ttl_epoch = int(time.time()) + dcv_token_ttl_seconds()
-        dcv_table = DcvSessionTokensTable()
+        ttl_epoch = int(time.time()) + dcv_session.token_ttl_seconds()
         if not dcv_table.put_token(
             token,
             sig,
@@ -1840,23 +1848,23 @@ class ApplicationPage:
             job_application_id=str(job_application_id)
             if job_application_id is not None
             else None,
-            slack_request_id=str(row_id),
+            captcha_task_id=str(task_id),
             ttl_epoch_seconds=ttl_epoch,
         ):
             logger.error(
-                "Failed to store DCV token in DynamoDB for slack_request_id=%s", row_id
+                "Failed to store DCV token in DynamoDB for captcha_task_id=%s", task_id
             )
 
         slack_cfg = config.get("slack") or {}
         channel = (slack_cfg.get("captcha_alerts_channel") or "").strip()
         if not channel:
             logger.error("config.yml slack.captcha_alerts_channel is not set")
-            self._wait_for_slack_captcha_resolution(row_id)
+            self._wait_for_captcha_task_resolution(task_id)
             return True
 
         captcha_text = (
-            "Captcha found on the job application page — please solve it in the remote session "
-            "and mark complete in Slack when done."
+            "Captcha found on the job application page — open the remote session, solve the captcha, "
+            "then confirm *Solved* or *Could not solve* in Slack (confirmation modal)."
         )
         evidence = getattr(captcha, "evidence", None) or ""
         text = f"{captcha_text} Job: {job_title}. {application_url}"
@@ -1882,7 +1890,7 @@ class ApplicationPage:
                         "type": "button",
                         "text": {"type": "plain_text", "text": "Open DCV session"},
                         "url": dcv_url,
-                        "action_id": "open_dcv_session",
+                        "action_id": ACTION_OPEN_DCV,
                     }
                 ],
             },
@@ -1891,23 +1899,31 @@ class ApplicationPage:
                 "elements": [
                     {
                         "type": "button",
-                        "text": {"type": "plain_text", "text": "Captcha solved — mark complete"},
-                        "action_id": SLACK_ACTION_CAPTCHA_COMPLETED,
-                        "value": str(row_id),
-                    }
+                        "text": {"type": "plain_text", "text": "Solved"},
+                        "style": "primary",
+                        "action_id": ACTION_MARK_SOLVED,
+                        "value": str(task_id),
+                    },
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "Could not solve"},
+                        "style": "danger",
+                        "action_id": ACTION_MARK_FAILED,
+                        "value": str(task_id),
+                    },
                 ],
             },
         ]
 
         client = MessagingClientFactory.create_client("slack")
         if not client:
-            self._wait_for_slack_captcha_resolution(row_id)
+            self._wait_for_captcha_task_resolution(task_id)
             return True
 
         result = client.post_message(channel, text, blocks=blocks)
         if result.ok and result.channel and result.message_ts:
-            self._update_slack_interactive_after_post(
-                row_id,
+            self._record_captcha_task_slack_delivery(
+                task_id,
                 slack_channel_id=result.channel,
                 slack_message_ts=result.message_ts,
             )
@@ -1917,7 +1933,7 @@ class ApplicationPage:
                 result.error_message if result else "no client",
             )
 
-        self._wait_for_slack_captcha_resolution(row_id)
+        self._wait_for_captcha_task_resolution(task_id)
         return True
 
     def _identify_submit_application_button(self):

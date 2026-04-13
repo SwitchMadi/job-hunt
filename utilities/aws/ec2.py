@@ -11,49 +11,6 @@ logger = get_logger(name="ec2")
 _METADATA_BASE = "http://169.254.169.254/latest/meta-data"
 
 
-def get_metadata_public_hostname(timeout=2):
-    """
-    Returns the instance public DNS (IPv4) from IMDS, or None if unavailable.
-    """
-    url = f"{_METADATA_BASE}/public-hostname"
-    try:
-        response = requests.get(url, timeout=timeout)
-        response.raise_for_status()
-        text = (response.text or "").strip()
-        return text or None
-    except requests.RequestException as e:
-        logger.debug("Could not read public-hostname from instance metadata: %s", e)
-        return None
-
-
-def get_metadata_public_ipv4(timeout=2):
-    """Returns the instance public IPv4 from IMDS, or None if unavailable."""
-    url = f"{_METADATA_BASE}/public-ipv4"
-    try:
-        response = requests.get(url, timeout=timeout)
-        response.raise_for_status()
-        text = (response.text or "").strip()
-        return text or None
-    except requests.RequestException as e:
-        logger.debug("Could not read public-ipv4 from instance metadata: %s", e)
-        return None
-
-
-def resolve_public_host_for_dcv():
-    """
-    Prefer public DNS for DCV URLs; fall back to public IP. Allows override via DCV_PUBLIC_HOST.
-    """
-    import os
-
-    override = (os.getenv("DCV_PUBLIC_HOST") or "").strip()
-    if override:
-        return override
-    host = get_metadata_public_hostname()
-    if host:
-        return host
-    return get_metadata_public_ipv4()
-
-
 class EC2:
     def __init__(
         self,
@@ -70,8 +27,7 @@ class EC2:
     ):
         self.client = get_aws_client("ec2")
         if self_identify_instance:
-            # The URL for the EC2 instance metadata service to get the instance ID
-            metadata_url = "http://169.254.169.254/latest/meta-data/instance-id"
+            metadata_url = f"{_METADATA_BASE}/instance-id"
 
             try:
                 response = requests.get(metadata_url)
@@ -94,6 +50,35 @@ class EC2:
                 self.launch_spot_instance()
             elif instance_pricing_model == "on_demand":
                 self.launch_on_demand_instance()
+
+    @staticmethod
+    def _metadata_text(path_suffix: str, timeout: float = 2) -> str:
+        url = f"{_METADATA_BASE}/{path_suffix.lstrip('/')}"
+        try:
+            response = requests.get(url, timeout=timeout)
+            response.raise_for_status()
+            return (response.text or "").strip()
+        except requests.RequestException as e:
+            logger.debug("IMDS read failed for %s: %s", path_suffix, e)
+            return ""
+
+    def get_public_hostname(self) -> str:
+        """Public DNS for this instance from IMDS, or empty string if unavailable."""
+        return self._metadata_text("public-hostname")
+
+    def get_public_ipv4(self) -> str:
+        """Public IPv4 for this instance from IMDS, or empty string if unavailable."""
+        return self._metadata_text("public-ipv4")
+
+    def resolve_public_connectable_host(self) -> str:
+        """
+        Hostname or IP suitable for HTTPS URLs to this instance (browser, DCV web client, etc.).
+        Prefer DNS; fall back to IPv4. Uses instance metadata only.
+        """
+        host = self.get_public_hostname()
+        if host:
+            return host
+        return self.get_public_ipv4()
 
     def launch_spot_instance(self):
         response = self.client.request_spot_fleet(
@@ -119,11 +104,10 @@ class EC2:
 
         spot_fleet_request_id = response["SpotFleetRequestId"]
 
-        # Custom polling mechanism to wait for the spot instance to be fulfilled
         instance_fulfilled = False
         while not instance_fulfilled:
             logger.info("Sleeping for 10 seconds to check spot_fleet_response later...")
-            time.sleep(10)  # Wait for 10 seconds before checking the status again
+            time.sleep(10)
             spot_fleet_response = self.client.describe_spot_fleet_requests(
                 SpotFleetRequestIds=[spot_fleet_request_id]
             )
@@ -131,7 +115,6 @@ class EC2:
             if status == "fulfilled":
                 instance_fulfilled = True
 
-        # Get the instance ID
         spot_instances = self.client.describe_spot_fleet_instances(
             SpotFleetRequestId=spot_fleet_request_id
         )
@@ -140,7 +123,6 @@ class EC2:
             f"Spot instance request fulfilled. instance_id - {self.instance_id}"
         )
 
-        # Set instance name if provided
         if self.instance_name:
             self.client.create_tags(
                 Resources=[self.instance_id],
@@ -162,7 +144,6 @@ class EC2:
 
         self.instance_id = response["Instances"][0]["InstanceId"]
 
-        # Set instance name if provided
         if self.instance_name:
             self.client.create_tags(
                 Resources=[self.instance_id],
@@ -183,7 +164,6 @@ class EC2:
         return True
 
     def create_snapshot(self, name=None):
-        # Create an AMI from the instance
         ami_response = self.client.create_image(
             InstanceId=self.instance_id,
             Name=name if name else f"snapshot-{self.instance_id}",
@@ -192,11 +172,9 @@ class EC2:
 
         ami_id = ami_response["ImageId"]
 
-        # Wait for the AMI to be available
         waiter = self.client.get_waiter("image_available")
         waiter.wait(ImageIds=[ami_id])
 
-        # Describe the AMI to get the snapshot ID
         image_info = self.client.describe_images(ImageIds=[ami_id])
         snapshot_id = image_info["Images"][0]["BlockDeviceMappings"][0]["Ebs"][
             "SnapshotId"
