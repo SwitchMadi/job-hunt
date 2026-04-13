@@ -683,6 +683,28 @@ Resources:
             Path: /paypal
             Method: POST
 
+  SlackInteractiveCallback:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: SlackInteractiveCallback
+      Handler: __init__.lambda_handler
+      Runtime: python3.10
+      CodeUri: ../../../scripts/lambdas/slack_interactive_callback
+      Timeout: 30
+      MemorySize: 256
+      Layers:
+        - !Ref JobHuntCommonLayer
+      Environment:
+        Variables:
+          SLACK_SIGNING_SECRET: ""
+      Events:
+        SlackInteractivePost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref WebhookApi
+            Path: /slack/interactive
+            Method: POST
+
   GetUserJobApplications:
     Type: AWS::Serverless::Function
     Properties:
