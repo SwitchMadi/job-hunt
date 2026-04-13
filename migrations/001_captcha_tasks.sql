@@ -1,6 +1,6 @@
 -- Human captcha tasks (Slack + DCV). Webhook updates by slack_channel_id + slack_message_id.
 -- Apply manually against your RDS instance when ready.
--- If you already created users.slack_interactive_requests, run 002_migrate_slack_interactive_to_captcha_tasks.sql instead.
+-- If you already created users.slack_interactive_requests, migrate manually (rename table/columns) to match this DDL.
 
 CREATE TABLE IF NOT EXISTS users.captcha_tasks (
     id                          BIGSERIAL PRIMARY KEY,
