@@ -8,6 +8,51 @@ from utilities.logging import get_logger
 
 logger = get_logger(name="ec2")
 
+_METADATA_BASE = "http://169.254.169.254/latest/meta-data"
+
+
+def get_metadata_public_hostname(timeout=2):
+    """
+    Returns the instance public DNS (IPv4) from IMDS, or None if unavailable.
+    """
+    url = f"{_METADATA_BASE}/public-hostname"
+    try:
+        response = requests.get(url, timeout=timeout)
+        response.raise_for_status()
+        text = (response.text or "").strip()
+        return text or None
+    except requests.RequestException as e:
+        logger.debug("Could not read public-hostname from instance metadata: %s", e)
+        return None
+
+
+def get_metadata_public_ipv4(timeout=2):
+    """Returns the instance public IPv4 from IMDS, or None if unavailable."""
+    url = f"{_METADATA_BASE}/public-ipv4"
+    try:
+        response = requests.get(url, timeout=timeout)
+        response.raise_for_status()
+        text = (response.text or "").strip()
+        return text or None
+    except requests.RequestException as e:
+        logger.debug("Could not read public-ipv4 from instance metadata: %s", e)
+        return None
+
+
+def resolve_public_host_for_dcv():
+    """
+    Prefer public DNS for DCV URLs; fall back to public IP. Allows override via DCV_PUBLIC_HOST.
+    """
+    import os
+
+    override = (os.getenv("DCV_PUBLIC_HOST") or "").strip()
+    if override:
+        return override
+    host = get_metadata_public_hostname()
+    if host:
+        return host
+    return get_metadata_public_ipv4()
+
 
 class EC2:
     def __init__(

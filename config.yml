@@ -47,3 +47,6 @@ websocket:
 subscription:
   trial_days: 30
 cloudwatch_log_group: job-hunt
+slack:
+  # Channel ID (C…) or name; used for captcha + DCV human alerts from job application runner
+  captcha_alerts_channel: ""

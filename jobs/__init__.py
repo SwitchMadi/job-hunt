@@ -1188,6 +1188,7 @@ class ApplicationPage:
             logger.warn(
                 f"Captcha is present on the page. Job title - {self.parent_job.url}. URL - {self.url}"
             )
+            self.check_captcha_and_notify_slack()
 
         if elements.cookies_prompt.value:
             self._identify_cookies_consent()
@@ -1614,6 +1615,15 @@ class ApplicationPage:
         phone_info = PhoneInfo(title=title, parent_application_page=self)
         phone_info.proceed()
         self.update_steps(phone_info)
+
+    def check_captcha_and_notify_slack(self) -> bool:
+        """
+        Run the Captcha page component; if an open captcha is present, post to Slack with a DCV link
+        and persist users.slack_interactive_requests + DynamoDB session token for Lambda auth.
+        """
+        from utilities.captcha_human_escalation import notify_if_open_captcha
+
+        return notify_if_open_captcha(self)
 
     def _identify_submit_application_button(self):
         submit_application_button = SubmitApplication(parent_application_page=self)
