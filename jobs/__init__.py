@@ -23,11 +23,6 @@ from psycopg2 import errors as pg_errors
 
 from utilities.sql import get_sql_query_output, execute_sql_query, get_sql_connection
 from utilities.dcv_session import DcvSession
-from utilities.slack_captcha_constants import (
-    ACTION_MARK_FAILED,
-    ACTION_MARK_SOLVED,
-    ACTION_OPEN_DCV,
-)
 from utilities.aws.ec2 import EC2
 from utilities.aws.dynamo.dcv_session_tokens import DcvSessionTokensTable
 from utilities.aws.s3 import S3Bucket
@@ -1627,16 +1622,6 @@ class ApplicationPage:
         phone_info.proceed()
         self.update_steps(phone_info)
 
-    @staticmethod
-    def _slack_message_ts_epoch_ms(ts: Optional[str]) -> int:
-        """Slack message ts is fractional Unix seconds; store as epoch milliseconds like other tables."""
-        if not ts:
-            return 0
-        try:
-            return int(round(float(ts) * 1000))
-        except (TypeError, ValueError):
-            return 0
-
     def _pending_captcha_task_id(
         self, job_application_id: Optional[int]
     ) -> Optional[int]:
@@ -1765,7 +1750,11 @@ class ApplicationPage:
                 """,
                 (
                     slack_channel_id,
-                    self._slack_message_ts_epoch_ms(slack_message_ts),
+                    (
+                        int(round(float(slack_message_ts) * 1000))
+                        if slack_message_ts
+                        else 0
+                    ),
                     slack_message_ts,
                     task_id,
                 ),
@@ -1785,13 +1774,6 @@ class ApplicationPage:
         if not captcha.proceed():
             return False
 
-        job = self.parent_job
-        job_title = getattr(job, "title", "") or "Unknown job"
-        application_url = self.url or ""
-        job_application_id = self.application_id
-        job_id = getattr(job, "id", None)
-        user_id = getattr(getattr(job, "user", None), "id", None)
-
         dcv_session = DcvSession(config)
         table_name = (config.get("aws") or {}).get("dcv_session_tokens_table")
         try:
@@ -1800,23 +1782,23 @@ class ApplicationPage:
             logger.error("%s", e)
             return True
 
-        existing_id = self._pending_captcha_task_id(job_application_id)
+        existing_id = self._pending_captcha_task_id(self.application_id)
         if existing_id is not None:
             logger.info(
                 "Pending captcha task already exists id=%s for application_id=%s; waiting for resolution",
                 existing_id,
-                job_application_id,
+                self.application_id,
             )
             self._wait_for_captcha_task_resolution(existing_id)
             return True
 
         task_id = self._add_captcha_task(
-            job_application_id=job_application_id,
-            job_id=job_id,
-            user_id=user_id,
+            job_application_id=self.application_id,
+            job_id=self.parent_job.id,
+            user_id=self.parent_job.user.id if self.parent_job.user else None,
         )
         if task_id is None:
-            existing_id = self._pending_captcha_task_id(job_application_id)
+            existing_id = self._pending_captcha_task_id(self.application_id)
             if existing_id is not None:
                 self._wait_for_captcha_task_resolution(existing_id)
             return True
@@ -1843,10 +1825,12 @@ class ApplicationPage:
         if not dcv_table.put_token(
             token,
             sig,
-            job_id=str(job_id) if job_id is not None else None,
-            user_id=str(user_id) if user_id is not None else None,
-            job_application_id=str(job_application_id)
-            if job_application_id is not None
+            job_id=str(self.parent_job.id),
+            user_id=str(self.parent_job.user.id)
+            if self.parent_job.user
+            else None,
+            job_application_id=str(self.application_id)
+            if self.application_id is not None
             else None,
             captcha_task_id=str(task_id),
             ttl_epoch_seconds=ttl_epoch,
@@ -1867,7 +1851,8 @@ class ApplicationPage:
             "then confirm *Solved* or *Could not solve* in Slack (confirmation modal)."
         )
         evidence = getattr(captcha, "evidence", None) or ""
-        text = f"{captcha_text} Job: {job_title}. {application_url}"
+        job_title = self.parent_job.title or "Unknown job"
+        text = f"{captcha_text} Job: {job_title}. {self.url}"
         if evidence:
             text = f"{text} Evidence: {evidence[:500]}"
 
@@ -1879,7 +1864,7 @@ class ApplicationPage:
                     "text": (
                         f"*{captcha_text}*\n"
                         f"*Job:* {job_title}\n"
-                        f"*Application page:* {application_url}"
+                        f"*Application page:* {self.url}"
                     ),
                 },
             },
@@ -1890,7 +1875,7 @@ class ApplicationPage:
                         "type": "button",
                         "text": {"type": "plain_text", "text": "Open DCV session"},
                         "url": dcv_url,
-                        "action_id": ACTION_OPEN_DCV,
+                        "action_id": constants.SLACK_CAPTCHA_ACTION_OPEN_DCV,
                     }
                 ],
             },
@@ -1901,14 +1886,14 @@ class ApplicationPage:
                         "type": "button",
                         "text": {"type": "plain_text", "text": "Solved"},
                         "style": "primary",
-                        "action_id": ACTION_MARK_SOLVED,
+                        "action_id": constants.SLACK_CAPTCHA_ACTION_MARK_SOLVED,
                         "value": str(task_id),
                     },
                     {
                         "type": "button",
                         "text": {"type": "plain_text", "text": "Could not solve"},
                         "style": "danger",
-                        "action_id": ACTION_MARK_FAILED,
+                        "action_id": constants.SLACK_CAPTCHA_ACTION_MARK_FAILED,
                         "value": str(task_id),
                     },
                 ],

@@ -27,6 +27,7 @@ class EC2:
     ):
         self.client = get_aws_client("ec2")
         if self_identify_instance:
+            # The URL for the EC2 instance metadata service to get the instance ID
             metadata_url = f"{_METADATA_BASE}/instance-id"
 
             try:
@@ -104,10 +105,11 @@ class EC2:
 
         spot_fleet_request_id = response["SpotFleetRequestId"]
 
+        # Custom polling mechanism to wait for the spot instance to be fulfilled
         instance_fulfilled = False
         while not instance_fulfilled:
             logger.info("Sleeping for 10 seconds to check spot_fleet_response later...")
-            time.sleep(10)
+            time.sleep(10)  # Wait for 10 seconds before checking the status again
             spot_fleet_response = self.client.describe_spot_fleet_requests(
                 SpotFleetRequestIds=[spot_fleet_request_id]
             )
@@ -115,6 +117,7 @@ class EC2:
             if status == "fulfilled":
                 instance_fulfilled = True
 
+        # Get the instance ID
         spot_instances = self.client.describe_spot_fleet_instances(
             SpotFleetRequestId=spot_fleet_request_id
         )
@@ -123,6 +126,7 @@ class EC2:
             f"Spot instance request fulfilled. instance_id - {self.instance_id}"
         )
 
+        # Set instance name if provided
         if self.instance_name:
             self.client.create_tags(
                 Resources=[self.instance_id],
@@ -144,6 +148,7 @@ class EC2:
 
         self.instance_id = response["Instances"][0]["InstanceId"]
 
+        # Set instance name if provided
         if self.instance_name:
             self.client.create_tags(
                 Resources=[self.instance_id],
@@ -164,6 +169,7 @@ class EC2:
         return True
 
     def create_snapshot(self, name=None):
+        # Create an AMI from the instance
         ami_response = self.client.create_image(
             InstanceId=self.instance_id,
             Name=name if name else f"snapshot-{self.instance_id}",
@@ -172,9 +178,11 @@ class EC2:
 
         ami_id = ami_response["ImageId"]
 
+        # Wait for the AMI to be available
         waiter = self.client.get_waiter("image_available")
         waiter.wait(ImageIds=[ami_id])
 
+        # Describe the AMI to get the snapshot ID
         image_info = self.client.describe_images(ImageIds=[ami_id])
         snapshot_id = image_info["Images"][0]["BlockDeviceMappings"][0]["Ebs"][
             "SnapshotId"

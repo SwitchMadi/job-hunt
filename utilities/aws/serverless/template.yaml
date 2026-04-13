@@ -683,13 +683,13 @@ Resources:
             Path: /paypal
             Method: POST
 
-  SlackCaptchaTasks:
+  ProcessSlackCaptchaActions:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: SlackCaptchaTasks
+      FunctionName: ProcessSlackCaptchaActions
       Handler: __init__.lambda_handler
       Runtime: python3.10
-      CodeUri: ../../../scripts/lambdas/slack_captcha_tasks
+      CodeUri: ../../../scripts/lambdas/process_slack_captcha_actions
       Timeout: 30
       MemorySize: 256
       Layers:
@@ -699,11 +699,11 @@ Resources:
           SLACK_SIGNING_SECRET: ""
           SLACK_BOT_TOKEN: ""
       Events:
-        SlackCaptchaTasksPost:
+        ProcessSlackCaptchaActionsPost:
           Type: Api
           Properties:
             RestApiId: !Ref WebhookApi
-            Path: /slack/captcha-tasks
+            Path: /slack/process-captcha-actions
             Method: POST
 
   GetUserJobApplications:

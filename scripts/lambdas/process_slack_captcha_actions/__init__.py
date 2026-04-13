@@ -1,6 +1,6 @@
 """
-Slack interactivity for captcha human tasks: confirm modals, then update users.captcha_tasks.
-API Gateway (WebhookApi) POST — configure Slack Interactivity URL to this function's path.
+Process Slack interactivity for captcha human tasks: confirm modals, then update users.captcha_tasks.
+Configure Slack Interactivity Request URL to this API Gateway path.
 
 Block actions open a modal via Slack Web API (views.open); view_submission updates Postgres.
 """
@@ -16,19 +16,14 @@ from urllib.parse import parse_qs
 
 import requests
 
+from utilities import constants
 from utilities.logging import get_logger
-from utilities.slack_captcha_constants import (
-    ACTION_MARK_FAILED,
-    ACTION_MARK_SOLVED,
-    VIEW_FAILED_CONFIRM,
-    VIEW_SOLVED_CONFIRM,
-)
 from utilities.sql import get_sql_connection
 
-logger = get_logger(name="slack_captcha_tasks")
+logger = get_logger(name="process_slack_captcha_actions")
 
 
-class SlackCaptchaTasksHandler:
+class ProcessSlackCaptchaActionsHandler:
     """Verify Slack signatures, route block_actions / view_submission, update Postgres."""
 
     def __init__(self):
@@ -116,20 +111,20 @@ class SlackCaptchaTasksHandler:
         action_id = action.get("action_id")
         raw_value = (action.get("value") or "").strip()
 
-        if action_id == ACTION_MARK_SOLVED:
+        if action_id == constants.SLACK_CAPTCHA_ACTION_MARK_SOLVED:
             self._open_confirm_modal_via_api(
                 payload,
                 raw_value,
-                VIEW_SOLVED_CONFIRM,
+                constants.SLACK_CAPTCHA_VIEW_SOLVED_CONFIRM,
                 "Captcha solved?",
                 "Mark this captcha task as *solved* and let automation continue?",
             )
             return {"statusCode": 200, "body": ""}
-        if action_id == ACTION_MARK_FAILED:
+        if action_id == constants.SLACK_CAPTCHA_ACTION_MARK_FAILED:
             self._open_confirm_modal_via_api(
                 payload,
                 raw_value,
-                VIEW_FAILED_CONFIRM,
+                constants.SLACK_CAPTCHA_VIEW_FAILED_CONFIRM,
                 "Captcha failed?",
                 "Mark this captcha task as *failed* (could not solve)?",
             )
@@ -194,7 +189,10 @@ class SlackCaptchaTasksHandler:
     def _on_view_submission(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         view = payload.get("view") or {}
         callback_id = view.get("callback_id")
-        if callback_id not in (VIEW_SOLVED_CONFIRM, VIEW_FAILED_CONFIRM):
+        if callback_id not in (
+            constants.SLACK_CAPTCHA_VIEW_SOLVED_CONFIRM,
+            constants.SLACK_CAPTCHA_VIEW_FAILED_CONFIRM,
+        ):
             return {"statusCode": 200, "body": ""}
 
         meta_raw = view.get("private_metadata") or "{}"
@@ -215,7 +213,7 @@ class SlackCaptchaTasksHandler:
         if not slack_user_id:
             return self._clear_modal_response()
 
-        if callback_id == VIEW_SOLVED_CONFIRM:
+        if callback_id == constants.SLACK_CAPTCHA_VIEW_SOLVED_CONFIRM:
             ok = self._finalize_task(
                 tid, slack_user_id, "completed", "Confirmed solved via Slack"
             )
@@ -225,7 +223,9 @@ class SlackCaptchaTasksHandler:
             )
 
         if ok:
-            logger.info("captcha_tasks id=%s set to %s by %s", tid, callback_id, slack_user_id)
+            logger.info(
+                "captcha_tasks id=%s set to %s by %s", tid, callback_id, slack_user_id
+            )
         else:
             logger.info("captcha_tasks id=%s not updated (not pending or missing)", tid)
 
@@ -281,4 +281,4 @@ class SlackCaptchaTasksHandler:
 
 
 def lambda_handler(event, context):
-    return SlackCaptchaTasksHandler().handle(event, context)
+    return ProcessSlackCaptchaActionsHandler().handle(event, context)
