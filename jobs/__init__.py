@@ -330,18 +330,24 @@ class ApplicationPage:
 
         return False
 
-    def identify_original_application_page(self):
+    def _load_job_application_url_and_check_captcha(self):
+        """Navigate to this page's job application URL, wait for load, then run captcha handling if needed."""
         global driver
 
         revoke_optional_permissions(self.url)
         driver.get(self.url)
         disable_browser_alerts()
 
-        # Wait for page load to complete
         WebDriverWait(driver, 10).until(
             lambda d: d.execute_script("return document.readyState") == "complete"
         )
         time.sleep(5)
+        self._handle_captcha()
+
+    def identify_original_application_page(self):
+        global driver
+
+        self._load_job_application_url_and_check_captcha()
 
         # Get the total height of the page
         total_height = driver.execute_script("return document.body.scrollHeight")
@@ -411,15 +417,7 @@ class ApplicationPage:
 
     def run_steps(self, stop_step=None):
         logger.info("Re-doing all steps...")
-        revoke_optional_permissions(self.url)
-        driver.get(self.url)
-        disable_browser_alerts()
-
-        # Wait for page load to complete
-        WebDriverWait(driver, 10).until(
-            lambda d: d.execute_script("return document.readyState") == "complete"
-        )
-        time.sleep(5)
+        self._load_job_application_url_and_check_captcha()
 
         next_step = self.head_step
         while True:
@@ -939,15 +937,7 @@ class ApplicationPage:
     def _identify_application_steps(self):
         global driver
 
-        revoke_optional_permissions(self.url)
-        driver.get(self.url)
-        disable_browser_alerts()
-
-        # Wait for page load to complete
-        WebDriverWait(driver, 10).until(
-            lambda d: d.execute_script("return document.readyState") == "complete"
-        )
-        time.sleep(5)
+        self._load_job_application_url_and_check_captcha()
 
         if self.head_step:
             self.run_steps()
@@ -1226,6 +1216,7 @@ class ApplicationPage:
             is_start_application_functional = self._identify_start_application_button()
 
             if is_start_application_functional:
+                self._handle_captcha()
                 latest_elements = self._identify_current_page_elements()
                 if latest_elements:
                     return self._act_on_current_page_elements(latest_elements)
@@ -1922,6 +1913,7 @@ class ApplicationPage:
         return True
 
     def _identify_submit_application_button(self):
+        self._handle_captcha()
         submit_application_button = SubmitApplication(parent_application_page=self)
         submit_application_button.proceed()
 
