@@ -703,7 +703,7 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref WebhookApi
-            Path: /slack/process-captcha-actions
+            Path: /slack/captcha-tasks
             Method: POST
 
   GetUserJobApplications:
