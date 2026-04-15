@@ -330,8 +330,8 @@ class ApplicationPage:
 
         return False
 
-    def _load_job_application_url_and_check_captcha(self):
-        """Navigate to this page's job application URL, wait for load, then run captcha handling if needed."""
+    def _load_job_application_url(self):
+        """Navigate to this page's job application URL and wait for initial load (no captcha logic)."""
         global driver
 
         revoke_optional_permissions(self.url)
@@ -342,12 +342,12 @@ class ApplicationPage:
             lambda d: d.execute_script("return document.readyState") == "complete"
         )
         time.sleep(5)
-        self._handle_captcha()
 
     def identify_original_application_page(self):
         global driver
 
-        self._load_job_application_url_and_check_captcha()
+        self._load_job_application_url()
+        self._handle_captcha()
 
         # Get the total height of the page
         total_height = driver.execute_script("return document.body.scrollHeight")
@@ -417,7 +417,8 @@ class ApplicationPage:
 
     def run_steps(self, stop_step=None):
         logger.info("Re-doing all steps...")
-        self._load_job_application_url_and_check_captcha()
+        self._load_job_application_url()
+        self._handle_captcha()
 
         next_step = self.head_step
         while True:
@@ -937,7 +938,8 @@ class ApplicationPage:
     def _identify_application_steps(self):
         global driver
 
-        self._load_job_application_url_and_check_captcha()
+        self._load_job_application_url()
+        self._handle_captcha()
 
         if self.head_step:
             self.run_steps()
@@ -1913,11 +1915,12 @@ class ApplicationPage:
         return True
 
     def _identify_submit_application_button(self):
-        self._handle_captcha()
         submit_application_button = SubmitApplication(parent_application_page=self)
         submit_application_button.proceed()
 
         if submit_application_button.is_component_functional:
+            # SubmitApplication only performs click + post-click load wait; captcha runs here after that.
+            self._handle_captcha()
             error_fields = self._identify_application_fields(identify_only_errors=True)
             # Filter out fields that don't have errors
             error_fields = [field for field in error_fields if field.error]
@@ -1928,6 +1931,8 @@ class ApplicationPage:
                 self._act_on_job_fields(error_fields, only_error_fields=True)
 
                 submit_application_button.proceed()
+                if submit_application_button.is_component_functional:
+                    self._handle_captcha()
 
             self.update_steps(submit_application_button)
 
@@ -1937,4 +1942,6 @@ class ApplicationPage:
                     parent_application_page=self
                 )
                 submit_application_button.proceed()
+                if submit_application_button.is_component_functional:
+                    self._handle_captcha()
                 self.update_steps(submit_application_button)
