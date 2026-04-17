@@ -697,7 +697,6 @@ Resources:
       Environment:
         Variables:
           SLACK_SIGNING_SECRET: ""
-          SLACK_BOT_TOKEN: ""
       Events:
         ProcessSlackCaptchaActionsPost:
           Type: Api

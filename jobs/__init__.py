@@ -1841,7 +1841,7 @@ class ApplicationPage:
 
         captcha_text = (
             "Captcha found on the job application page — open the remote session, solve the captcha, "
-            "then confirm *Solved* or *Could not solve* in Slack (confirmation modal)."
+            "then use *Solved* or *Could not solve* in Slack (Slack will ask you to confirm before sending)."
         )
         evidence = getattr(captcha, "evidence", None) or ""
         job_title = self.parent_job.title or "Unknown job"
@@ -1881,6 +1881,22 @@ class ApplicationPage:
                         "style": "primary",
                         "action_id": constants.SLACK_CAPTCHA_ACTION_MARK_SOLVED,
                         "value": str(task_id),
+                        "confirm": {
+                            "title": {
+                                "type": "plain_text",
+                                "text": "Mark captcha solved?",
+                            },
+                            "text": {
+                                "type": "mrkdwn",
+                                "text": "Mark this task as *solved* and let automation continue?",
+                            },
+                            "confirm": {
+                                "type": "plain_text",
+                                "text": "Yes, mark solved",
+                            },
+                            "deny": {"type": "plain_text", "text": "Cancel"},
+                            "style": "primary",
+                        },
                     },
                     {
                         "type": "button",
@@ -1888,6 +1904,22 @@ class ApplicationPage:
                         "style": "danger",
                         "action_id": constants.SLACK_CAPTCHA_ACTION_MARK_FAILED,
                         "value": str(task_id),
+                        "confirm": {
+                            "title": {
+                                "type": "plain_text",
+                                "text": "Mark captcha failed?",
+                            },
+                            "text": {
+                                "type": "mrkdwn",
+                                "text": "Mark this task as *failed* (could not solve the captcha)?",
+                            },
+                            "confirm": {
+                                "type": "plain_text",
+                                "text": "Yes, mark failed",
+                            },
+                            "deny": {"type": "plain_text", "text": "Cancel"},
+                            "style": "danger",
+                        },
                     },
                 ],
             },

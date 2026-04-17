@@ -26,5 +26,3 @@ non_automatable_job_boards = [
 SLACK_CAPTCHA_ACTION_OPEN_DCV = "open_dcv_session"
 SLACK_CAPTCHA_ACTION_MARK_SOLVED = "captcha_mark_solved"
 SLACK_CAPTCHA_ACTION_MARK_FAILED = "captcha_mark_failed"
-SLACK_CAPTCHA_VIEW_SOLVED_CONFIRM = "captcha_task_solved_confirm"
-SLACK_CAPTCHA_VIEW_FAILED_CONFIRM = "captcha_task_failed_confirm"
