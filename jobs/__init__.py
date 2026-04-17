@@ -347,7 +347,7 @@ class ApplicationPage:
         global driver
 
         self._load_job_application_url()
-        self._handle_captcha()
+        self.handle_captcha()
 
         # Get the total height of the page
         total_height = driver.execute_script("return document.body.scrollHeight")
@@ -418,7 +418,7 @@ class ApplicationPage:
     def run_steps(self, stop_step=None):
         logger.info("Re-doing all steps...")
         self._load_job_application_url()
-        self._handle_captcha()
+        self.handle_captcha()
 
         next_step = self.head_step
         while True:
@@ -939,7 +939,7 @@ class ApplicationPage:
         global driver
 
         self._load_job_application_url()
-        self._handle_captcha()
+        self.handle_captcha()
 
         if self.head_step:
             self.run_steps()
@@ -1218,7 +1218,7 @@ class ApplicationPage:
             is_start_application_functional = self._identify_start_application_button()
 
             if is_start_application_functional:
-                self._handle_captcha()
+                self.handle_captcha()
                 latest_elements = self._identify_current_page_elements()
                 if latest_elements:
                     return self._act_on_current_page_elements(latest_elements)
@@ -1756,7 +1756,7 @@ class ApplicationPage:
         finally:
             con.close()
 
-    def _handle_captcha(self) -> bool:
+    def handle_captcha(self) -> bool:
         """
         Run Captcha page component; if an open captcha is present, ensure a pending
         ``users.captcha_tasks`` row, post Slack (DCV link + solved/failed buttons with confirm modals in Lambda),
@@ -1952,7 +1952,7 @@ class ApplicationPage:
 
         if submit_application_button.is_component_functional:
             # SubmitApplication only performs click + post-click load wait; captcha runs here after that.
-            self._handle_captcha()
+            self.handle_captcha()
             error_fields = self._identify_application_fields(identify_only_errors=True)
             # Filter out fields that don't have errors
             error_fields = [field for field in error_fields if field.error]
@@ -1964,7 +1964,7 @@ class ApplicationPage:
 
                 submit_application_button.proceed()
                 if submit_application_button.is_component_functional:
-                    self._handle_captcha()
+                    self.handle_captcha()
 
             self.update_steps(submit_application_button)
 
@@ -1975,5 +1975,5 @@ class ApplicationPage:
                 )
                 submit_application_button.proceed()
                 if submit_application_button.is_component_functional:
-                    self._handle_captcha()
+                    self.handle_captcha()
                 self.update_steps(submit_application_button)

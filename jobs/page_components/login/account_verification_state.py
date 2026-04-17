@@ -5,6 +5,7 @@ from enum import Enum
 from typing import Optional
 
 from jobs.page_components.login.base_state import LoginState
+from jobs.page_components.login.handle_captcha import handle_captcha
 from jobs.page_components.login.types import LoginStateType
 from jobs.page_components.button import Button
 from jobs.page_components.text_input import TextInput
@@ -66,6 +67,7 @@ class AccountVerificationState(LoginState):
 
             if self.verify_button:
                 self.verify_button.proceed()
+                handle_captcha(self.parent_application_page)
 
         self._update_steps_if_first_time()
         self.is_component_functional = True
