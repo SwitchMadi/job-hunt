@@ -70,10 +70,8 @@ class Login(PageComponent):
                 try:
                     current.proceed()
                 except Exception as e:
-                    # Check if it's a captcha or verification failure (expected exceptions)
-                    if current.current_state_type == LoginStateType.CAPTCHA:
-                        raise
-                    elif (
+                    # Check if it's a verification failure (expected exceptions)
+                    if (
                         current.current_state_type
                         == LoginStateType.ACCOUNT_VERIFICATION_FAILED
                     ):
@@ -93,7 +91,7 @@ class Login(PageComponent):
                         )
                         self.is_component_functional = True
                         return
-                    # Captcha and AccountVerificationFailed raise exceptions in their proceed()
+                    # AccountVerificationFailed raises in proceed()
                     # If we get here, it means terminal state was reached but wasn't LoggedIn
                     break
 
@@ -195,7 +193,6 @@ class Login(PageComponent):
             LoginStateType.ACCOUNT_ALREADY_EXISTS: "AccountAlreadyExistsState",
             LoginStateType.ACCOUNT_VERIFICATION: "AccountVerificationState",
             LoginStateType.LOGGED_IN: "LoggedInState",
-            LoginStateType.CAPTCHA: "CaptchaState",
             LoginStateType.ACCOUNT_VERIFICATION_FAILED: "AccountVerificationFailedState",
             LoginStateType.CONFIRMATION_POPUP: "ConfirmationPopupState",
         }
@@ -311,7 +308,6 @@ class Login(PageComponent):
                 "AccountAlreadyExistsState": LoginStateType.ACCOUNT_ALREADY_EXISTS,
                 "AccountVerificationState": LoginStateType.ACCOUNT_VERIFICATION,
                 "LoggedInState": LoginStateType.LOGGED_IN,
-                "CaptchaState": LoginStateType.CAPTCHA,
                 "AccountVerificationFailedState": LoginStateType.ACCOUNT_VERIFICATION_FAILED,
                 "ConfirmationPopupState": LoginStateType.CONFIRMATION_POPUP,
             }

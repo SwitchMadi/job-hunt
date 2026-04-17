@@ -347,7 +347,9 @@ class SignInFormState(LoginState):
     def identify_next_state(self) -> Optional[LoginStateType]:
         """Check login result and determine next state"""
         if self.security_enabled:
-            return LoginStateType.CAPTCHA
+            raise Exception(
+                "Security is enabled on login (captcha detected), so skipping login!"
+            )
 
         user_prompt = (
             f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title}."
@@ -410,7 +412,9 @@ class SignInFormState(LoginState):
             elif result.result == LoginResult.account_verification:
                 return LoginStateType.ACCOUNT_VERIFICATION
             elif result.result == LoginResult.captcha:
-                return LoginStateType.CAPTCHA
+                raise Exception(
+                    "Security is enabled on login (captcha detected), so skipping login!"
+                )
 
         # Default to account doesn't exist if unclear
         return LoginStateType.ACCOUNT_DOESNT_EXIST

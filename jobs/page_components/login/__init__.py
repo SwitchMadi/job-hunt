@@ -30,7 +30,6 @@ from jobs.page_components.login.account_verification_state import (
     AccountVerificationState,
 )
 from jobs.page_components.login.logged_in_state import LoggedInState
-from jobs.page_components.login.captcha_state import CaptchaState
 from jobs.page_components.login.account_verification_failed_state import (
     AccountVerificationFailedState,
 )
