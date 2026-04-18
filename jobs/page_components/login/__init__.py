@@ -41,4 +41,3 @@ VerifyAccount = AccountVerificationState
 
 # Import Login class last (after all state classes are defined)
 from jobs.page_components.login.login_class import Login
-from jobs.page_components.login.handle_captcha import handle_captcha
