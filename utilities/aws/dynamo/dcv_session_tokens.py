@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import time
 from typing import Any, Dict, Optional
 
@@ -60,3 +62,59 @@ class DcvSessionTokensTable(BaseDynamoTable):
         except Exception as e:
             logger.exception("Error storing DCV session token: %s", e)
             return False
+
+    def consume_token_once(
+        self, token: str, *, hmac_secret: str
+    ) -> str:
+        """
+        Atomically mark a token consumed if it exists, is unused, and HMAC matches stored ``tokenSignature``.
+
+        Returns:
+            ``"consumed"`` — first successful validation
+            ``"already_used"`` — ``consumedAt`` was already set
+            ``"not_found"`` — no item for this token
+            ``"bad_signature"`` — stored signature does not match recomputed HMAC
+            ``"error"`` — DynamoDB failure
+        """
+        if not (token or "").strip() or not (hmac_secret or "").strip():
+            return "not_found"
+
+        token = token.strip()
+        expected_sig = hmac.new(
+            hmac_secret.encode("utf-8"),
+            token.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+
+        key = {"token": {"S": token}}
+        now_ms = int(time.time() * 1000)
+        try:
+            self.client.update_item(
+                TableName=self.table_name,
+                Key=key,
+                UpdateExpression="SET consumedAt = :ts",
+                ConditionExpression="attribute_not_exists(consumedAt) AND tokenSignature = :sig",
+                ExpressionAttributeValues={
+                    ":ts": {"N": str(now_ms)},
+                    ":sig": {"S": expected_sig},
+                },
+            )
+            return "consumed"
+        except self.client.exceptions.ConditionalCheckFailedException:
+            item = self.get_item({"token": token})
+            if not item:
+                return "not_found"
+            stored = ""
+            tsig = item.get("tokenSignature")
+            if tsig and "S" in tsig:
+                stored = tsig["S"]
+            if not hmac.compare_digest(
+                stored.encode("utf-8"), expected_sig.encode("utf-8")
+            ):
+                return "bad_signature"
+            if item.get("consumedAt"):
+                return "already_used"
+            return "bad_signature"
+        except Exception as e:
+            logger.exception("consume_token_once failed: %s", e)
+            return "error"

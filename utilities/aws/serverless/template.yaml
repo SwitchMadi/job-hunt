@@ -177,6 +177,22 @@ Resources:
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
 
+  # DCV session tokens (partition key: token; optional ttl for DynamoDB TTL)
+  DcvSessionTokensTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: dcv-session-tokens
+      AttributeDefinitions:
+        - AttributeName: token
+          AttributeType: S
+      KeySchema:
+        - AttributeName: token
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
   # WebSocket API
   ResumeParserWebSocket:
     Type: AWS::ApiGatewayV2::Api
@@ -697,12 +713,42 @@ Resources:
       Environment:
         Variables:
           SLACK_SIGNING_SECRET: ""
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref DcvSessionTokensTable
       Events:
         ProcessSlackCaptchaActionsPost:
           Type: Api
           Properties:
             RestApiId: !Ref WebhookApi
             Path: /slack/captcha-tasks
+            Method: POST
+
+  DcvSessionAuth:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: DcvSessionAuth
+      Handler: __init__.lambda_handler
+      Runtime: python3.10
+      CodeUri: ../../../scripts/lambdas/dcv_session_auth
+      Timeout: 10
+      MemorySize: 128
+      Layers:
+        - !Ref JobHuntCommonLayer
+      Environment:
+        Variables:
+          DCV_SESSION_TOKENS_TABLE: !Ref DcvSessionTokensTable
+          DCV_SESSION_HMAC_SECRET: ""
+          DCV_AUTH_WINDOWS_USERNAME: "JobHunt"
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref DcvSessionTokensTable
+      Events:
+        DcvSessionAuthPost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref WebhookApi
+            Path: /dcv/session-auth
             Method: POST
 
   GetUserJobApplications:
