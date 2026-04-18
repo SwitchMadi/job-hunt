@@ -1,6 +1,7 @@
 import time
 from datetime import datetime
 from pydantic import BaseModel, Field
+from selenium.webdriver.support.ui import WebDriverWait
 from enum import Enum
 from typing import Optional
 
@@ -58,6 +59,10 @@ class AccountVerificationState(LoginState):
             verification_email = self._identify_verification_email()
             verification_info = self._extract_verification_info(verification_email)
             driver.get(verification_info)
+            WebDriverWait(driver, 10).until(
+                lambda d: d.execute_script("return document.readyState") == "complete"
+            )
+            handle_captcha(self.parent_application_page)
         else:
             # OTP verification: get email, extract OTP, fill and submit
             verification_email = self._identify_verification_email()
