@@ -726,8 +726,6 @@ Resources:
 
   DcvSessionAuth:
     Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: makefile
     Properties:
       FunctionName: DcvSessionAuth
       Handler: __init__.lambda_handler

@@ -12,7 +12,6 @@ Configure DCV ``auth-token-verifier`` URL to this API path, e.g.:
 import base64
 import os
 import urllib.parse
-from pathlib import Path
 from typing import Any, Dict, Tuple
 
 import yaml
@@ -21,6 +20,9 @@ from utilities.aws.dynamo.dcv_session_tokens import DcvSessionTokensTable
 from utilities.logging import get_logger
 
 logger = get_logger(name="dcv_session_auth")
+
+# Same pattern as jobs/__init__.py and other modules (cwd = Lambda task root).
+config = yaml.safe_load(open("config.yml"))
 
 _XML_YES_TEMPLATE = '<auth result="yes"><username>{username}</username></auth>'
 _XML_NO = '<auth result="no"><message>Invalid or expired token</message></auth>'
@@ -32,12 +34,6 @@ def _xml_response(status: int, body: str) -> Dict[str, Any]:
         "headers": {"Content-Type": "application/xml"},
         "body": body,
     }
-
-
-def _load_config() -> Dict[str, Any]:
-    path = Path(__file__).resolve().parent / "config.yml"
-    with open(path, encoding="utf-8") as f:
-        return yaml.safe_load(f) or {}
 
 
 def _parse_form_body(event: Dict[str, Any]) -> Tuple[str, str]:
@@ -66,13 +62,7 @@ def lambda_handler(event, context):
         logger.error("DCV_SESSION_HMAC_SECRET is not set")
         return _xml_response(500, _XML_NO)
 
-    try:
-        cfg = _load_config()
-    except OSError as e:
-        logger.error("Could not load config.yml next to lambda: %s", e)
-        return _xml_response(500, _XML_NO)
-
-    table_name = ((cfg.get("aws") or {}).get("dcv_session_tokens_table") or "").strip()
+    table_name = ((config.get("aws") or {}).get("dcv_session_tokens_table") or "").strip()
     try:
         table = DcvSessionTokensTable(table_name)
     except ValueError as e:
@@ -88,7 +78,7 @@ def lambda_handler(event, context):
         )
         return _xml_response(200, _XML_NO)
 
-    dcv_cfg = cfg.get("dcv") or {}
+    dcv_cfg = config.get("dcv") or {}
     username = (dcv_cfg.get("auth_windows_username") or "JobHunt").strip() or "JobHunt"
     xml = _XML_YES_TEMPLATE.format(username=_escape_xml(username))
     logger.info("DCV session auth granted for sessionId prefix=%s", (session_id or "")[:32])
