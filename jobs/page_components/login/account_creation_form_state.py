@@ -362,8 +362,7 @@ class AccountCreationFormState(LoginState):
             f"I just tried to create an account. Analyse the whole HTML very carefully to determine:\n"
             f"1. Did account creation succeed and I'm now logged in?\n"
             f"2. Did account creation fail with 'account already exists' error?\n"
-            f"3. Is account verification required (email verification needed)?\n"
-            f"4. Is there a captcha present?\n\n"
+            f"3. Is account verification required (email verification needed)?\n\n"
             f"To determine if account creation succeeded and I'm logged in, look for indicators such as:\n"
             f"- Logout button or link visible in the navigation/header\n"
             f"- User profile menu, account settings, or user name/email displayed\n"
@@ -379,7 +378,6 @@ class AccountCreationFormState(LoginState):
             logged_in = "logged_in"
             account_already_exists = "account_already_exists"
             account_verification = "account_verification"
-            captcha = "captcha"
 
         class AccountCreationResultCheck(BaseModel):
             result: AccountCreationResult = Field(
@@ -388,7 +386,7 @@ class AccountCreationFormState(LoginState):
                 "For login success (logged_in), look for: logout button, user profile menu, dashboard/application form visible, "
                 "welcome/account created message, authenticated navigation, or signup form disappeared. "
                 "Determine if account was created and user is logged in (logged_in), creation failed because account already exists "
-                "(account_already_exists), requires email verification (account_verification), or captcha is blocking (captcha).",
+                "(account_already_exists), or requires email verification (account_verification).",
             )
 
         result_found, result = _llm_service.chat(
@@ -405,10 +403,6 @@ class AccountCreationFormState(LoginState):
                 return LoginStateType.ACCOUNT_ALREADY_EXISTS
             elif result.result == AccountCreationResult.account_verification:
                 return LoginStateType.ACCOUNT_VERIFICATION
-            elif result.result == AccountCreationResult.captcha:
-                raise Exception(
-                    "Security is enabled on login (captcha detected), so skipping login!"
-                )
 
         # Default to account verification if unclear (most common flow)
         return LoginStateType.ACCOUNT_VERIFICATION

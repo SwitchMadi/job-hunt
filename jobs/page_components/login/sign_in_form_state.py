@@ -332,8 +332,7 @@ class SignInFormState(LoginState):
             f"I just tried to login using username and password. Analyse the whole HTML very carefully to determine:\n"
             f"1. Did login succeed? (I'm now on a page after login)\n"
             f"2. Did login fail? If so, what type of failure?\n"
-            f"3. Is account verification required (email verification needed)?\n"
-            f"4. Is there a captcha present?\n\n"
+            f"3. Is account verification required (email verification needed)?\n\n"
             f"To determine if login succeeded, look for indicators such as:\n"
             f"- Logout button or link visible in the navigation/header\n"
             f"- User profile menu, account settings, or user name/email displayed\n"
@@ -348,15 +347,13 @@ class SignInFormState(LoginState):
             f"links that would confirm account existence). Generic errors like 'wrong email or password', 'invalid credentials', "
             f"'account might be locked', or similar authentication failures without proof of account existence should be treated as account_doesnt_exist.\n"
             f"- 'account_verification': Use this when there are clear messages about email verification, OTP verification, or similar "
-            f"verification requirements after login attempt.\n"
-            f"- 'captcha': Use this when there are visible captchas, security challenges, or similar blocking elements."
+            f"verification requirements after login attempt."
         )
 
         class LoginResult(Enum):
             logged_in = "logged_in"
             account_doesnt_exist = "account_doesnt_exist"
             account_verification = "account_verification"
-            captcha = "captcha"
 
         class LoginResultCheck(BaseModel):
             result: LoginResult = Field(
@@ -368,8 +365,7 @@ class SignInFormState(LoginState):
                 "generic authentication error messages (wrong email/password, invalid credentials, account locked, etc.) WITHOUT any clear "
                 "evidence that the account actually exists. Generic authentication failures should default to account_doesnt_exist unless "
                 "there's explicit proof the account exists (like password reset links, 'account already exists' messages, etc.). "
-                "For account_verification: Use when there are clear messages about email/OTP verification requirements. "
-                "For captcha: Use when there are visible captchas or security challenges blocking login.",
+                "For account_verification: Use when there are clear messages about email/OTP verification requirements.",
             )
 
         result_found, result = _llm_service.chat(
@@ -386,10 +382,6 @@ class SignInFormState(LoginState):
                 return LoginStateType.ACCOUNT_DOESNT_EXIST
             elif result.result == LoginResult.account_verification:
                 return LoginStateType.ACCOUNT_VERIFICATION
-            elif result.result == LoginResult.captcha:
-                raise Exception(
-                    "Security is enabled on login (captcha detected), so skipping login!"
-                )
 
         # Default to account doesn't exist if unclear
         return LoginStateType.ACCOUNT_DOESNT_EXIST
