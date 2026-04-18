@@ -59,6 +59,8 @@ slack:
 dcv:
   web_port: 8445
   session_token_ttl_seconds: 3600
+  # Windows username returned in DCV external auth XML (<auth result="yes">)
+  auth_windows_username: JobHunt
 
 aws:
   # DynamoDB table for DCV session token + HMAC (partition key: token)

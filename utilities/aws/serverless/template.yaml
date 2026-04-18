@@ -726,6 +726,8 @@ Resources:
 
   DcvSessionAuth:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: makefile
     Properties:
       FunctionName: DcvSessionAuth
       Handler: __init__.lambda_handler
@@ -737,9 +739,7 @@ Resources:
         - !Ref JobHuntCommonLayer
       Environment:
         Variables:
-          DCV_SESSION_TOKENS_TABLE: !Ref DcvSessionTokensTable
           DCV_SESSION_HMAC_SECRET: ""
-          DCV_AUTH_WINDOWS_USERNAME: "JobHunt"
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref DcvSessionTokensTable
