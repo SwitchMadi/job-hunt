@@ -97,6 +97,7 @@ class BaseDynamoTable:
 # Import table-specific implementations
 from .websocket_connections import WebSocketConnectionsTable
 from .operation_locks import OperationLocksTable
+from .dcv_session_tokens import DcvSessionTokensTable
 
 # Backward compatibility - will be deprecated
 DynamoTable = WebSocketConnectionsTable
@@ -105,5 +106,6 @@ __all__ = [
     "BaseDynamoTable",
     "WebSocketConnectionsTable",
     "OperationLocksTable",
+    "DcvSessionTokensTable",
     "DynamoTable",  # Deprecated
 ]

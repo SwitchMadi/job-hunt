@@ -21,3 +21,8 @@ non_automatable_job_boards = [
     "guru.com",
     "peopleperhour.com",
 ]
+
+# Slack Block Kit: captcha human tasks (job runner + ProcessSlackCaptchaActions Lambda)
+SLACK_CAPTCHA_ACTION_OPEN_DCV = "open_dcv_session"
+SLACK_CAPTCHA_ACTION_MARK_SOLVED = "captcha_mark_solved"
+SLACK_CAPTCHA_ACTION_MARK_FAILED = "captcha_mark_failed"

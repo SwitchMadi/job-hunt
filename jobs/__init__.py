@@ -19,8 +19,15 @@ from utilities.selenium import (
 )
 from utilities.llm import create_llm_service
 from utilities.logging import get_logger
-from utilities.sql import get_sql_query_output, execute_sql_query
+from psycopg2 import errors as pg_errors
+
+from utilities.sql import get_sql_query_output, execute_sql_query, get_sql_connection
+from utilities.dcv_session import DcvSession
+from utilities.aws.ec2 import EC2
+from utilities.aws.dynamo.dcv_session_tokens import DcvSessionTokensTable
 from utilities.aws.s3 import S3Bucket
+from utilities.messaging import MessagingClientFactory
+from jobs.page_components.captcha import Captcha
 from utilities.aws.websocket import WebSocketClient
 from utilities.aws.dynamo.websocket_connections import WebSocketConnectionsTable
 from jobs.page_components import ApplicationField
@@ -323,18 +330,24 @@ class ApplicationPage:
 
         return False
 
-    def identify_original_application_page(self):
+    def _load_job_application_url(self):
+        """Navigate to this page's job application URL and wait for initial load (no captcha logic)."""
         global driver
 
         revoke_optional_permissions(self.url)
         driver.get(self.url)
         disable_browser_alerts()
 
-        # Wait for page load to complete
         WebDriverWait(driver, 10).until(
             lambda d: d.execute_script("return document.readyState") == "complete"
         )
         time.sleep(5)
+
+    def identify_original_application_page(self):
+        global driver
+
+        self._load_job_application_url()
+        self.handle_captcha()
 
         # Get the total height of the page
         total_height = driver.execute_script("return document.body.scrollHeight")
@@ -404,15 +417,8 @@ class ApplicationPage:
 
     def run_steps(self, stop_step=None):
         logger.info("Re-doing all steps...")
-        revoke_optional_permissions(self.url)
-        driver.get(self.url)
-        disable_browser_alerts()
-
-        # Wait for page load to complete
-        WebDriverWait(driver, 10).until(
-            lambda d: d.execute_script("return document.readyState") == "complete"
-        )
-        time.sleep(5)
+        self._load_job_application_url()
+        self.handle_captcha()
 
         next_step = self.head_step
         while True:
@@ -932,15 +938,8 @@ class ApplicationPage:
     def _identify_application_steps(self):
         global driver
 
-        revoke_optional_permissions(self.url)
-        driver.get(self.url)
-        disable_browser_alerts()
-
-        # Wait for page load to complete
-        WebDriverWait(driver, 10).until(
-            lambda d: d.execute_script("return document.readyState") == "complete"
-        )
-        time.sleep(5)
+        self._load_job_application_url()
+        self.handle_captcha()
 
         if self.head_step:
             self.run_steps()
@@ -1219,6 +1218,7 @@ class ApplicationPage:
             is_start_application_functional = self._identify_start_application_button()
 
             if is_start_application_functional:
+                self.handle_captcha()
                 latest_elements = self._identify_current_page_elements()
                 if latest_elements:
                     return self._act_on_current_page_elements(latest_elements)
@@ -1615,11 +1615,344 @@ class ApplicationPage:
         phone_info.proceed()
         self.update_steps(phone_info)
 
+    def _pending_captcha_task_id(
+        self, job_application_id: Optional[int]
+    ) -> Optional[int]:
+        if job_application_id is None:
+            return None
+        con = get_sql_connection()
+        try:
+            cur = con.cursor()
+            cur.execute(
+                """
+                SELECT id
+                FROM users.captcha_tasks
+                WHERE job_application_id = %s
+                  AND task_kind = 'captcha_dcv'
+                  AND status = 'pending'
+                ORDER BY id DESC
+                LIMIT 1;
+                """,
+                (job_application_id,),
+            )
+            row = cur.fetchone()
+            return int(row[0]) if row else None
+        finally:
+            con.close()
+
+    def _captcha_task_status(self, task_id: int) -> Optional[str]:
+        con = get_sql_connection()
+        try:
+            cur = con.cursor()
+            cur.execute(
+                """
+                SELECT status
+                FROM users.captcha_tasks
+                WHERE id = %s;
+                """,
+                (task_id,),
+            )
+            row = cur.fetchone()
+            return str(row[0]) if row else None
+        finally:
+            con.close()
+
+    def _wait_for_captcha_task_resolution(self, task_id: int) -> str:
+        """
+        After notifying Slack, block until the task leaves ``pending`` or max wait elapses.
+        Timing from ``config.yml`` → ``slack.captcha_task`` (initial_wait_seconds, poll_interval_seconds, max_wait_seconds).
+        """
+        ct = (config.get("slack") or {}).get("captcha_task") or {}
+        initial = int(ct.get("initial_wait_seconds", 60))
+        interval = int(ct.get("poll_interval_seconds", 15))
+        max_wait = int(ct.get("max_wait_seconds", 7200))
+
+        time.sleep(max(0, initial))
+        deadline = time.time() + max(0, max_wait)
+        while time.time() < deadline:
+            status = self._captcha_task_status(task_id)
+            if status and status != "pending":
+                logger.info(
+                    "captcha_tasks id=%s resolved with status=%s",
+                    task_id,
+                    status,
+                )
+                return status
+            time.sleep(max(1, interval))
+        logger.warning(
+            "Timed out waiting for captcha task id=%s after %ss",
+            task_id,
+            max_wait,
+        )
+        return "pending"
+
+    def _add_captcha_task(
+        self,
+        *,
+        job_application_id: Optional[int],
+        job_id: Optional[int],
+        user_id: Optional[int],
+    ) -> Optional[int]:
+        con = get_sql_connection()
+        try:
+            cur = con.cursor()
+            cur.execute(
+                """
+                INSERT INTO users.captcha_tasks (
+                    task_kind,
+                    status,
+                    job_application_id,
+                    job_id,
+                    user_id
+                )
+                VALUES ('captcha_dcv', 'pending', %s, %s, %s)
+                RETURNING id;
+                """,
+                (job_application_id, job_id, user_id),
+            )
+            row = cur.fetchone()
+            con.commit()
+            return int(row[0]) if row else None
+        except pg_errors.UniqueViolation:
+            con.rollback()
+            return None
+        except Exception:
+            con.rollback()
+            raise
+        finally:
+            con.close()
+
+    def _record_captcha_task_slack_delivery(
+        self,
+        task_id: int,
+        *,
+        slack_channel_id: str,
+        slack_message_ts: str,
+    ) -> None:
+        con = get_sql_connection()
+        try:
+            cur = con.cursor()
+            cur.execute(
+                """
+                UPDATE users.captcha_tasks
+                SET slack_channel_id = %s,
+                    slack_message_ts_epoch_ms = %s,
+                    slack_message_id = %s,
+                    updated_at = NOW()
+                WHERE id = %s;
+                """,
+                (
+                    slack_channel_id,
+                    (
+                        int(round(float(slack_message_ts) * 1000))
+                        if slack_message_ts
+                        else 0
+                    ),
+                    slack_message_ts,
+                    task_id,
+                ),
+            )
+            con.commit()
+        finally:
+            con.close()
+
+    def handle_captcha(self) -> bool:
+        """
+        Run Captcha page component; if an open captcha is present, ensure a pending
+        ``users.captcha_tasks`` row, post Slack (DCV link + solved/failed buttons with confirm modals in Lambda),
+        then wait until the task is no longer ``pending``.
+        Returns True if captcha was open; False if none detected.
+        """
+        captcha = Captcha(self)
+        if not captcha.proceed():
+            return False
+
+        dcv_session = DcvSession(config)
+        table_name = (config.get("aws") or {}).get("dcv_session_tokens_table")
+        try:
+            dcv_table = DcvSessionTokensTable(table_name)
+        except ValueError as e:
+            logger.error("%s", e)
+            return True
+
+        existing_id = self._pending_captcha_task_id(self.application_id)
+        if existing_id is not None:
+            logger.info(
+                "Pending captcha task already exists id=%s for application_id=%s; waiting for resolution",
+                existing_id,
+                self.application_id,
+            )
+            self._wait_for_captcha_task_resolution(existing_id)
+            return True
+
+        task_id = self._add_captcha_task(
+            job_application_id=self.application_id,
+            job_id=self.parent_job.id,
+            user_id=self.parent_job.user.id if self.parent_job.user else None,
+        )
+        if task_id is None:
+            existing_id = self._pending_captcha_task_id(self.application_id)
+            if existing_id is not None:
+                self._wait_for_captcha_task_resolution(existing_id)
+            return True
+
+        metadata_ec2 = EC2(self_identify_instance=True)
+        public_host = metadata_ec2.resolve_public_connectable_host()
+        if not public_host:
+            logger.error(
+                "Cannot resolve instance public host from metadata for DCV URL"
+            )
+            self._wait_for_captcha_task_resolution(task_id)
+            return True
+
+        try:
+            token, sig = dcv_session.create_token_pair()
+        except ValueError as e:
+            logger.error("%s", e)
+            self._wait_for_captcha_task_resolution(task_id)
+            return True
+
+        dcv_url = dcv_session.build_browser_url(public_host, token)
+
+        ttl_epoch = int(time.time()) + dcv_session.token_ttl_seconds()
+        if not dcv_table.put_token(
+            token,
+            sig,
+            job_id=str(self.parent_job.id),
+            user_id=str(self.parent_job.user.id)
+            if self.parent_job.user
+            else None,
+            job_application_id=str(self.application_id)
+            if self.application_id is not None
+            else None,
+            captcha_task_id=str(task_id),
+            ttl_epoch_seconds=ttl_epoch,
+        ):
+            logger.error(
+                "Failed to store DCV token in DynamoDB for captcha_task_id=%s", task_id
+            )
+
+        slack_cfg = config.get("slack") or {}
+        channel = (slack_cfg.get("captcha_alerts_channel") or "").strip()
+        if not channel:
+            logger.error("config.yml slack.captcha_alerts_channel is not set")
+            self._wait_for_captcha_task_resolution(task_id)
+            return True
+
+        captcha_text = (
+            "Captcha found on the job application page — open the remote session, solve the captcha, "
+            "then use *Solved* or *Could not solve* in Slack (Slack will ask you to confirm before sending)."
+        )
+        evidence = getattr(captcha, "evidence", None) or ""
+        job_title = self.parent_job.title or "Unknown job"
+        text = f"{captcha_text} Job: {job_title}. {self.url}"
+        if evidence:
+            text = f"{text} Evidence: {evidence[:500]}"
+
+        blocks = [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": (
+                        f"*{captcha_text}*\n"
+                        f"*Job:* {job_title}\n"
+                        f"*Application page:* {self.url}"
+                    ),
+                },
+            },
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "Open DCV session"},
+                        "url": dcv_url,
+                        "action_id": constants.SLACK_CAPTCHA_ACTION_OPEN_DCV,
+                    }
+                ],
+            },
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "Solved"},
+                        "style": "primary",
+                        "action_id": constants.SLACK_CAPTCHA_ACTION_MARK_SOLVED,
+                        "value": str(task_id),
+                        "confirm": {
+                            "title": {
+                                "type": "plain_text",
+                                "text": "Mark captcha solved?",
+                            },
+                            "text": {
+                                "type": "mrkdwn",
+                                "text": "Mark this task as *solved* and let automation continue?",
+                            },
+                            "confirm": {
+                                "type": "plain_text",
+                                "text": "Yes, mark solved",
+                            },
+                            "deny": {"type": "plain_text", "text": "Cancel"},
+                            "style": "primary",
+                        },
+                    },
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "Could not solve"},
+                        "style": "danger",
+                        "action_id": constants.SLACK_CAPTCHA_ACTION_MARK_FAILED,
+                        "value": str(task_id),
+                        "confirm": {
+                            "title": {
+                                "type": "plain_text",
+                                "text": "Mark captcha failed?",
+                            },
+                            "text": {
+                                "type": "mrkdwn",
+                                "text": "Mark this task as *failed* (could not solve the captcha)?",
+                            },
+                            "confirm": {
+                                "type": "plain_text",
+                                "text": "Yes, mark failed",
+                            },
+                            "deny": {"type": "plain_text", "text": "Cancel"},
+                            "style": "danger",
+                        },
+                    },
+                ],
+            },
+        ]
+
+        client = MessagingClientFactory.create_client("slack")
+        if not client:
+            self._wait_for_captcha_task_resolution(task_id)
+            return True
+
+        result = client.post_message(channel, text, blocks=blocks)
+        if result.ok and result.channel and result.message_ts:
+            self._record_captcha_task_slack_delivery(
+                task_id,
+                slack_channel_id=result.channel,
+                slack_message_ts=result.message_ts,
+            )
+        else:
+            logger.error(
+                "Slack captcha alert failed: %s",
+                result.error_message if result else "no client",
+            )
+
+        self._wait_for_captcha_task_resolution(task_id)
+        return True
+
     def _identify_submit_application_button(self):
         submit_application_button = SubmitApplication(parent_application_page=self)
         submit_application_button.proceed()
 
         if submit_application_button.is_component_functional:
+            # SubmitApplication only performs click + post-click load wait; captcha runs here after that.
+            self.handle_captcha()
             error_fields = self._identify_application_fields(identify_only_errors=True)
             # Filter out fields that don't have errors
             error_fields = [field for field in error_fields if field.error]
@@ -1630,6 +1963,8 @@ class ApplicationPage:
                 self._act_on_job_fields(error_fields, only_error_fields=True)
 
                 submit_application_button.proceed()
+                if submit_application_button.is_component_functional:
+                    self.handle_captcha()
 
             self.update_steps(submit_application_button)
 
@@ -1639,4 +1974,6 @@ class ApplicationPage:
                     parent_application_page=self
                 )
                 submit_application_button.proceed()
+                if submit_application_button.is_component_functional:
+                    self.handle_captcha()
                 self.update_steps(submit_application_button)

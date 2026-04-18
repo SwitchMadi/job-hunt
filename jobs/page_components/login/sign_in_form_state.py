@@ -39,7 +39,6 @@ class SignInFormState(LoginState):
         self.password_input = None
         self.consent_checkboxes = []
         self.login_button = None
-        self.security_enabled = False
         self._identified = False
 
     @property
@@ -50,10 +49,6 @@ class SignInFormState(LoginState):
         """Fill and submit sign-in form"""
         if not self._identified:
             self._identify_form_fields()
-
-        if self.security_enabled:
-            # Transition will be handled by identify_next_state which will return Captcha
-            return
 
         if self.username_input:
             self.username_input.proceed()
@@ -66,6 +61,7 @@ class SignInFormState(LoginState):
 
         if self.login_button:
             self.login_button.proceed()
+            self.parent_application_page.handle_captcha()
             self._update_steps_if_first_time()
             self.is_component_functional = True
 
@@ -122,8 +118,7 @@ class SignInFormState(LoginState):
             f"1. Username/email input field (relative XPath from container)\n"
             f"2. Password input field (relative XPath from container)\n"
             f"3. Optional consent checkboxes (relative XPath from container - there can be multiple checkboxes for terms, privacy, etc.)\n"
-            f"4. Login/submit button (relative XPath from container)\n"
-            f"5. Check if there's any captcha or security challenge\n\n"
+            f"4. Login/submit button (relative XPath from container)\n\n"
             f"CRITICAL POPUP AWARENESS: Be aware that popups/modals can be present on the page and can cause duplicate form elements. "
             f"For example, a sign-in form might exist inside a popup while another sign-in form exists behind the popup. "
             f"If multiple instances of the sign-in form exist (one in popup and one not in popup), ALWAYS PRIORITIZE identifying the form container "
@@ -143,10 +138,6 @@ class SignInFormState(LoginState):
             user_prompt = base_prompt + retry_prompt
         else:
             user_prompt = base_prompt
-
-        class SecurityEnabled(Enum):
-            true = True
-            false = False
 
         class SignInFormFields(BaseModel):
             form_container_x_path: str = Field(
@@ -183,12 +174,6 @@ class SignInFormState(LoginState):
                 "Use the container XPath as context in your XPath expression. Don't use HTML hierarchy to construct XPath. "
                 "This button typically has text like 'Sign In', 'Log In', 'Login', 'Submit', or similar.",
             )
-            security_enabled: SecurityEnabled = Field(
-                ...,
-                description="Whether any captcha, reCAPTCHA, security question, puzzle, or other security challenge is "
-                "present on the page that must be solved before login can proceed. This includes visual captchas, "
-                "math puzzles, checkbox challenges, etc.",
-            )
 
         fields_found, fields = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
@@ -204,7 +189,6 @@ class SignInFormState(LoginState):
             )
 
         self.form_container_x_path = fields.form_container_x_path
-        self.security_enabled = fields.security_enabled.value
 
         # Persist whether form container is in popup at identification time
         # This is needed for domain-specific logic that runs after popup might have closed
@@ -212,10 +196,6 @@ class SignInFormState(LoginState):
             self.form_container_in_popup = is_element_in_popup(
                 self.form_container_x_path
             )
-
-        if self.security_enabled:
-            self._identified = True
-            return
 
         # Validate XPaths: check for missing (0 elements) vs non-unique (>1 elements)
         xpaths_to_check = {
@@ -346,17 +326,13 @@ class SignInFormState(LoginState):
 
     def identify_next_state(self) -> Optional[LoginStateType]:
         """Check login result and determine next state"""
-        if self.security_enabled:
-            return LoginStateType.CAPTCHA
-
         user_prompt = (
             f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title}."
             f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
             f"I just tried to login using username and password. Analyse the whole HTML very carefully to determine:\n"
             f"1. Did login succeed? (I'm now on a page after login)\n"
             f"2. Did login fail? If so, what type of failure?\n"
-            f"3. Is account verification required (email verification needed)?\n"
-            f"4. Is there a captcha present?\n\n"
+            f"3. Is account verification required (email verification needed)?\n\n"
             f"To determine if login succeeded, look for indicators such as:\n"
             f"- Logout button or link visible in the navigation/header\n"
             f"- User profile menu, account settings, or user name/email displayed\n"
@@ -371,15 +347,13 @@ class SignInFormState(LoginState):
             f"links that would confirm account existence). Generic errors like 'wrong email or password', 'invalid credentials', "
             f"'account might be locked', or similar authentication failures without proof of account existence should be treated as account_doesnt_exist.\n"
             f"- 'account_verification': Use this when there are clear messages about email verification, OTP verification, or similar "
-            f"verification requirements after login attempt.\n"
-            f"- 'captcha': Use this when there are visible captchas, security challenges, or similar blocking elements."
+            f"verification requirements after login attempt."
         )
 
         class LoginResult(Enum):
             logged_in = "logged_in"
             account_doesnt_exist = "account_doesnt_exist"
             account_verification = "account_verification"
-            captcha = "captcha"
 
         class LoginResultCheck(BaseModel):
             result: LoginResult = Field(
@@ -391,8 +365,7 @@ class SignInFormState(LoginState):
                 "generic authentication error messages (wrong email/password, invalid credentials, account locked, etc.) WITHOUT any clear "
                 "evidence that the account actually exists. Generic authentication failures should default to account_doesnt_exist unless "
                 "there's explicit proof the account exists (like password reset links, 'account already exists' messages, etc.). "
-                "For account_verification: Use when there are clear messages about email/OTP verification requirements. "
-                "For captcha: Use when there are visible captchas or security challenges blocking login.",
+                "For account_verification: Use when there are clear messages about email/OTP verification requirements.",
             )
 
         result_found, result = _llm_service.chat(
@@ -409,8 +382,6 @@ class SignInFormState(LoginState):
                 return LoginStateType.ACCOUNT_DOESNT_EXIST
             elif result.result == LoginResult.account_verification:
                 return LoginStateType.ACCOUNT_VERIFICATION
-            elif result.result == LoginResult.captcha:
-                return LoginStateType.CAPTCHA
 
         # Default to account doesn't exist if unclear
         return LoginStateType.ACCOUNT_DOESNT_EXIST
@@ -430,7 +401,6 @@ class SignInFormState(LoginState):
                 checkbox.to_dict() for checkbox in self.consent_checkboxes
             ],
             "login_button": self.login_button.to_dict() if self.login_button else None,
-            "security_enabled": self.security_enabled,
             "next": self.next.to_dict() if self.next else None,
         }
 
@@ -441,7 +411,6 @@ class SignInFormState(LoginState):
         instance.form_container_in_popup = input_dict.get(
             "form_container_in_popup", False
         )
-        instance.security_enabled = input_dict.get("security_enabled", False)
 
         from jobs.page_components import get_page_component_class_name
 

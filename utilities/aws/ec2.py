@@ -8,6 +8,8 @@ from utilities.logging import get_logger
 
 logger = get_logger(name="ec2")
 
+_METADATA_BASE = "http://169.254.169.254/latest/meta-data"
+
 
 class EC2:
     def __init__(
@@ -26,7 +28,7 @@ class EC2:
         self.client = get_aws_client("ec2")
         if self_identify_instance:
             # The URL for the EC2 instance metadata service to get the instance ID
-            metadata_url = "http://169.254.169.254/latest/meta-data/instance-id"
+            metadata_url = f"{_METADATA_BASE}/instance-id"
 
             try:
                 response = requests.get(metadata_url)
@@ -49,6 +51,35 @@ class EC2:
                 self.launch_spot_instance()
             elif instance_pricing_model == "on_demand":
                 self.launch_on_demand_instance()
+
+    @staticmethod
+    def _metadata_text(path_suffix: str, timeout: float = 2) -> str:
+        url = f"{_METADATA_BASE}/{path_suffix.lstrip('/')}"
+        try:
+            response = requests.get(url, timeout=timeout)
+            response.raise_for_status()
+            return (response.text or "").strip()
+        except requests.RequestException as e:
+            logger.debug("IMDS read failed for %s: %s", path_suffix, e)
+            return ""
+
+    def get_public_hostname(self) -> str:
+        """Public DNS for this instance from IMDS, or empty string if unavailable."""
+        return self._metadata_text("public-hostname")
+
+    def get_public_ipv4(self) -> str:
+        """Public IPv4 for this instance from IMDS, or empty string if unavailable."""
+        return self._metadata_text("public-ipv4")
+
+    def resolve_public_connectable_host(self) -> str:
+        """
+        Hostname or IP suitable for HTTPS URLs to this instance (browser, DCV web client, etc.).
+        Prefer DNS; fall back to IPv4. Uses instance metadata only.
+        """
+        host = self.get_public_hostname()
+        if host:
+            return host
+        return self.get_public_ipv4()
 
     def launch_spot_instance(self):
         response = self.client.request_spot_fleet(

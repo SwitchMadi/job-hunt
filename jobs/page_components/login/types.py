@@ -14,7 +14,6 @@ class LoginStateType(str, Enum):
     ACCOUNT_ALREADY_EXISTS = "account_already_exists"
     ACCOUNT_VERIFICATION = "account_verification"
     LOGGED_IN = "logged_in"
-    CAPTCHA = "captcha"
     ACCOUNT_VERIFICATION_FAILED = "account_verification_failed"
     CONFIRMATION_POPUP = "confirmation_popup"
 
@@ -41,7 +40,6 @@ STATE_MACHINE_TRANSITIONS: Dict[LoginStateType, List[LoginStateType]] = {
         LoginStateType.LOGGED_IN,
         LoginStateType.ACCOUNT_DOESNT_EXIST,
         LoginStateType.ACCOUNT_VERIFICATION,
-        LoginStateType.CAPTCHA,
     ],
     LoginStateType.ACCOUNT_DOESNT_EXIST: [
         LoginStateType.ACCOUNT_CREATION_FORM,
@@ -51,7 +49,6 @@ STATE_MACHINE_TRANSITIONS: Dict[LoginStateType, List[LoginStateType]] = {
         LoginStateType.LOGGED_IN,
         LoginStateType.ACCOUNT_VERIFICATION,
         LoginStateType.ACCOUNT_ALREADY_EXISTS,
-        LoginStateType.CAPTCHA,
     ],
     LoginStateType.ACCOUNT_ALREADY_EXISTS: [
         LoginStateType.SIGN_IN_FORM,
@@ -62,7 +59,6 @@ STATE_MACHINE_TRANSITIONS: Dict[LoginStateType, List[LoginStateType]] = {
         LoginStateType.ACCOUNT_VERIFICATION_FAILED,
     ],
     LoginStateType.LOGGED_IN: [],  # Terminal state
-    LoginStateType.CAPTCHA: [],  # Raises exception
     LoginStateType.ACCOUNT_VERIFICATION_FAILED: [],  # Raises exception
     LoginStateType.CONFIRMATION_POPUP: [
         LoginStateType.SIGN_IN_FORM,

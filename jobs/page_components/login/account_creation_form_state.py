@@ -40,7 +40,6 @@ class AccountCreationFormState(LoginState):
         self.confirm_password_input = None
         self.consent_checkboxes = []
         self.create_account_button = None
-        self.security_enabled = False
         self.account_created_at = None
         self._identified = False
 
@@ -52,10 +51,6 @@ class AccountCreationFormState(LoginState):
         """Fill and submit account creation form"""
         if not self._identified:
             self._identify_form_fields()
-
-        if self.security_enabled:
-            # Transition will be handled by identify_next_state which will return Captcha
-            return
 
         if self.username_input:
             self.username_input.proceed()
@@ -72,6 +67,7 @@ class AccountCreationFormState(LoginState):
         if self.create_account_button:
             self.account_created_at = datetime.utcnow()
             self.create_account_button.proceed()
+            self.parent_application_page.handle_captcha()
             self._update_steps_if_first_time()
             self.is_component_functional = True
 
@@ -129,8 +125,7 @@ class AccountCreationFormState(LoginState):
             f"2. Password input field (relative XPath from container)\n"
             f"3. Confirm password input field (relative XPath from container - if present)\n"
             f"4. Optional consent checkboxes (relative XPath from container - there can be multiple checkboxes for terms, privacy, etc.)\n"
-            f"5. Create account/submit button (relative XPath from container)\n"
-            f"6. Check if there's any captcha or security challenge\n\n"
+            f"5. Create account/submit button (relative XPath from container)\n\n"
             f"CRITICAL POPUP AWARENESS: Be aware that popups/modals can be present on the page and can cause duplicate form elements. "
             f"For example, an account creation form might exist inside a popup while another account creation form exists behind the popup. "
             f"If multiple instances of the account creation form exist (one in popup and one not in popup), ALWAYS PRIORITIZE identifying the form container "
@@ -150,10 +145,6 @@ class AccountCreationFormState(LoginState):
             user_prompt = base_prompt + retry_prompt
         else:
             user_prompt = base_prompt
-
-        class SecurityEnabled(Enum):
-            true = True
-            false = False
 
         class AccountCreationFormFields(BaseModel):
             form_container_x_path: str = Field(
@@ -195,12 +186,6 @@ class AccountCreationFormState(LoginState):
                 "Use the container XPath as context in your XPath expression. Don't use HTML hierarchy to construct XPath. "
                 "This button typically has text like 'Sign Up', 'Create Account', 'Register', 'Submit', or similar.",
             )
-            security_enabled: SecurityEnabled = Field(
-                ...,
-                description="Whether any captcha, reCAPTCHA, security question, puzzle, or other security challenge is "
-                "present on the page that must be solved before account creation can proceed. This includes visual captchas, "
-                "math puzzles, checkbox challenges, etc.",
-            )
 
         fields_found, fields = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
@@ -216,7 +201,6 @@ class AccountCreationFormState(LoginState):
             )
 
         self.form_container_x_path = fields.form_container_x_path
-        self.security_enabled = fields.security_enabled.value
 
         # Persist whether form container is in popup at identification time
         # This is needed for domain-specific logic that runs after popup might have closed
@@ -224,10 +208,6 @@ class AccountCreationFormState(LoginState):
             self.form_container_in_popup = is_element_in_popup(
                 self.form_container_x_path
             )
-
-        if self.security_enabled:
-            self._identified = True
-            return
 
         # Validate XPaths: check for missing (0 elements) vs non-unique (>1 elements)
         xpaths_to_check = {
@@ -376,17 +356,13 @@ class AccountCreationFormState(LoginState):
 
     def identify_next_state(self) -> Optional[LoginStateType]:
         """Check account creation result and determine next state"""
-        if self.security_enabled:
-            return LoginStateType.CAPTCHA
-
         user_prompt = (
             f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title}."
             f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
             f"I just tried to create an account. Analyse the whole HTML very carefully to determine:\n"
             f"1. Did account creation succeed and I'm now logged in?\n"
             f"2. Did account creation fail with 'account already exists' error?\n"
-            f"3. Is account verification required (email verification needed)?\n"
-            f"4. Is there a captcha present?\n\n"
+            f"3. Is account verification required (email verification needed)?\n\n"
             f"To determine if account creation succeeded and I'm logged in, look for indicators such as:\n"
             f"- Logout button or link visible in the navigation/header\n"
             f"- User profile menu, account settings, or user name/email displayed\n"
@@ -402,7 +378,6 @@ class AccountCreationFormState(LoginState):
             logged_in = "logged_in"
             account_already_exists = "account_already_exists"
             account_verification = "account_verification"
-            captcha = "captcha"
 
         class AccountCreationResultCheck(BaseModel):
             result: AccountCreationResult = Field(
@@ -411,7 +386,7 @@ class AccountCreationFormState(LoginState):
                 "For login success (logged_in), look for: logout button, user profile menu, dashboard/application form visible, "
                 "welcome/account created message, authenticated navigation, or signup form disappeared. "
                 "Determine if account was created and user is logged in (logged_in), creation failed because account already exists "
-                "(account_already_exists), requires email verification (account_verification), or captcha is blocking (captcha).",
+                "(account_already_exists), or requires email verification (account_verification).",
             )
 
         result_found, result = _llm_service.chat(
@@ -428,8 +403,6 @@ class AccountCreationFormState(LoginState):
                 return LoginStateType.ACCOUNT_ALREADY_EXISTS
             elif result.result == AccountCreationResult.account_verification:
                 return LoginStateType.ACCOUNT_VERIFICATION
-            elif result.result == AccountCreationResult.captcha:
-                return LoginStateType.CAPTCHA
 
         # Default to account verification if unclear (most common flow)
         return LoginStateType.ACCOUNT_VERIFICATION
@@ -458,7 +431,6 @@ class AccountCreationFormState(LoginState):
                 if self.create_account_button
                 else None
             ),
-            "security_enabled": self.security_enabled,
             "account_created_at": (
                 self.account_created_at.isoformat() if self.account_created_at else None
             ),
@@ -472,7 +444,6 @@ class AccountCreationFormState(LoginState):
         instance.form_container_in_popup = input_dict.get(
             "form_container_in_popup", False
         )
-        instance.security_enabled = input_dict.get("security_enabled", False)
 
         if input_dict.get("account_created_at"):
             instance.account_created_at = datetime.fromisoformat(

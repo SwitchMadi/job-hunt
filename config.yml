@@ -47,3 +47,21 @@ websocket:
 subscription:
   trial_days: 30
 cloudwatch_log_group: job-hunt
+slack:
+  # Channel ID (C…) or name; used for captcha + DCV human alerts from job application runner
+  captcha_alerts_channel: ""
+  captcha_task:
+    # After posting to Slack, wait this many seconds before first DB poll for human resolution
+    initial_wait_seconds: 60
+    poll_interval_seconds: 15
+    max_wait_seconds: 7200
+
+dcv:
+  web_port: 8445
+  session_token_ttl_seconds: 3600
+  # Windows username returned in DCV external auth XML (<auth result="yes">)
+  auth_windows_username: JobHunt
+
+aws:
+  # DynamoDB table for DCV session token + HMAC (partition key: token)
+  dcv_session_tokens_table: dcv-session-tokens
