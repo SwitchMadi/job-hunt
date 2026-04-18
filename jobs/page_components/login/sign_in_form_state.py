@@ -39,7 +39,6 @@ class SignInFormState(LoginState):
         self.password_input = None
         self.consent_checkboxes = []
         self.login_button = None
-        self.security_enabled = False
         self._identified = False
 
     @property
@@ -50,10 +49,6 @@ class SignInFormState(LoginState):
         """Fill and submit sign-in form"""
         if not self._identified:
             self._identify_form_fields()
-
-        if self.security_enabled:
-            # identify_next_state raises if captcha blocks before submit
-            return
 
         if self.username_input:
             self.username_input.proceed()
@@ -123,8 +118,7 @@ class SignInFormState(LoginState):
             f"1. Username/email input field (relative XPath from container)\n"
             f"2. Password input field (relative XPath from container)\n"
             f"3. Optional consent checkboxes (relative XPath from container - there can be multiple checkboxes for terms, privacy, etc.)\n"
-            f"4. Login/submit button (relative XPath from container)\n"
-            f"5. Check if there's any captcha or security challenge\n\n"
+            f"4. Login/submit button (relative XPath from container)\n\n"
             f"CRITICAL POPUP AWARENESS: Be aware that popups/modals can be present on the page and can cause duplicate form elements. "
             f"For example, a sign-in form might exist inside a popup while another sign-in form exists behind the popup. "
             f"If multiple instances of the sign-in form exist (one in popup and one not in popup), ALWAYS PRIORITIZE identifying the form container "
@@ -144,10 +138,6 @@ class SignInFormState(LoginState):
             user_prompt = base_prompt + retry_prompt
         else:
             user_prompt = base_prompt
-
-        class SecurityEnabled(Enum):
-            true = True
-            false = False
 
         class SignInFormFields(BaseModel):
             form_container_x_path: str = Field(
@@ -184,12 +174,6 @@ class SignInFormState(LoginState):
                 "Use the container XPath as context in your XPath expression. Don't use HTML hierarchy to construct XPath. "
                 "This button typically has text like 'Sign In', 'Log In', 'Login', 'Submit', or similar.",
             )
-            security_enabled: SecurityEnabled = Field(
-                ...,
-                description="Whether any captcha, reCAPTCHA, security question, puzzle, or other security challenge is "
-                "present on the page that must be solved before login can proceed. This includes visual captchas, "
-                "math puzzles, checkbox challenges, etc.",
-            )
 
         fields_found, fields = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
@@ -205,7 +189,6 @@ class SignInFormState(LoginState):
             )
 
         self.form_container_x_path = fields.form_container_x_path
-        self.security_enabled = fields.security_enabled.value
 
         # Persist whether form container is in popup at identification time
         # This is needed for domain-specific logic that runs after popup might have closed
@@ -213,10 +196,6 @@ class SignInFormState(LoginState):
             self.form_container_in_popup = is_element_in_popup(
                 self.form_container_x_path
             )
-
-        if self.security_enabled:
-            self._identified = True
-            return
 
         # Validate XPaths: check for missing (0 elements) vs non-unique (>1 elements)
         xpaths_to_check = {
@@ -347,11 +326,6 @@ class SignInFormState(LoginState):
 
     def identify_next_state(self) -> Optional[LoginStateType]:
         """Check login result and determine next state"""
-        if self.security_enabled:
-            raise Exception(
-                "Security is enabled on login (captcha detected), so skipping login!"
-            )
-
         user_prompt = (
             f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title}."
             f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
@@ -435,7 +409,6 @@ class SignInFormState(LoginState):
                 checkbox.to_dict() for checkbox in self.consent_checkboxes
             ],
             "login_button": self.login_button.to_dict() if self.login_button else None,
-            "security_enabled": self.security_enabled,
             "next": self.next.to_dict() if self.next else None,
         }
 
@@ -446,7 +419,6 @@ class SignInFormState(LoginState):
         instance.form_container_in_popup = input_dict.get(
             "form_container_in_popup", False
         )
-        instance.security_enabled = input_dict.get("security_enabled", False)
 
         from jobs.page_components import get_page_component_class_name
 

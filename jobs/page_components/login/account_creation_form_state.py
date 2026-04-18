@@ -40,7 +40,6 @@ class AccountCreationFormState(LoginState):
         self.confirm_password_input = None
         self.consent_checkboxes = []
         self.create_account_button = None
-        self.security_enabled = False
         self.account_created_at = None
         self._identified = False
 
@@ -52,10 +51,6 @@ class AccountCreationFormState(LoginState):
         """Fill and submit account creation form"""
         if not self._identified:
             self._identify_form_fields()
-
-        if self.security_enabled:
-            # identify_next_state raises if captcha blocks before submit
-            return
 
         if self.username_input:
             self.username_input.proceed()
@@ -130,8 +125,7 @@ class AccountCreationFormState(LoginState):
             f"2. Password input field (relative XPath from container)\n"
             f"3. Confirm password input field (relative XPath from container - if present)\n"
             f"4. Optional consent checkboxes (relative XPath from container - there can be multiple checkboxes for terms, privacy, etc.)\n"
-            f"5. Create account/submit button (relative XPath from container)\n"
-            f"6. Check if there's any captcha or security challenge\n\n"
+            f"5. Create account/submit button (relative XPath from container)\n\n"
             f"CRITICAL POPUP AWARENESS: Be aware that popups/modals can be present on the page and can cause duplicate form elements. "
             f"For example, an account creation form might exist inside a popup while another account creation form exists behind the popup. "
             f"If multiple instances of the account creation form exist (one in popup and one not in popup), ALWAYS PRIORITIZE identifying the form container "
@@ -151,10 +145,6 @@ class AccountCreationFormState(LoginState):
             user_prompt = base_prompt + retry_prompt
         else:
             user_prompt = base_prompt
-
-        class SecurityEnabled(Enum):
-            true = True
-            false = False
 
         class AccountCreationFormFields(BaseModel):
             form_container_x_path: str = Field(
@@ -196,12 +186,6 @@ class AccountCreationFormState(LoginState):
                 "Use the container XPath as context in your XPath expression. Don't use HTML hierarchy to construct XPath. "
                 "This button typically has text like 'Sign Up', 'Create Account', 'Register', 'Submit', or similar.",
             )
-            security_enabled: SecurityEnabled = Field(
-                ...,
-                description="Whether any captcha, reCAPTCHA, security question, puzzle, or other security challenge is "
-                "present on the page that must be solved before account creation can proceed. This includes visual captchas, "
-                "math puzzles, checkbox challenges, etc.",
-            )
 
         fields_found, fields = _llm_service.chat(
             constants.gpt["system_prompts"]["application_step_identification"],
@@ -217,7 +201,6 @@ class AccountCreationFormState(LoginState):
             )
 
         self.form_container_x_path = fields.form_container_x_path
-        self.security_enabled = fields.security_enabled.value
 
         # Persist whether form container is in popup at identification time
         # This is needed for domain-specific logic that runs after popup might have closed
@@ -225,10 +208,6 @@ class AccountCreationFormState(LoginState):
             self.form_container_in_popup = is_element_in_popup(
                 self.form_container_x_path
             )
-
-        if self.security_enabled:
-            self._identified = True
-            return
 
         # Validate XPaths: check for missing (0 elements) vs non-unique (>1 elements)
         xpaths_to_check = {
@@ -377,11 +356,6 @@ class AccountCreationFormState(LoginState):
 
     def identify_next_state(self) -> Optional[LoginStateType]:
         """Check account creation result and determine next state"""
-        if self.security_enabled:
-            raise Exception(
-                "Security is enabled on login (captcha detected), so skipping login!"
-            )
-
         user_prompt = (
             f"Following HTML page is job application webpage for {self.parent_application_page.parent_job.title}."
             f"HTML: {minify_html_for_gpt_prompt(driver.page_source)}\n"
@@ -463,7 +437,6 @@ class AccountCreationFormState(LoginState):
                 if self.create_account_button
                 else None
             ),
-            "security_enabled": self.security_enabled,
             "account_created_at": (
                 self.account_created_at.isoformat() if self.account_created_at else None
             ),
@@ -477,7 +450,6 @@ class AccountCreationFormState(LoginState):
         instance.form_container_in_popup = input_dict.get(
             "form_container_in_popup", False
         )
-        instance.security_enabled = input_dict.get("security_enabled", False)
 
         if input_dict.get("account_created_at"):
             instance.account_created_at = datetime.fromisoformat(
