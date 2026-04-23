@@ -2711,3 +2711,35 @@ def revoke_optional_permissions(url: str):
     driver.execute_cdp_cmd(
         "Browser.grantPermissions", {"origin": url, "permissions": []}
     )
+
+
+def compose_xpath(child_xpath: str, parent_xpath: str, strict: bool = False) -> str:
+    """
+    Compose two XPath expressions so that child_xpath is only matched if it's
+    within the element(s) matched by parent_xpath.
+
+    This uses XPath ancestor filtering to combine two XPaths without modifying either:
+        C[ancestor-or-self::node() = P]  (default - includes self)
+        C[ancestor::node() = P]          (strict - excludes self)
+
+    Args:
+        child_xpath: The XPath of the target element to find (C)
+        parent_xpath: The XPath of the container/parent element (P)
+        strict: If True, child must be strictly inside parent (not equal to it).
+                If False (default), child can be the parent itself or inside it.
+
+    Returns:
+        A composed XPath that finds child_xpath only within parent_xpath.
+
+    Examples:
+        >>> compose_xpath("//input[@aria-label='Email']", "//div[@role='dialog']")
+        "//input[@aria-label='Email'][ancestor-or-self::node() = //div[@role='dialog']]"
+
+        >>> compose_xpath("//button[@type='submit']", "//form[@id='login']", strict=True)
+        "//button[@type='submit'][ancestor::node() = //form[@id='login']]"
+    """
+    if not child_xpath or not parent_xpath:
+        raise ValueError("Both child_xpath and parent_xpath must be provided")
+
+    ancestor_axis = "ancestor::node()" if strict else "ancestor-or-self::node()"
+    return f"{child_xpath}[{ancestor_axis} = {parent_xpath}]"
