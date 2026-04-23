@@ -6,7 +6,6 @@ from utilities.logging import get_logger
 from utilities.google_services import get_google_credentials
 from utilities.google_services.drive import DriveResource
 
-
 logger = get_logger(name="sheet")
 
 

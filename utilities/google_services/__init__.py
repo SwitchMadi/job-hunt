@@ -9,7 +9,6 @@ import requests
 
 from utilities.logging import get_logger
 
-
 dotenv.load_dotenv()
 logger = get_logger(name="google")
 

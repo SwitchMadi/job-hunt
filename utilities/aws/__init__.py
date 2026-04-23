@@ -4,7 +4,6 @@ import dotenv
 import json
 import functools
 
-
 dotenv.load_dotenv()
 
 

@@ -4,7 +4,6 @@ from utilities.aws import get_aws_client
 from utilities.aws.dynamo import WebSocketConnectionsTable
 from utilities.logging import get_logger
 
-
 logger = get_logger(name="websocket")
 
 

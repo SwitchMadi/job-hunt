@@ -11,7 +11,6 @@ from utilities.selenium import kill_selenium_chrome
 from utilities.aws.dynamo import OperationLocksTable
 from utilities.aws.s3 import S3Bucket
 
-
 config = yaml.safe_load(open("config.yml"))
 
 logger = get_logger("jobs_steps_identification")

@@ -4,7 +4,6 @@ from utilities.logging import get_logger
 from utilities.aws.dynamo import OperationLocksTable
 from user import User
 
-
 logger = get_logger(name="share_jobs")
 
 # Initialize lock manager

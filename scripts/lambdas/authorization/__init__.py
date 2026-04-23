@@ -4,7 +4,6 @@ import dotenv
 
 from utilities.logging import get_logger
 
-
 dotenv.load_dotenv()
 SECRET = os.getenv("JWT_SECRET_KEY")
 

@@ -10,7 +10,6 @@ from utilities import decrypt_string
 from utilities.aws import send_lambda_response
 from user import User
 
-
 dotenv.load_dotenv()
 logger = get_logger(name="save_user_tokens")
 

@@ -15,7 +15,6 @@ from utilities.logging import get_logger
 from utilities.aws.s3 import S3Bucket
 from jobs import ApplicationPage
 
-
 logger = get_logger(name="scrape_linkedin")
 
 

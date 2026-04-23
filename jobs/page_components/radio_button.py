@@ -11,7 +11,6 @@ from utilities.selenium import (
 )
 from utilities import remove_emoji
 
-
 driver = get_selenium_driver()
 driver.set_page_load_timeout(15)
 

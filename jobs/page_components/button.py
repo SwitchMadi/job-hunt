@@ -18,7 +18,6 @@ from utilities.selenium import (
     element_exists,
 )
 
-
 driver = get_selenium_driver()
 driver.set_page_load_timeout(15)
 
